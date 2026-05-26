@@ -1,0 +1,35 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+yavchn
+yavchn.exe
+
+# Test binary
+*.test
+
+# Coverage
+*.out
+coverage.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Local data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
