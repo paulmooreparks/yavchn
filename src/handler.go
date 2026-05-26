@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -225,9 +226,23 @@ func (s *Server) renderShellWithListError(w http.ResponseWriter, r *http.Request
 	}
 }
 
-const articleErrorFragment = `<div class="article-stub"><h2>Reader-mode couldn't load this page</h2><p class="note">The source server didn't return readable HTML. Use the "Open article" link above to read on the original site.</p></div>`
+// articleErrorTmpl renders the article-pane fallback when reader-mode
+// extraction fails. The CTA is rendered through html/template so the
+// href is auto-escaped and javascript: schemes are neutralised.
+var articleErrorTmpl = template.Must(template.New("articleError").Parse(
+	`<div class="article-stub">
+  <h2>Reader-mode couldn't load this page</h2>
+  {{ if . }}<a class="cta" href="{{ . }}" target="_blank" rel="noopener">Open article &uarr;</a>{{ end }}
+  <p class="note">The source server didn't return readable HTML.</p>
+</div>`))
 
 const discussionErrorFragment = `<div class="empty-note"><p>Couldn't load the discussion right now. Use the "Open on HN &uarr;" link above to read it directly.</p></div>`
+
+func articleErrorHTML(rawURL string) string {
+	var buf bytes.Buffer
+	_ = articleErrorTmpl.Execute(&buf, rawURL)
+	return buf.String()
+}
 
 func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 	rawURL := r.URL.Query().Get("url")
@@ -244,7 +259,7 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 		// 200 (not 5xx) so Cloudflare and friends don't replace our fragment
 		// with their own branded error page. Inability to extract is a content
 		// failure, not a server failure.
-		writeFragment(w, http.StatusOK, articleErrorFragment)
+		writeFragment(w, http.StatusOK, articleErrorHTML(rawURL))
 		return
 	}
 
