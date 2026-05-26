@@ -36,3 +36,7 @@ Thumbs.db
 
 # Local deployment notes (held outside the public repo)
 DEPLOY.md
+
+# Stray screenshots dropped in the repo root
+/screenshot.png
+/screenshot-*.png
