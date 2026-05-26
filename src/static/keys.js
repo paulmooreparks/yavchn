@@ -43,9 +43,19 @@
     return false;
   }
 
+  // Activatable = the kind of element where Enter would invoke a default
+  // action other than "follow a link" (buttons fire onclick, inputs submit
+  // forms). For those, let the browser do its thing. Anchors are NOT in
+  // this set: Enter on the focused story should override a stray Tab-focus
+  // on a story link.
+  function isActivatable(target) {
+    if (inEditable(target)) return true;
+    var tag = (target.tagName || '').toLowerCase();
+    return tag === 'button';
+  }
+
   document.addEventListener('keydown', function (e) {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
-    if (inEditable(e.target)) return;
 
     var items = getItems();
     if (!items.length) return;
@@ -53,6 +63,7 @@
     switch (e.key) {
       case 'j':
       case 'ArrowDown':
+        if (inEditable(e.target)) return;
         if (focusIdx < items.length - 1) {
           focusIdx++;
           applyFocus(items);
@@ -61,6 +72,7 @@
         break;
       case 'k':
       case 'ArrowUp':
+        if (inEditable(e.target)) return;
         if (focusIdx > 0) {
           focusIdx--;
           applyFocus(items);
@@ -68,10 +80,9 @@
         e.preventDefault();
         break;
       case 'Enter':
-        if (e.target === document.body) {
-          e.preventDefault();
-          openFocused(items);
-        }
+        if (isActivatable(e.target)) return;
+        e.preventDefault();
+        openFocused(items);
         break;
     }
   });

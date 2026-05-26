@@ -239,7 +239,11 @@ header .logo {
 }
 .story:hover { background: var(--hover); }
 .story.selected { background: var(--selected); }
-.story.focused { box-shadow: inset 3px 0 0 var(--link); }
+.story.focused {
+  box-shadow: inset 4px 0 0 var(--link);
+  background: var(--hover);
+}
+.story.selected.focused { background: var(--selected); }
 
 .rank {
   color: var(--text-dim);
