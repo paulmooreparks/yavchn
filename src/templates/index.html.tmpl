@@ -4,7 +4,18 @@
 <meta charset="utf-8">
 <title>{{ if .Selected }}{{ .Selected.Title }} &middot; yavchn{{ else }}yavchn{{ end }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Three-pane Hacker News reader: story list, reader-mode article, threaded discussion side by side.">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 <link rel="stylesheet" href="/static/style.css">
+<meta property="og:title" content="yavchn">
+<meta property="og:description" content="Three-pane Hacker News reader: story list, reader-mode article, threaded discussion side by side.">
+<meta property="og:image" content="https://yavchn.parkscomputing.com/static/logo.png">
+<meta property="og:url" content="https://yavchn.parkscomputing.com/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="yavchn">
+<meta name="twitter:description" content="Three-pane Hacker News reader: story list, reader-mode article, threaded discussion side by side.">
+<meta name="twitter:image" content="https://yavchn.parkscomputing.com/static/logo.png">
 <script>
 (function () {
   try {
@@ -23,7 +34,9 @@
 </script>
 </head>
 <body>
-<header><h1><a href="/">yavchn</a></h1></header>
+<header>
+  <h1><a href="/"><img src="/static/logo.png" alt="" class="logo"> yavchn</a></h1>
+</header>
 <div class="layout">
 
   <aside class="pane pane-list">
