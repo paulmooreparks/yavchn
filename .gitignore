@@ -33,3 +33,6 @@ Thumbs.db
 # Env
 .env
 .env.local
+
+# Local deployment notes (held outside the public repo)
+DEPLOY.md
