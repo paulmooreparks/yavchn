@@ -191,6 +191,11 @@ func (h *HN) fetchItem(ctx context.Context, id int64) (*Item, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&item); err != nil {
 		return nil, err
 	}
+	// firebaseio returns 200 + body "null" for unknown IDs; that decodes
+	// into a zero-value Item. Treat as not-found.
+	if item.ID == 0 {
+		return nil, fmt.Errorf("item %d: not found", id)
+	}
 	return &item, nil
 }
 

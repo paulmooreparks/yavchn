@@ -62,6 +62,13 @@
 <div class="layout">
 
   <aside class="pane pane-list">
+    {{ if .ListError }}
+    <div class="list-error">
+      <h2>Front page unavailable</h2>
+      <p>{{ .ListError }}</p>
+      <p><a class="cta" href="{{ .RetryURL }}">Retry</a></p>
+    </div>
+    {{ else }}
     <ul class="stories">
     {{ range .Stories }}
     <li class="story{{ if .Selected }} selected{{ end }}">
@@ -84,12 +91,21 @@
       <span class="page-num">page {{ .Page }}</span>
       {{ if .HasNext }}<a href="{{ .NextURL }}">next &rarr;</a>{{ else }}<span class="disabled">next &rarr;</span>{{ end }}
     </nav>
+    {{ end }}
   </aside>
 
   <div class="splitter splitter-v" role="separator" aria-orientation="vertical"></div>
 
   <section class="pane pane-article"{{ if and .Selected .Selected.HasArticle }} data-reader-url="{{ .Selected.URL }}"{{ end }}>
-    {{ if .Selected }}
+    {{ if .SelectError }}
+      <div class="pane-header"><span class="pane-label">article</span></div>
+      <div class="pane-body">
+        <div class="article-stub">
+          <h2>Story unavailable</h2>
+          <p class="note">{{ .SelectError }}</p>
+        </div>
+      </div>
+    {{ else if .Selected }}
       <div class="pane-header">
         <span class="pane-label">article</span>
         {{ if .Selected.HasArticle }}<a href="{{ .Selected.URL }}" target="_blank" rel="noopener">Open original &uarr;</a>{{ end }}
@@ -118,7 +134,12 @@
   <div class="splitter splitter-h" role="separator" aria-orientation="horizontal"></div>
 
   <section class="pane pane-discussion"{{ if .Selected }} data-discussion-id="{{ .Selected.ID }}"{{ end }}>
-    {{ if .Selected }}
+    {{ if .SelectError }}
+      <div class="pane-header"><span class="pane-label">discussion</span></div>
+      <div class="pane-body">
+        <p class="empty-note">{{ .SelectError }}</p>
+      </div>
+    {{ else if .Selected }}
       <div class="pane-header">
         <span class="pane-label">discussion</span>
         <a href="{{ .Selected.HNURL }}" target="_blank" rel="noopener">Open on HN &uarr;</a>

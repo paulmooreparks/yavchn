@@ -8,13 +8,12 @@
     if (!body) return;
 
     fetch(urlBuilder(key), { credentials: 'omit' })
-      .then(function (r) {
-        if (!r.ok) throw new Error('upstream');
-        return r.text();
-      })
+      .then(function (r) { return r.text(); })
       .then(function (html) {
-        body.innerHTML = html;
-        body.scrollTop = 0;
+        if (html && html.length) {
+          body.innerHTML = html;
+          body.scrollTop = 0;
+        }
       })
       .catch(function () {
         var status = body.querySelector(fallbackSel);

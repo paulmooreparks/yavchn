@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -41,13 +42,16 @@ func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 type listVM struct {
-	Stories  []storyVM
-	Page     int
-	HasPrev  bool
-	HasNext  bool
-	PrevURL  string
-	NextURL  string
-	Selected *selectedVM
+	Stories     []storyVM
+	Page        int
+	HasPrev     bool
+	HasNext     bool
+	PrevURL     string
+	NextURL     string
+	Selected    *selectedVM
+	ListError   string
+	SelectError string
+	RetryURL    string
 }
 
 type storyVM struct {
@@ -102,9 +106,11 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	ids, err := s.hn.TopIDs(ctx)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("upstream: %v", err), http.StatusBadGateway)
+	ids, idsErr := s.hn.TopIDs(ctx)
+	if idsErr != nil {
+		slog.Warn("topstories unavailable", "err", idsErr, "path", r.URL.Path)
+		s.renderShellWithListError(w, r, page, selectedID,
+			"The HN front page couldn't be loaded right now. The HN API may be having a moment.")
 		return
 	}
 
@@ -123,21 +129,23 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 		wg      sync.WaitGroup
 		items   []*Item
 		selItem *Item
+		selErr  error
 	)
 	wg.Add(1)
 	go func() { defer wg.Done(); items = s.hn.ItemsParallel(ctx, pageIDs) }()
 	if selectedID != 0 {
 		wg.Add(1)
-		go func() { defer wg.Done(); selItem, _ = s.hn.Item(ctx, selectedID) }()
+		go func() { defer wg.Done(); selItem, selErr = s.hn.Item(ctx, selectedID) }()
 	}
 	wg.Wait()
 
 	vm := listVM{
-		Page:    page,
-		HasPrev: page > 1,
-		HasNext: end < len(ids),
-		PrevURL: buildPagerURL(selectedID, page-1),
-		NextURL: buildPagerURL(selectedID, page+1),
+		Page:     page,
+		HasPrev:  page > 1,
+		HasNext:  end < len(ids),
+		PrevURL:  buildPagerURL(selectedID, page-1),
+		NextURL:  buildPagerURL(selectedID, page+1),
+		RetryURL: r.URL.RequestURI(),
 	}
 
 	for i, item := range items {
@@ -161,28 +169,56 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if selItem != nil && !selItem.Dead && !selItem.Deleted {
-		host, displayURL := storyURLs(selItem)
-		vm.Selected = &selectedVM{
-			ID:         selItem.ID,
-			Title:      selItem.Title,
-			URL:        displayURL,
-			Host:       host,
-			HNURL:      fmt.Sprintf("https://news.ycombinator.com/item?id=%d", selItem.ID),
-			HasArticle: selItem.URL != "",
+	if selectedID != 0 {
+		switch {
+		case selErr != nil || selItem == nil:
+			slog.Warn("item fetch failed", "id", selectedID, "err", selErr)
+			vm.SelectError = "Couldn't load this story. It may have been removed, or the HN API is having a moment."
+		case selItem.Dead || selItem.Deleted:
+			vm.SelectError = "This story has been removed."
+		default:
+			host, displayURL := storyURLs(selItem)
+			vm.Selected = &selectedVM{
+				ID:         selItem.ID,
+				Title:      selItem.Title,
+				URL:        displayURL,
+				Host:       host,
+				HNURL:      fmt.Sprintf("https://news.ycombinator.com/item?id=%d", selItem.ID),
+				HasArticle: selItem.URL != "",
+			}
 		}
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.Error("render index", "err", err)
 	}
 }
+
+// renderShellWithListError renders the page shell with a list-pane error placeholder.
+// Used when TopIDs itself fails -- we can't show the list, but the rest of the layout
+// still gives the visitor something to look at.
+func (s *Server) renderShellWithListError(w http.ResponseWriter, r *http.Request, page int, selectedID int64, msg string) {
+	vm := listVM{
+		Page:      page,
+		ListError: msg,
+		RetryURL:  r.URL.RequestURI(),
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
+		slog.Error("render shell", "err", err)
+	}
+}
+
+const articleErrorFragment = `<div class="article-stub"><h2>Reader-mode couldn't load this page</h2><p class="note">The source server didn't return readable HTML. Use the "Open article" link above to read on the original site.</p></div>`
+
+const discussionErrorFragment = `<div class="empty-note"><p>Couldn't load the discussion right now. Use the "Open on HN &uarr;" link above to read it directly.</p></div>`
 
 func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 	rawURL := r.URL.Query().Get("url")
 	if rawURL == "" {
-		http.Error(w, "missing url", http.StatusBadRequest)
+		writeFragment(w, http.StatusBadRequest, `<div class="article-stub"><p class="note">Missing URL.</p></div>`)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), extractTimeout+2*time.Second)
@@ -190,13 +226,14 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 
 	article, err := s.extract.Get(ctx, rawURL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		slog.Warn("article extract failed", "url", rawURL, "err", err)
+		writeFragment(w, http.StatusBadGateway, articleErrorFragment)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tpl.ExecuteTemplate(w, "article.html.tmpl", article); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.Error("render article", "err", err)
 	}
 }
 
@@ -204,7 +241,7 @@ func (s *Server) DiscussionAPI(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		http.Error(w, "bad id", http.StatusBadRequest)
+		writeFragment(w, http.StatusBadRequest, `<div class="empty-note"><p>Bad story id.</p></div>`)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -212,15 +249,22 @@ func (s *Server) DiscussionAPI(w http.ResponseWriter, r *http.Request) {
 
 	thread, err := s.hn.StoryThread(ctx, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		slog.Warn("thread fetch failed", "id", id, "err", err)
+		writeFragment(w, http.StatusBadGateway, discussionErrorFragment)
 		return
 	}
 
 	vm := buildThreadVM(thread)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tpl.ExecuteTemplate(w, "discussion.html.tmpl", vm); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.Error("render discussion", "err", err)
 	}
+}
+
+func writeFragment(w http.ResponseWriter, status int, html string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(html))
 }
 
 func buildThreadVM(t *StoryThread) *threadVM {

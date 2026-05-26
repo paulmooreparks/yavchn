@@ -1,5 +1,7 @@
 # yavchn
 
+<img src="src/static/logo.png" align="right" width="200" alt="Overt mascot">
+
 Yet Another Vibe-Coded Hacker News.
 
 A three-pane web reader for Hacker News:
@@ -8,7 +10,11 @@ A three-pane web reader for Hacker News:
 - **Right-top:** the linked article, reader-mode extracted
 - **Right-bottom:** the HN discussion thread
 
-## Running
+## Live Site
+
+The site is live at https://yavchn.parkscomputing.com/ if you'd like to try it out.
+
+## Running Locally
 
 ```
 go run ./src

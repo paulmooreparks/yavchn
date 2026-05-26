@@ -304,6 +304,32 @@ header .logo {
   text-align: center;
 }
 
+.list-error {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--text-mute);
+}
+.list-error h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.list-error p {
+  margin: 0 0 1rem;
+  font-size: 0.9em;
+}
+.list-error .cta {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  background: var(--cta-bg);
+  color: var(--cta-fg);
+  text-decoration: none;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.list-error .cta:hover { background: var(--cta-hover-bg); }
+
 .article-content {
   max-width: 720px;
   margin: 0 auto;
