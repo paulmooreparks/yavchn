@@ -275,6 +275,9 @@ header .logo {
   background: var(--pane-header-bg);
   border-bottom: 1px solid var(--pane-border);
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 .source-tabs a {
   padding: 0.4rem 0.75rem;
