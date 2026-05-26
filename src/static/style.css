@@ -153,6 +153,28 @@ header .logo {
   flex-direction: column;
 }
 
+.source-tabs {
+  display: flex;
+  background: var(--pane-header-bg);
+  border-bottom: 1px solid var(--pane-border);
+  flex-shrink: 0;
+}
+.source-tabs a {
+  padding: 0.4rem 0.75rem;
+  color: var(--text-mute);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+.source-tabs a:hover { color: var(--text); }
+.source-tabs a.active {
+  color: var(--text);
+  border-bottom-color: var(--link);
+}
+
 .pane-article {
   grid-area: article;
   display: flex;

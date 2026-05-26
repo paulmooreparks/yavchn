@@ -24,7 +24,26 @@ const (
 	threadCacheCap = 256
 
 	userAgent = "yavchn/0.1 (+https://github.com/paulmooreparks/yavchn)"
+
+	SourceTop  = "top"
+	SourceShow = "show"
+	SourceAsk  = "ask"
+	SourceNew  = "new"
 )
+
+// sourceEndpoints maps a source name to the firebaseio.com path. Sources
+// not in the map are unknown and rejected by validSource.
+var sourceEndpoints = map[string]string{
+	SourceTop:  "/topstories.json",
+	SourceShow: "/showstories.json",
+	SourceAsk:  "/askstories.json",
+	SourceNew:  "/newstories.json",
+}
+
+func validSource(s string) bool {
+	_, ok := sourceEndpoints[s]
+	return ok
+}
 
 type Item struct {
 	ID          int64   `json:"id"`
@@ -67,9 +86,9 @@ type HN struct {
 	http *http.Client
 	sf   singleflight.Group
 
-	mu         sync.RWMutex
-	topIDs     []int64
-	topFetched time.Time
+	mu          sync.RWMutex
+	listIDs     map[string][]int64
+	listFetched map[string]time.Time
 
 	items   *expirable.LRU[int64, *Item]
 	threads *expirable.LRU[int64, *StoryThread]
@@ -81,8 +100,10 @@ func NewHN() *HN {
 			Timeout:   httpTimeout,
 			Transport: newPoliteTransport(30),
 		},
-		items:   expirable.NewLRU[int64, *Item](itemCacheCap, nil, itemTTL),
-		threads: expirable.NewLRU[int64, *StoryThread](threadCacheCap, nil, threadTTL),
+		listIDs:     make(map[string][]int64),
+		listFetched: make(map[string]time.Time),
+		items:       expirable.NewLRU[int64, *Item](itemCacheCap, nil, itemTTL),
+		threads:     expirable.NewLRU[int64, *StoryThread](threadCacheCap, nil, threadTTL),
 	}
 }
 
@@ -109,34 +130,43 @@ func (u *uaTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	return u.rt.RoundTrip(r)
 }
 
-func (h *HN) TopIDs(ctx context.Context) ([]int64, error) {
+// StoryIDs returns the cached id list for source (top/show/ask/new), fetching
+// upstream if absent or stale. Sources are cached independently.
+func (h *HN) StoryIDs(ctx context.Context, source string) ([]int64, error) {
+	if !validSource(source) {
+		return nil, fmt.Errorf("unknown source %q", source)
+	}
 	h.mu.RLock()
-	fresh := !h.topFetched.IsZero() && time.Since(h.topFetched) < topStoriesTTL
-	ids := h.topIDs
+	fetched := h.listFetched[source]
+	ids := h.listIDs[source]
 	h.mu.RUnlock()
-	if fresh {
+	if !fetched.IsZero() && time.Since(fetched) < topStoriesTTL {
 		return ids, nil
 	}
-	return h.refreshTopIDs(ctx)
+	return h.refreshStoryIDs(ctx, source)
 }
 
-func (h *HN) refreshTopIDs(ctx context.Context) ([]int64, error) {
-	v, err, _ := h.sf.Do("topstories", func() (interface{}, error) {
-		return h.fetchTopIDs(ctx)
+func (h *HN) refreshStoryIDs(ctx context.Context, source string) ([]int64, error) {
+	v, err, _ := h.sf.Do("storyids:"+source, func() (interface{}, error) {
+		return h.fetchStoryIDs(ctx, source)
 	})
 	if err != nil {
 		return nil, err
 	}
 	ids := v.([]int64)
 	h.mu.Lock()
-	h.topIDs = ids
-	h.topFetched = time.Now()
+	h.listIDs[source] = ids
+	h.listFetched[source] = time.Now()
 	h.mu.Unlock()
 	return ids, nil
 }
 
-func (h *HN) fetchTopIDs(ctx context.Context) ([]int64, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", apiBase+"/topstories.json", nil)
+func (h *HN) fetchStoryIDs(ctx context.Context, source string) ([]int64, error) {
+	endpoint, ok := sourceEndpoints[source]
+	if !ok {
+		return nil, fmt.Errorf("unknown source %q", source)
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", apiBase+endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +176,7 @@ func (h *HN) fetchTopIDs(ctx context.Context) ([]int64, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("topstories: %s", resp.Status)
+		return nil, fmt.Errorf("%s: %s", source, resp.Status)
 	}
 	var ids []int64
 	if err := json.NewDecoder(resp.Body).Decode(&ids); err != nil {
@@ -280,6 +310,8 @@ func convertComment(a algoliaItem) *Comment {
 	return c
 }
 
+// StartBackgroundRefresh keeps the "top" source warm. Other sources fill
+// lazily on first hit -- ok for niche tabs that don't need sub-minute freshness.
 func (h *HN) StartBackgroundRefresh(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(topStoriesTTL)
@@ -290,7 +322,7 @@ func (h *HN) StartBackgroundRefresh(ctx context.Context) {
 				return
 			case <-ticker.C:
 				bgCtx, cancel := context.WithTimeout(ctx, httpTimeout)
-				_, _ = h.refreshTopIDs(bgCtx)
+				_, _ = h.refreshStoryIDs(bgCtx, SourceTop)
 				cancel()
 			}
 		}

@@ -58,6 +58,11 @@ func main() {
 	mux.HandleFunc("GET /healthz", srv.Healthz)
 	mux.HandleFunc("GET /{$}", srv.Index)
 	mux.HandleFunc("GET /s/{id}", srv.Index)
+	for _, src := range []string{"show", "ask", "new"} {
+		mux.HandleFunc("GET /"+src, srv.Index)
+		mux.HandleFunc("GET /"+src+"/{$}", srv.Index)
+		mux.HandleFunc("GET /"+src+"/s/{id}", srv.Index)
+	}
 
 	httpSrv := &http.Server{
 		Addr:              ":8080",

@@ -8,13 +8,17 @@ A three-pane web reader for Hacker News:
 - **Right-top:** the linked article, reader-mode extracted
 - **Right-bottom:** the HN discussion thread
 
-## Why?
+Why?
+
+Because I could!
+
+## No, Really... Why?
 
 It seems that everybody has their own personalized Hacker-News reader these days. After all, why not? It's so easy to whip one up in an evening when you have agentic coding at your disposal.
 
 Whenever I browse Hacker News, I find myself opening the discussion in a new tab, then clicking through in that tab to view the article, then popping back to the discussion. It's all very annoying, when what I really want to do is get a quick overview of the article and see if there is any interesting discussion going on before I dive into either the article or the discussion.
 
-YAVCHN lets me quickly browse articles
+YAVCHN lets me quickly browse an article in scaled-down reader mode in one pane and see the discussion in the pane below. If I find either one compelling, I can click "Open original" to see the original article or "Open on HN" to join the discussion on Hacker News.
 
 ## Live Site
 

@@ -62,6 +62,11 @@
 <div class="layout">
 
   <aside class="pane pane-list">
+    <nav class="source-tabs">
+    {{ range .Tabs }}
+      <a href="{{ .URL }}"{{ if .Active }} class="active"{{ end }}>{{ .Label }}</a>
+    {{ end }}
+    </nav>
     {{ if .ListError }}
     <div class="list-error">
       <h2>Front page unavailable</h2>

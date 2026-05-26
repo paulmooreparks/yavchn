@@ -42,6 +42,8 @@ func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 type listVM struct {
+	Source      string
+	Tabs        []tabVM
 	Stories     []storyVM
 	Page        int
 	HasPrev     bool
@@ -52,6 +54,12 @@ type listVM struct {
 	ListError   string
 	SelectError string
 	RetryURL    string
+}
+
+type tabVM struct {
+	Label  string
+	URL    string
+	Active bool
 }
 
 type storyVM struct {
@@ -96,6 +104,8 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 		page = p
 	}
 
+	source := sourceFromPath(r.URL.Path)
+
 	var selectedID int64
 	if idStr := r.PathValue("id"); idStr != "" {
 		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
@@ -106,11 +116,11 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	ids, idsErr := s.hn.TopIDs(ctx)
+	ids, idsErr := s.hn.StoryIDs(ctx, source)
 	if idsErr != nil {
-		slog.Warn("topstories unavailable", "err", idsErr, "path", r.URL.Path)
-		s.renderShellWithListError(w, r, page, selectedID,
-			"The HN front page couldn't be loaded right now. The HN API may be having a moment.")
+		slog.Warn("storyids unavailable", "source", source, "err", idsErr, "path", r.URL.Path)
+		s.renderShellWithListError(w, r, source, page, selectedID,
+			"The "+sourceLabel(source)+" couldn't be loaded right now. The HN API may be having a moment.")
 		return
 	}
 
@@ -140,11 +150,13 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 
 	vm := listVM{
+		Source:   source,
+		Tabs:     buildTabs(source),
 		Page:     page,
 		HasPrev:  page > 1,
 		HasNext:  end < len(ids),
-		PrevURL:  buildPagerURL(selectedID, page-1),
-		NextURL:  buildPagerURL(selectedID, page+1),
+		PrevURL:  buildPagerURL(source, selectedID, page-1),
+		NextURL:  buildPagerURL(source, selectedID, page+1),
 		RetryURL: r.URL.RequestURI(),
 	}
 
@@ -165,7 +177,7 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 			Comments:  item.Descendants,
 			HNURL:     fmt.Sprintf("https://news.ycombinator.com/item?id=%d", item.ID),
 			Selected:  item.ID == selectedID,
-			SelectURL: fmt.Sprintf("/s/%d", item.ID),
+			SelectURL: buildSelectURL(source, item.ID),
 		})
 	}
 
@@ -196,10 +208,12 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 }
 
 // renderShellWithListError renders the page shell with a list-pane error placeholder.
-// Used when TopIDs itself fails -- we can't show the list, but the rest of the layout
-// still gives the visitor something to look at.
-func (s *Server) renderShellWithListError(w http.ResponseWriter, r *http.Request, page int, selectedID int64, msg string) {
+// Used when StoryIDs itself fails -- we can't show the list, but the rest of the
+// layout still gives the visitor something to look at.
+func (s *Server) renderShellWithListError(w http.ResponseWriter, r *http.Request, source string, page int, selectedID int64, msg string) {
 	vm := listVM{
+		Source:    source,
+		Tabs:      buildTabs(source),
 		Page:      page,
 		ListError: msg,
 		RetryURL:  r.URL.RequestURI(),
@@ -301,18 +315,77 @@ func storyURLs(item *Item) (host, displayURL string) {
 	return
 }
 
-func buildPagerURL(selectedID int64, page int) string {
+func sourceFromPath(path string) string {
+	switch {
+	case strings.HasPrefix(path, "/show"):
+		return SourceShow
+	case strings.HasPrefix(path, "/ask"):
+		return SourceAsk
+	case strings.HasPrefix(path, "/new"):
+		return SourceNew
+	default:
+		return SourceTop
+	}
+}
+
+func sourceLabel(source string) string {
+	switch source {
+	case SourceShow:
+		return "Show HN"
+	case SourceAsk:
+		return "Ask HN"
+	case SourceNew:
+		return "New"
+	default:
+		return "HN front page"
+	}
+}
+
+func sourceBase(source string) string {
+	if source == SourceTop {
+		return ""
+	}
+	return "/" + source
+}
+
+func buildTabs(active string) []tabVM {
+	defs := []struct{ src, label string }{
+		{SourceTop, "Top"},
+		{SourceShow, "Show HN"},
+		{SourceAsk, "Ask HN"},
+		{SourceNew, "New"},
+	}
+	out := make([]tabVM, 0, len(defs))
+	for _, d := range defs {
+		url := "/"
+		if d.src != SourceTop {
+			url = "/" + d.src + "/"
+		}
+		out = append(out, tabVM{Label: d.label, URL: url, Active: d.src == active})
+	}
+	return out
+}
+
+func buildSelectURL(source string, id int64) string {
+	return fmt.Sprintf("%s/s/%d", sourceBase(source), id)
+}
+
+func buildPagerURL(source string, selectedID int64, page int) string {
 	q := ""
 	if page > 1 {
 		q = fmt.Sprintf("?page=%d", page)
 	}
+	base := sourceBase(source)
 	if selectedID != 0 {
-		return fmt.Sprintf("/s/%d%s", selectedID, q)
+		return fmt.Sprintf("%s/s/%d%s", base, selectedID, q)
 	}
-	if q == "" {
-		return "/"
+	if base == "" {
+		if q == "" {
+			return "/"
+		}
+		return "/" + q
 	}
-	return "/" + q
+	return base + "/" + q
 }
 
 func relTime(unix int64) string {
