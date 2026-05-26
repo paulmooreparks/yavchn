@@ -35,8 +35,11 @@ func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if err := s.db.PingContext(ctx); err != nil {
+		// Log the detail privately; don't leak SQLite version / paths / lock
+		// state to the public endpoint.
+		slog.Warn("healthz db ping failed", "err", err)
 		w.WriteHeader(http.StatusServiceUnavailable)
-		fmt.Fprintf(w, `{"status":"db_unavailable","error":%q}`, err.Error())
+		_, _ = w.Write([]byte(`{"status":"db_unavailable"}`))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
