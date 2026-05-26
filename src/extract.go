@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -24,6 +25,9 @@ const (
 	rateLimitPerWindow       = 20
 	rateLimitWindow          = 60 * time.Second
 	maxResponseBytes         = 5 * 1024 * 1024 // 5 MiB upper bound on the source-page body we'll parse
+
+	articleCacheTTL = 30 * 24 * time.Hour // 30 days
+	articleGCEvery  = 6 * time.Hour
 )
 
 // errRateLimited is returned by Extractor.Get when the caller's IP has
@@ -170,6 +174,39 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 		return nil, fmt.Errorf("cache store: %w", err)
 	}
 	return a, nil
+}
+
+// StartGC runs an immediate sweep and then ticks every articleGCEvery,
+// deleting article rows older than articleCacheTTL so the SQLite cache
+// stays bounded. Returns when ctx is cancelled.
+func (e *Extractor) StartGC(ctx context.Context) {
+	go func() {
+		e.runGC(ctx)
+		ticker := time.NewTicker(articleGCEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				e.runGC(ctx)
+			}
+		}
+	}()
+}
+
+func (e *Extractor) runGC(ctx context.Context) {
+	cutoff := time.Now().Add(-articleCacheTTL).Unix()
+	res, err := e.db.ExecContext(ctx,
+		`DELETE FROM articles WHERE fetched_at < ?`, cutoff)
+	if err != nil {
+		slog.Warn("article cache gc failed", "err", err)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n > 0 {
+		slog.Info("article cache gc", "evicted", n, "ttl_days", 30)
+	}
 }
 
 func urlHash(s string) string {

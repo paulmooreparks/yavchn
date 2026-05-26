@@ -62,6 +62,7 @@ func main() {
 	hn := NewHN()
 	hn.StartBackgroundRefresh(ctx)
 	extract := NewExtractor(db)
+	extract.StartGC(ctx)
 
 	srv := NewServer(hn, tpl, extract, db)
 	mux := http.NewServeMux()
