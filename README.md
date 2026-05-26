@@ -44,11 +44,11 @@ Serves on `http://localhost:8080`.
 
 ## Design notes
 
-- **URL-is-king.** Every state is addressable: `/`, `/?page=N`, `/s/{hn-id}`, `/s/{hn-id}?page=N`.
-- **Zero auth in this app.** HN has no OAuth. Comments are fetched server-side from the HN Algolia API and rendered into the discussion pane. For vote / save / hide / reply, click the per-comment "&uarr;" or the pane-header "Open on HN &uarr;" &mdash; opens the item on news.ycombinator.com in a new tab where your existing HN session handles the action. yavchn never sees your credentials or cookies.
-- **Cache hierarchy.** HN top-list, items, and comment threads: in-memory LRU + TTL. Extracted articles: SQLite (expensive to recompute, stable per URL).
-- **Progressive enhancement.** Pages render server-side without JavaScript. Article reader-mode and discussion rendering are lazy-loaded after first paint via `GET /api/article?url=...` and `GET /api/discussion?id=...`; no-JS visitors get prominent "Open article" / "Open on HN" fallback links.
-- **Persisted UI state.** Splitter sizes and the light/dark theme preference live in `localStorage`; an inline script in `<head>` applies them before first paint to avoid flash.
+- **URL-is-king**: Every state is addressable: `/`, `/?page=N`, `/s/{hn-id}`, `/s/{hn-id}?page=N`.
+- **Zero auth**: HN has no OAuth. Comments are fetched server-side from the HN Algolia API and rendered into the discussion pane. For vote / save / hide / reply, click the per-comment "&uarr;" or the pane-header "Open on HN &uarr;" &mdash; opens the item on news.ycombinator.com in a new tab where your existing HN session handles the action. yavchn never sees your credentials or cookies.
+- **Cache hierarchy**: HN top-list, items, and comment threads: in-memory LRU + TTL. Extracted articles: SQLite (expensive to recompute, but stable per URL).
+- **Progressive enhancement**: Pages render server-side without JavaScript. Article reader-mode and discussion rendering are lazy-loaded after first paint via `GET /api/article?url=...` and `GET /api/discussion?id=...`; no-JS visitors get prominent "Open article" / "Open on HN" fallback links.
+- **Persisted UI state**: Splitter sizes and the light/dark theme preference live in `localStorage`; an inline script in `<head>` applies them before first paint to avoid flash.
 
 ## Docker
 
