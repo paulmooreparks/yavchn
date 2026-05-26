@@ -29,12 +29,24 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	dbPath := os.Getenv("YAVCHN_DB_PATH")
+	if dbPath == "" {
+		dbPath = "./yavchn.db"
+	}
+	db, err := OpenDB(ctx, dbPath)
+	if err != nil {
+		log.Fatalf("open db (%s): %v", dbPath, err)
+	}
+	defer db.Close()
+
 	hn := NewHN()
 	hn.StartBackgroundRefresh(ctx)
+	extract := NewExtractor(db)
 
-	srv := NewServer(hn, tpl)
+	srv := NewServer(hn, tpl, extract)
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.HandleFunc("GET /api/article", srv.ArticleAPI)
 	mux.HandleFunc("GET /{$}", srv.Index)
 	mux.HandleFunc("GET /s/{id}", srv.Index)
 
@@ -44,7 +56,7 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
-		log.Printf("yavchn listening on %s", httpSrv.Addr)
+		log.Printf("yavchn listening on %s (db=%s)", httpSrv.Addr, dbPath)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}

@@ -15,12 +15,13 @@ import (
 const pageSize = 30
 
 type Server struct {
-	hn  *HN
-	tpl *template.Template
+	hn      *HN
+	tpl     *template.Template
+	extract *Extractor
 }
 
-func NewServer(hn *HN, tpl *template.Template) *Server {
-	return &Server{hn: hn, tpl: tpl}
+func NewServer(hn *HN, tpl *template.Template, extract *Extractor) *Server {
+	return &Server{hn: hn, tpl: tpl, extract: extract}
 }
 
 type listVM struct {
@@ -146,6 +147,27 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
+	rawURL := r.URL.Query().Get("url")
+	if rawURL == "" {
+		http.Error(w, "missing url", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), extractTimeout+2*time.Second)
+	defer cancel()
+
+	article, err := s.extract.Get(ctx, rawURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tpl.ExecuteTemplate(w, "article.html.tmpl", article); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

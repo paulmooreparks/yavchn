@@ -35,32 +35,30 @@
     </nav>
   </aside>
 
-  <section class="pane pane-article">
+  <section class="pane pane-article"{{ if and .Selected .Selected.HasArticle }} data-reader-url="{{ .Selected.URL }}"{{ end }}>
     {{ if .Selected }}
-      {{ if .Selected.HasArticle }}
-        <div class="pane-header">
-          <span class="pane-label">article</span>
-          <a href="{{ .Selected.URL }}" target="_blank" rel="noopener">Open article &uarr;</a>
-        </div>
-        <div class="article-stub">
-          <h2>{{ .Selected.Title }}</h2>
-          <p class="article-host">{{ .Selected.Host }}</p>
-          <a class="cta" href="{{ .Selected.URL }}" target="_blank" rel="noopener">Open article &uarr;</a>
-          <p class="note">Reader-mode extraction lands next commit. For now, click above to open in a new tab.</p>
-        </div>
-      {{ else }}
-        <div class="pane-header">
-          <span class="pane-label">article</span>
-        </div>
-        <div class="article-stub">
-          <h2>{{ .Selected.Title }}</h2>
-          <p class="note">This is a self-post &mdash; see the discussion below.</p>
-        </div>
-      {{ end }}
-    {{ else }}
-      <div class="article-stub empty">
-        <p>Click a story to view its article.</p>
+      <div class="pane-header">
+        <span class="pane-label">article</span>
+        {{ if .Selected.HasArticle }}<a href="{{ .Selected.URL }}" target="_blank" rel="noopener">Open original &uarr;</a>{{ end }}
       </div>
+      <div class="pane-body">
+        {{ if .Selected.HasArticle }}
+          <div class="article-stub">
+            <h2>{{ .Selected.Title }}</h2>
+            <p class="article-host">{{ .Selected.Host }}</p>
+            <a class="cta" href="{{ .Selected.URL }}" target="_blank" rel="noopener">Open article &uarr;</a>
+            <p class="note js-reader-status">Loading reader-mode&hellip;</p>
+            <noscript><p class="note">Reader-mode requires JavaScript. The "Open article" link above works without it.</p></noscript>
+          </div>
+        {{ else }}
+          <div class="article-stub">
+            <h2>{{ .Selected.Title }}</h2>
+            <p class="note">This is a self-post &mdash; see the discussion below.</p>
+          </div>
+        {{ end }}
+      </div>
+    {{ else }}
+      <div class="article-stub empty"><p>Click a story to view its article.</p></div>
     {{ end }}
   </section>
 
@@ -72,12 +70,11 @@
       </div>
       <iframe src="{{ .Selected.HNURL }}" title="HN discussion"></iframe>
     {{ else }}
-      <div class="article-stub empty">
-        <p>Click a story to view the discussion.</p>
-      </div>
+      <div class="article-stub empty"><p>Click a story to view the discussion.</p></div>
     {{ end }}
   </section>
 
 </div>
+<script src="/static/reader.js" defer></script>
 </body>
 </html>
