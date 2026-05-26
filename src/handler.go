@@ -241,7 +241,10 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 	article, err := s.extract.Get(ctx, rawURL)
 	if err != nil {
 		slog.Warn("article extract failed", "url", rawURL, "err", err)
-		writeFragment(w, http.StatusBadGateway, articleErrorFragment)
+		// 200 (not 5xx) so Cloudflare and friends don't replace our fragment
+		// with their own branded error page. Inability to extract is a content
+		// failure, not a server failure.
+		writeFragment(w, http.StatusOK, articleErrorFragment)
 		return
 	}
 
@@ -264,7 +267,9 @@ func (s *Server) DiscussionAPI(w http.ResponseWriter, r *http.Request) {
 	thread, err := s.hn.StoryThread(ctx, id)
 	if err != nil {
 		slog.Warn("thread fetch failed", "id", id, "err", err)
-		writeFragment(w, http.StatusBadGateway, discussionErrorFragment)
+		// 200 for the same reason as ArticleAPI -- Cloudflare swaps 5xx
+		// origin responses for its own branded error page.
+		writeFragment(w, http.StatusOK, discussionErrorFragment)
 		return
 	}
 
