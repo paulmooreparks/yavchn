@@ -2,13 +2,16 @@
   var layout = document.querySelector('.layout');
   if (!layout) return;
 
-  function attach(splitter, axis, cssVar, storageKey, minA, minB) {
+  function attach(splitter, axis, cssVar, storageKey, minAFn, minBFn) {
     if (!splitter) return;
 
     splitter.addEventListener('pointerdown', function (e) {
       e.preventDefault();
       splitter.setPointerCapture(e.pointerId);
       splitter.classList.add('active');
+
+      var minA = typeof minAFn === 'function' ? minAFn() : minAFn;
+      var minB = typeof minBFn === 'function' ? minBFn() : minBFn;
 
       function onMove(ev) {
         var rect = layout.getBoundingClientRect();
@@ -40,6 +43,13 @@
     });
   }
 
-  attach(layout.querySelector('.splitter-v'), 'x', '--list-w', 'yavchn-list-w', 220, 320);
+  // Minimums depend on viewport: narrow mode lets the list shrink more so
+  // the right pane has room. Evaluated per drag-start so a rotation /
+  // window-resize picks up the new floor.
+  function narrow() { return window.innerWidth < 800; }
+  function listMin()  { return narrow() ? 90  : 220; }
+  function rightMin() { return narrow() ? 120 : 320; }
+
+  attach(layout.querySelector('.splitter-v'), 'x', '--list-w', 'yavchn-list-w', listMin, rightMin);
   attach(layout.querySelector('.splitter-h'), 'y', '--article-h', 'yavchn-article-h', 140, 140);
 })();
