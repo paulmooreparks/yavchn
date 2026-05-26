@@ -74,7 +74,7 @@
       <p><a class="cta" href="{{ .RetryURL }}">Retry</a></p>
     </div>
     {{ else }}
-    <ul class="stories">
+    <ul class="stories" data-has-next="{{ if .HasNext }}true{{ else }}false{{ end }}">
     {{ range .Stories }}
     <li class="story{{ if .Selected }} selected{{ end }}">
       <span class="rank">{{ .Rank }}.</span>
@@ -163,5 +163,6 @@
 <script src="/static/splitters.js" defer></script>
 <script src="/static/theme.js" defer></script>
 <script src="/static/keys.js" defer></script>
+<script src="/static/infinite.js" defer></script>
 </body>
 </html>

@@ -327,6 +327,16 @@ header .logo {
   text-align: center;
 }
 
+.end-of-list {
+  padding: 1.25rem 1rem;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.8em;
+  border-top: 1px solid var(--pane-border);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .list-error {
   padding: 1.5rem 1rem;
   text-align: center;

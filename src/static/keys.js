@@ -1,17 +1,24 @@
 (function () {
   var list = document.querySelector('.pane-list .stories');
   if (!list) return;
-  var items = Array.prototype.slice.call(list.querySelectorAll('.story'));
-  if (!items.length) return;
+
+  // Items are re-queried on every keypress so appended rows from infinite
+  // scroll (yavchn-5) participate in navigation automatically.
+  function getItems() {
+    return Array.prototype.slice.call(list.querySelectorAll('.story'));
+  }
+
+  var initial = getItems();
+  if (!initial.length) return;
 
   var focusIdx = -1;
-  for (var i = 0; i < items.length; i++) {
-    if (items[i].classList.contains('selected')) { focusIdx = i; break; }
+  for (var i = 0; i < initial.length; i++) {
+    if (initial[i].classList.contains('selected')) { focusIdx = i; break; }
   }
   if (focusIdx < 0) focusIdx = 0;
-  applyFocus();
+  applyFocus(initial);
 
-  function applyFocus() {
+  function applyFocus(items) {
     for (var i = 0; i < items.length; i++) {
       items[i].classList.toggle('focused', i === focusIdx);
     }
@@ -21,7 +28,7 @@
     }
   }
 
-  function openFocused() {
+  function openFocused(items) {
     var li = items[focusIdx];
     if (!li) return;
     var a = li.querySelector('.title a');
@@ -40,12 +47,15 @@
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     if (inEditable(e.target)) return;
 
+    var items = getItems();
+    if (!items.length) return;
+
     switch (e.key) {
       case 'j':
       case 'ArrowDown':
         if (focusIdx < items.length - 1) {
           focusIdx++;
-          applyFocus();
+          applyFocus(items);
         }
         e.preventDefault();
         break;
@@ -53,14 +63,14 @@
       case 'ArrowUp':
         if (focusIdx > 0) {
           focusIdx--;
-          applyFocus();
+          applyFocus(items);
         }
         e.preventDefault();
         break;
       case 'Enter':
         if (e.target === document.body) {
           e.preventDefault();
-          openFocused();
+          openFocused(items);
         }
         break;
     }
