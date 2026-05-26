@@ -4,9 +4,9 @@
 
 A three-pane web reader for Hacker News:
 
-- **Left:** paged list of stories
-- **Right-top:** the linked article, reader-mode extracted
-- **Right-bottom:** the HN discussion thread
+- **Left:** The list of articles on Hacker News
+- **Right-top:** The linked article, reader-mode extracted
+- **Right-bottom:** The HN discussion thread
 
 Why?
 

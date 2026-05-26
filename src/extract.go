@@ -20,13 +20,21 @@ import (
 const (
 	extractTimeout           = 8 * time.Second
 	maxConcurrentExtractions = 20
+	rateLimitPerWindow       = 20
+	rateLimitWindow          = 60 * time.Second
 )
+
+// errRateLimited is returned by Extractor.Get when the caller's IP has
+// exceeded the per-window outbound-fetch budget. Cache hits never reach
+// this path -- the rate check fires only after cache miss + singleflight.
+var errRateLimited = errors.New("rate limited")
 
 type Extractor struct {
 	db     *sql.DB
 	sf     singleflight.Group
 	client *http.Client
 	sem    chan struct{}
+	rate   *rateLimiter
 }
 
 type Article struct {
@@ -43,11 +51,12 @@ func NewExtractor(db *sql.DB) *Extractor {
 			Timeout:   extractTimeout,
 			Transport: newPoliteTransport(8),
 		},
-		sem: make(chan struct{}, maxConcurrentExtractions),
+		sem:  make(chan struct{}, maxConcurrentExtractions),
+		rate: newRateLimiter(rateLimitPerWindow, rateLimitWindow),
 	}
 }
 
-func (e *Extractor) Get(ctx context.Context, rawURL string) (*Article, error) {
+func (e *Extractor) Get(ctx context.Context, rawURL, requesterIP string) (*Article, error) {
 	if !isAllowedURL(rawURL) {
 		return nil, errors.New("url scheme not allowed")
 	}
@@ -60,6 +69,11 @@ func (e *Extractor) Get(ctx context.Context, rawURL string) (*Article, error) {
 	v, err, _ := e.sf.Do(hash, func() (interface{}, error) {
 		if a, err := e.fromCache(ctx, hash); err == nil {
 			return a, nil
+		}
+		// Rate-check inside singleflight so cache hits and piggy-backers
+		// on an in-flight fetch never consume the requester's budget.
+		if !e.rate.Allow(requesterIP) {
+			return nil, errRateLimited
 		}
 		return e.fetchAndStore(ctx, hash, rawURL)
 	})

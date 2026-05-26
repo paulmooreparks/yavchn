@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -236,11 +237,24 @@ var articleErrorTmpl = template.Must(template.New("articleError").Parse(
   <p class="note">The source server didn't return readable HTML.</p>
 </div>`))
 
+var rateLimitedTmpl = template.Must(template.New("rateLimited").Parse(
+	`<div class="article-stub">
+  <h2>Too many article requests</h2>
+  {{ if . }}<a class="cta" href="{{ . }}" target="_blank" rel="noopener">Open article &uarr;</a>{{ end }}
+  <p class="note">You've hit the per-visitor rate limit. Wait a minute, or open the source page directly.</p>
+</div>`))
+
 const discussionErrorFragment = `<div class="empty-note"><p>Couldn't load the discussion right now. Use the "Open on HN &uarr;" link above to read it directly.</p></div>`
 
 func articleErrorHTML(rawURL string) string {
 	var buf bytes.Buffer
 	_ = articleErrorTmpl.Execute(&buf, rawURL)
+	return buf.String()
+}
+
+func rateLimitedHTML(rawURL string) string {
+	var buf bytes.Buffer
+	_ = rateLimitedTmpl.Execute(&buf, rawURL)
 	return buf.String()
 }
 
@@ -253,8 +267,14 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), extractTimeout+2*time.Second)
 	defer cancel()
 
-	article, err := s.extract.Get(ctx, rawURL)
+	article, err := s.extract.Get(ctx, rawURL, clientIP(r))
 	if err != nil {
+		if errors.Is(err, errRateLimited) {
+			slog.Info("article extract rate-limited", "url", rawURL, "ip", clientIP(r))
+			w.Header().Set("Retry-After", "60")
+			writeFragment(w, http.StatusTooManyRequests, rateLimitedHTML(rawURL))
+			return
+		}
 		slog.Warn("article extract failed", "url", rawURL, "err", err)
 		// 200 (not 5xx) so Cloudflare and friends don't replace our fragment
 		// with their own branded error page. Inability to extract is a content
