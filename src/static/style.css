@@ -1,4 +1,5 @@
-:root {
+:root,
+:root[data-theme="light"] {
   --header-h: 38px;
   --pane-border: #e0e0e0;
   --pane-bg: #fff;
@@ -11,6 +12,38 @@
   --accent: #1a1a1a;
   --link: #1a73e8;
   --thread-rule: #ececec;
+  --row-border: #f0f0f0;
+  --comment-border: #f5f5f5;
+  --code-bg: #f7f7f7;
+  --article-text: #222;
+  --cta-bg: #1a1a1a;
+  --cta-fg: #fff;
+  --cta-hover-bg: #333;
+  --disabled: #ccc;
+  --splitter-hover: #b8c4d4;
+}
+
+:root[data-theme="dark"] {
+  --pane-border: #2a2a2a;
+  --pane-bg: #161616;
+  --pane-header-bg: #1f1f1f;
+  --text: #e8e8e8;
+  --text-mute: #a0a0a0;
+  --text-dim: #707070;
+  --hover: #1f1f1f;
+  --selected: #1e2b3d;
+  --accent: #e8e8e8;
+  --link: #6ba3ff;
+  --thread-rule: #2a2a2a;
+  --row-border: #222;
+  --comment-border: #222;
+  --code-bg: #242424;
+  --article-text: #d8d8d8;
+  --cta-bg: #e8e8e8;
+  --cta-fg: #161616;
+  --cta-hover-bg: #fff;
+  --disabled: #3a3a3a;
+  --splitter-hover: #3a4a5e;
 }
 
 * { box-sizing: border-box; }
@@ -56,6 +89,26 @@ header .logo {
   height: 24px;
 }
 
+.theme-toggle {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: var(--text-mute);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0.25rem 0.5rem;
+  line-height: 1;
+  border-radius: 4px;
+}
+.theme-toggle:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+:root[data-theme="dark"] .theme-toggle .icon-dark { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-light { display: inline; }
+.theme-toggle .icon-dark { display: inline; }
+.theme-toggle .icon-light { display: none; }
+
 .layout {
   display: grid;
   grid-template-columns: var(--list-w, 380px) 4px 1fr;
@@ -95,7 +148,7 @@ header .logo {
 }
 .splitter:hover,
 .splitter.active {
-  background: #b8c4d4;
+  background: var(--splitter-hover);
 }
 .splitter-v {
   grid-area: vsplit;
@@ -136,7 +189,7 @@ header .logo {
   display: flex;
   gap: 0.5rem;
   padding: 0.55rem 0.75rem;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--row-border);
 }
 .story:hover { background: var(--hover); }
 .story.selected { background: var(--selected); }
@@ -179,7 +232,7 @@ header .logo {
 }
 .pager a { color: var(--text); text-decoration: none; }
 .pager a:hover { text-decoration: underline; }
-.pager .disabled { color: #ccc; }
+.pager .disabled { color: var(--disabled); }
 .page-num { color: var(--text-dim); }
 
 .article-stub {
@@ -206,13 +259,13 @@ header .logo {
 .article-stub .cta {
   display: inline-block;
   padding: 0.5rem 1.25rem;
-  background: var(--accent);
-  color: #fff;
+  background: var(--cta-bg);
+  color: var(--cta-fg);
   text-decoration: none;
   border-radius: 4px;
   font-weight: 500;
 }
-.article-stub .cta:hover { background: #333; }
+.article-stub .cta:hover { background: var(--cta-hover-bg); }
 .article-stub .note {
   color: var(--text-dim);
   font-size: 0.85em;
@@ -232,7 +285,7 @@ header .logo {
   margin: 0 auto;
   padding: 2rem 1.5rem 3rem;
   font: 16px/1.6 Georgia, "Times New Roman", serif;
-  color: #222;
+  color: var(--article-text);
 }
 .article-content h1 {
   font-size: 1.6rem;
@@ -267,7 +320,7 @@ header .logo {
   font-style: italic;
 }
 .article-content pre {
-  background: #f7f7f7;
+  background: var(--code-bg);
   padding: 0.75rem 1rem;
   border-radius: 4px;
   overflow-x: auto;
@@ -275,7 +328,7 @@ header .logo {
 }
 .article-content code {
   font: 0.9em "SF Mono", Consolas, Menlo, monospace;
-  background: #f7f7f7;
+  background: var(--code-bg);
   padding: 0.05em 0.3em;
   border-radius: 3px;
 }
@@ -309,7 +362,7 @@ header .logo {
 
 .comment {
   padding: 0.55rem 0;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--comment-border);
 }
 .comment:last-child { border-bottom: 0; }
 
@@ -341,7 +394,7 @@ header .logo {
 .comment-text p:last-child { margin-bottom: 0; }
 .comment-text a { color: var(--link); }
 .comment-text pre {
-  background: #f7f7f7;
+  background: var(--code-bg);
   padding: 0.5em 0.75em;
   border-radius: 3px;
   overflow-x: auto;
