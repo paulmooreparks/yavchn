@@ -57,8 +57,64 @@
     <button type="button" class="theme-toggle" title="Toggle light/dark theme" aria-label="Toggle theme">
       <span class="icon-dark" aria-hidden="true">&#9790;</span><span class="icon-light" aria-hidden="true">&#9728;</span>
     </button>
+    <button type="button" class="help-button" title="Help (?)" aria-label="Help" aria-haspopup="dialog">?</button>
   </div>
 </header>
+
+<dialog id="help-dialog" class="help-dialog" aria-labelledby="help-dialog-title">
+  <div class="help-dialog-frame">
+    <header class="help-dialog-header">
+      <h2 id="help-dialog-title">Help</h2>
+      <button type="button" class="help-dialog-close" aria-label="Close help">&times;</button>
+    </header>
+    <div class="help-dialog-body">
+
+      <section>
+        <h3>Keyboard</h3>
+        <dl>
+          <dt><kbd>j</kbd> / <kbd>&darr;</kbd></dt>
+          <dd>Move focus down the story list</dd>
+          <dt><kbd>k</kbd> / <kbd>&uarr;</kbd></dt>
+          <dd>Move focus up the story list</dd>
+          <dt><kbd>Enter</kbd></dt>
+          <dd>Open the focused story (loads its article and discussion in the right panes)</dd>
+          <dt><kbd>?</kbd></dt>
+          <dd>Toggle this help</dd>
+          <dt><kbd>Esc</kbd></dt>
+          <dd>Close this help</dd>
+        </dl>
+      </section>
+
+      <section>
+        <h3>Mouse and touch</h3>
+        <ul>
+          <li>Click a story title to load its article and discussion in the right panes; the list stays where you left it (your scroll position and any infinite-scrolled extra rows are preserved).</li>
+          <li>Scroll the story list down past the visible rows to load more stories.</li>
+          <li>Drag the splitter bars between panes to resize them; the layout you chose persists across reloads.</li>
+          <li>Click <strong>Open original &uarr;</strong> in the article pane to read the full source page in a new tab.</li>
+          <li>Click <strong>Open on HN &uarr;</strong> in the discussion pane (or the small &uarr; next to any comment) to vote, reply, save, or hide on news.ycombinator.com.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h3>Source tabs</h3>
+        <p>The tabs above the story list switch the feed: <strong>Top</strong>, <strong>Show HN</strong>, <strong>Ask HN</strong>, <strong>New</strong>.</p>
+      </section>
+
+      <section>
+        <h3>Theme</h3>
+        <p>The sun/moon button in the header toggles between light and dark themes. The first visit follows your operating system's preference.</p>
+      </section>
+
+      <section>
+        <h3>About</h3>
+        <p>yavchn never sees your HN credentials. The discussion is fetched server-side and rendered into the pane; logged-in actions hand off to news.ycombinator.com in a new tab where your existing session does the work.</p>
+        <p>Open source: <a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">github.com/paulmooreparks/yavchn</a>.</p>
+      </section>
+
+    </div>
+  </div>
+</dialog>
 <div class="layout">
 
   <aside class="pane pane-list">
@@ -165,5 +221,6 @@
 <script src="/static/keys.js" defer></script>
 <script src="/static/infinite.js" defer></script>
 <script src="/static/swap.js" defer></script>
+<script src="/static/help.js" defer></script>
 </body>
 </html>
