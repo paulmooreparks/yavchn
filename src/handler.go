@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -18,10 +19,25 @@ type Server struct {
 	hn      *HN
 	tpl     *template.Template
 	extract *Extractor
+	db      *sql.DB
 }
 
-func NewServer(hn *HN, tpl *template.Template, extract *Extractor) *Server {
-	return &Server{hn: hn, tpl: tpl, extract: extract}
+func NewServer(hn *HN, tpl *template.Template, extract *Extractor, db *sql.DB) *Server {
+	return &Server{hn: hn, tpl: tpl, extract: extract, db: db}
+}
+
+func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+	defer cancel()
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := s.db.PingContext(ctx); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintf(w, `{"status":"db_unavailable","error":%q}`, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
 
 type listVM struct {

@@ -43,11 +43,12 @@ func main() {
 	hn.StartBackgroundRefresh(ctx)
 	extract := NewExtractor(db)
 
-	srv := NewServer(hn, tpl, extract)
+	srv := NewServer(hn, tpl, extract, db)
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	mux.HandleFunc("GET /api/article", srv.ArticleAPI)
 	mux.HandleFunc("GET /api/discussion", srv.DiscussionAPI)
+	mux.HandleFunc("GET /healthz", srv.Healthz)
 	mux.HandleFunc("GET /{$}", srv.Index)
 	mux.HandleFunc("GET /s/{id}", srv.Index)
 
