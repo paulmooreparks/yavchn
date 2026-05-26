@@ -613,3 +613,63 @@ header .logo {
   margin-top: 0.4rem;
   border-left: 2px solid var(--thread-rule);
 }
+
+/* Narrow viewports: tighten padding, inline the list rank, clamp list pane. */
+@media (max-width: 800px) {
+  header { padding: 0 0.5rem; }
+
+  .layout {
+    /* Don't let a desktop-saved splitter width squeeze the right pane. */
+    grid-template-columns: min(var(--list-w, 250px), 50vw) 4px 1fr;
+  }
+
+  .source-tabs a {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.75em;
+  }
+
+  .pane-header {
+    padding: 0.3rem 0.6rem;
+  }
+
+  .story {
+    display: block;
+    padding: 0.45rem 0.6rem;
+  }
+  .story::after {
+    content: '';
+    display: block;
+    clear: both;
+  }
+  .rank {
+    float: left;
+    min-width: 0;
+    padding: 0 0.3rem 0 0;
+    text-align: left;
+    color: var(--text-mute);
+    font-size: inherit;
+  }
+  .meta {
+    font-size: 0.78em;
+    margin-top: 0.15rem;
+  }
+
+  .pager { padding: 0.75rem; }
+
+  .article-content {
+    padding: 1rem 0.85rem 1.5rem;
+    font-size: 15px;
+  }
+  .article-content h1 { font-size: 1.25rem; }
+  .article-content h2 { font-size: 1.05rem; margin-top: 1.25rem; }
+  .article-content h3 { font-size: 0.95rem; margin-top: 1rem; }
+
+  .discussion-content {
+    padding: 0.5rem 0.6rem 1rem;
+  }
+  .comment { padding: 0.45rem 0; }
+  .comment .thread {
+    padding-left: 0.75rem;
+    margin-top: 0.3rem;
+  }
+}
