@@ -249,6 +249,8 @@ var rateLimitedTmpl = template.Must(template.New("rateLimited").Parse(
 
 const discussionErrorFragment = `<div class="empty-note"><p>Couldn't load the discussion right now. Use the "Open on HN &uarr;" link above to read it directly.</p></div>`
 
+const discussionRateLimitedFragment = `<div class="empty-note"><p>You've hit the per-visitor rate limit for discussions. Wait a minute and try again, or use the "Open on HN &uarr;" link above to read on news.ycombinator.com.</p></div>`
+
 func articleErrorHTML(rawURL string) string {
 	var buf bytes.Buffer
 	_ = articleErrorTmpl.Execute(&buf, rawURL)
@@ -302,8 +304,14 @@ func (s *Server) DiscussionAPI(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	thread, err := s.hn.StoryThread(ctx, id)
+	thread, err := s.hn.StoryThread(ctx, id, clientIP(r))
 	if err != nil {
+		if errors.Is(err, errRateLimited) {
+			slog.Info("discussion rate-limited", "id", id, "ip", clientIP(r))
+			w.Header().Set("Retry-After", "60")
+			writeFragment(w, http.StatusTooManyRequests, discussionRateLimitedFragment)
+			return
+		}
 		slog.Warn("thread fetch failed", "id", id, "err", err)
 		// 200 for the same reason as ArticleAPI -- Cloudflare swaps 5xx
 		// origin responses for its own branded error page.

@@ -92,6 +92,11 @@ type HN struct {
 
 	items   *expirable.LRU[int64, *Item]
 	threads *expirable.LRU[int64, *StoryThread]
+
+	// threadRate caps outbound Algolia thread fetches per requester IP.
+	// Cache hits never reach this gate (checked inside the singleflight
+	// callback after a second cache peek).
+	threadRate *rateLimiter
 }
 
 func NewHN() *HN {
@@ -104,6 +109,7 @@ func NewHN() *HN {
 		listFetched: make(map[string]time.Time),
 		items:       expirable.NewLRU[int64, *Item](itemCacheCap, nil, itemTTL),
 		threads:     expirable.NewLRU[int64, *StoryThread](threadCacheCap, nil, threadTTL),
+		threadRate:  newRateLimiter(30, 60*time.Second),
 	}
 }
 
@@ -250,7 +256,9 @@ func (h *HN) ItemsParallel(ctx context.Context, ids []int64) []*Item {
 
 // StoryThread returns the full comment tree for a story, fetched from the HN
 // Algolia API (one HTTP call returns the entire tree). Cached for threadTTL.
-func (h *HN) StoryThread(ctx context.Context, id int64) (*StoryThread, error) {
+// requesterIP is rate-limited on cache miss only; cache hits and singleflight
+// piggy-backers don't consume the requester's budget.
+func (h *HN) StoryThread(ctx context.Context, id int64, requesterIP string) (*StoryThread, error) {
 	if thread, ok := h.threads.Get(id); ok {
 		return thread, nil
 	}
@@ -258,6 +266,9 @@ func (h *HN) StoryThread(ctx context.Context, id int64) (*StoryThread, error) {
 	v, err, _ := h.sf.Do(fmt.Sprintf("thread:%d", id), func() (interface{}, error) {
 		if thread, ok := h.threads.Get(id); ok {
 			return thread, nil
+		}
+		if !h.threadRate.Allow(requesterIP) {
+			return nil, errRateLimited
 		}
 		return h.fetchThread(ctx, id)
 	})
