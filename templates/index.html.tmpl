@@ -2,29 +2,82 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>yavchn</title>
+<title>{{ if .Selected }}{{ .Selected.Title }} &middot; yavchn{{ else }}yavchn{{ end }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header><h1><a href="/">yavchn</a></h1></header>
-<main>
-<ul class="stories">
-{{ range .Stories }}
-<li class="story">
-  <span class="rank">{{ .Rank }}.</span>
-  <div class="body">
-    <div class="title"><a href="{{ .URL }}" target="_blank" rel="noopener">{{ .Title }}</a> <span class="host">({{ .Host }})</span></div>
-    <div class="meta">{{ .Score }} points by {{ .By }} {{ .Age }} ago | <a href="{{ .HNURL }}" target="_blank" rel="noopener">{{ .Comments }} comments</a></div>
-  </div>
-</li>
-{{ end }}
-</ul>
-<nav class="pager">
-  {{ if .HasPrev }}<a href="/?page={{ .PrevPage }}">&larr; prev</a>{{ else }}<span class="disabled">&larr; prev</span>{{ end }}
-  <span class="page-num">page {{ .Page }}</span>
-  {{ if .HasNext }}<a href="/?page={{ .NextPage }}">next &rarr;</a>{{ else }}<span class="disabled">next &rarr;</span>{{ end }}
-</nav>
-</main>
+<div class="layout">
+
+  <aside class="pane pane-list">
+    <ul class="stories">
+    {{ range .Stories }}
+    <li class="story{{ if .Selected }} selected{{ end }}">
+      <span class="rank">{{ .Rank }}.</span>
+      <div class="body">
+        <div class="title"><a href="{{ .SelectURL }}">{{ .Title }}</a></div>
+        <div class="meta">
+          <a class="host" href="{{ .URL }}" target="_blank" rel="noopener">{{ .Host }} &uarr;</a>
+          &middot; {{ .Score }} pts
+          &middot; {{ .By }}
+          &middot; {{ .Age }}
+          &middot; {{ .Comments }} comments
+        </div>
+      </div>
+    </li>
+    {{ end }}
+    </ul>
+    <nav class="pager">
+      {{ if .HasPrev }}<a href="{{ .PrevURL }}">&larr; prev</a>{{ else }}<span class="disabled">&larr; prev</span>{{ end }}
+      <span class="page-num">page {{ .Page }}</span>
+      {{ if .HasNext }}<a href="{{ .NextURL }}">next &rarr;</a>{{ else }}<span class="disabled">next &rarr;</span>{{ end }}
+    </nav>
+  </aside>
+
+  <section class="pane pane-article">
+    {{ if .Selected }}
+      {{ if .Selected.HasArticle }}
+        <div class="pane-header">
+          <span class="pane-label">article</span>
+          <a href="{{ .Selected.URL }}" target="_blank" rel="noopener">Open article &uarr;</a>
+        </div>
+        <div class="article-stub">
+          <h2>{{ .Selected.Title }}</h2>
+          <p class="article-host">{{ .Selected.Host }}</p>
+          <a class="cta" href="{{ .Selected.URL }}" target="_blank" rel="noopener">Open article &uarr;</a>
+          <p class="note">Reader-mode extraction lands next commit. For now, click above to open in a new tab.</p>
+        </div>
+      {{ else }}
+        <div class="pane-header">
+          <span class="pane-label">article</span>
+        </div>
+        <div class="article-stub">
+          <h2>{{ .Selected.Title }}</h2>
+          <p class="note">This is a self-post &mdash; see the discussion below.</p>
+        </div>
+      {{ end }}
+    {{ else }}
+      <div class="article-stub empty">
+        <p>Click a story to view its article.</p>
+      </div>
+    {{ end }}
+  </section>
+
+  <section class="pane pane-discussion">
+    {{ if .Selected }}
+      <div class="pane-header">
+        <span class="pane-label">discussion</span>
+        <a href="{{ .Selected.HNURL }}" target="_blank" rel="noopener">Open on HN &uarr;</a>
+      </div>
+      <iframe src="{{ .Selected.HNURL }}" title="HN discussion"></iframe>
+    {{ else }}
+      <div class="article-stub empty">
+        <p>Click a story to view the discussion.</p>
+      </div>
+    {{ end }}
+  </section>
+
+</div>
 </body>
 </html>

@@ -34,8 +34,9 @@ func main() {
 
 	srv := NewServer(hn, tpl)
 	mux := http.NewServeMux()
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
-	mux.HandleFunc("/", srv.Index)
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.HandleFunc("GET /{$}", srv.Index)
+	mux.HandleFunc("GET /s/{id}", srv.Index)
 
 	httpSrv := &http.Server{
 		Addr:              ":8080",
