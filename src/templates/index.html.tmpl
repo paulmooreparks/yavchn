@@ -5,6 +5,22 @@
 <title>{{ if .Selected }}{{ .Selected.Title }} &middot; yavchn{{ else }}yavchn{{ end }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/static/style.css">
+<script>
+(function () {
+  try {
+    var w = localStorage.getItem('yavchn-list-w');
+    var h = localStorage.getItem('yavchn-article-h');
+    if (!w && !h) return;
+    var css = '.layout {';
+    if (w) css += ' --list-w: ' + w + ';';
+    if (h) css += ' --article-h: ' + h + ';';
+    css += ' }';
+    var s = document.createElement('style');
+    s.textContent = css;
+    document.head.appendChild(s);
+  } catch (e) { /* no storage */ }
+})();
+</script>
 </head>
 <body>
 <header><h1><a href="/">yavchn</a></h1></header>
@@ -35,6 +51,8 @@
     </nav>
   </aside>
 
+  <div class="splitter splitter-v" role="separator" aria-orientation="vertical"></div>
+
   <section class="pane pane-article"{{ if and .Selected .Selected.HasArticle }} data-reader-url="{{ .Selected.URL }}"{{ end }}>
     {{ if .Selected }}
       <div class="pane-header">
@@ -62,6 +80,8 @@
     {{ end }}
   </section>
 
+  <div class="splitter splitter-h" role="separator" aria-orientation="horizontal"></div>
+
   <section class="pane pane-discussion"{{ if .Selected }} data-discussion-id="{{ .Selected.ID }}"{{ end }}>
     {{ if .Selected }}
       <div class="pane-header">
@@ -79,5 +99,6 @@
 
 </div>
 <script src="/static/reader.js" defer></script>
+<script src="/static/splitters.js" defer></script>
 </body>
 </html>
