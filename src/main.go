@@ -5,7 +5,7 @@ import (
 	"embed"
 	"html/template"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,13 +17,19 @@ import (
 var assets embed.FS
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})))
+
 	tpl, err := template.ParseFS(assets, "templates/*.tmpl")
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("parse templates", "err", err)
+		os.Exit(1)
 	}
 	staticFS, err := fs.Sub(assets, "static")
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("static fs sub", "err", err)
+		os.Exit(1)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -35,7 +41,8 @@ func main() {
 	}
 	db, err := OpenDB(ctx, dbPath)
 	if err != nil {
-		log.Fatalf("open db (%s): %v", dbPath, err)
+		slog.Error("open db", "path", dbPath, "err", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -58,14 +65,15 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
-		log.Printf("yavchn listening on %s (db=%s)", httpSrv.Addr, dbPath)
+		slog.Info("yavchn listening", "addr", httpSrv.Addr, "db", dbPath)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
+			slog.Error("http server", "err", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-ctx.Done()
-	log.Println("shutting down")
+	slog.Info("shutting down")
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutCancel()
 	_ = httpSrv.Shutdown(shutCtx)
