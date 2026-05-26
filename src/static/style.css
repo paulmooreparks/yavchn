@@ -217,6 +217,7 @@ header .logo {
 }
 .story:hover { background: var(--hover); }
 .story.selected { background: var(--selected); }
+.story.focused { box-shadow: inset 3px 0 0 var(--link); }
 
 .rank {
   color: var(--text-dim);

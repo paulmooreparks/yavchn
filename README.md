@@ -1,14 +1,20 @@
-# yavchn
+# YAVCHN - Yet Another Vibe-Coded Hacker News
 
-<img src="src/static/logo.png" align="right" width="200" alt="Overt mascot">
-
-Yet Another Vibe-Coded Hacker News.
+<img src="src/static/logo.png" align="right" width="200" alt="YAVCHN logo">
 
 A three-pane web reader for Hacker News:
 
 - **Left:** paged list of stories
 - **Right-top:** the linked article, reader-mode extracted
 - **Right-bottom:** the HN discussion thread
+
+## Why?
+
+It seems that everybody has their own personalized Hacker-News reader these days. After all, why not? It's so easy to whip one up in an evening when you have agentic coding at your disposal.
+
+Whenever I browse Hacker News, I find myself opening the discussion in a new tab, then clicking through in that tab to view the article, then popping back to the discussion. It's all very annoying, when what I really want to do is get a quick overview of the article and see if there is any interesting discussion going on before I dive into either the article or the discussion.
+
+YAVCHN lets me quickly browse articles
 
 ## Live Site
 
