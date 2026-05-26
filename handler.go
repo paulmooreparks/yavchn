@@ -58,6 +58,18 @@ type selectedVM struct {
 	HasArticle bool
 }
 
+type commentVM struct {
+	Author   string
+	Age      string
+	HTML     template.HTML
+	HNURL    string
+	Children []*commentVM
+}
+
+type threadVM struct {
+	Comments []*commentVM
+}
+
 func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 	page := 1
 	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
@@ -170,6 +182,50 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 	if err := s.tpl.ExecuteTemplate(w, "article.html.tmpl", article); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (s *Server) DiscussionAPI(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	thread, err := s.hn.StoryThread(ctx, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	vm := buildThreadVM(thread)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tpl.ExecuteTemplate(w, "discussion.html.tmpl", vm); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func buildThreadVM(t *StoryThread) *threadVM {
+	vm := &threadVM{}
+	for _, c := range t.Comments {
+		vm.Comments = append(vm.Comments, commentToVM(c))
+	}
+	return vm
+}
+
+func commentToVM(c *Comment) *commentVM {
+	cv := &commentVM{
+		Author: c.Author,
+		Age:    relTime(c.CreatedAt),
+		HTML:   template.HTML(sanitizeHTML(c.Text)),
+		HNURL:  fmt.Sprintf("https://news.ycombinator.com/item?id=%d", c.ID),
+	}
+	for _, child := range c.Children {
+		cv.Children = append(cv.Children, commentToVM(child))
+	}
+	return cv
 }
 
 func storyURLs(item *Item) (host, displayURL string) {

@@ -14,17 +14,15 @@ import (
 	"time"
 
 	readability "github.com/go-shiori/go-readability"
-	"github.com/microcosm-cc/bluemonday"
 	"golang.org/x/sync/singleflight"
 )
 
 const extractTimeout = 8 * time.Second
 
 type Extractor struct {
-	db        *sql.DB
-	sf        singleflight.Group
-	sanitizer *bluemonday.Policy
-	client    *http.Client
+	db     *sql.DB
+	sf     singleflight.Group
+	client *http.Client
 }
 
 type Article struct {
@@ -35,20 +33,12 @@ type Article struct {
 }
 
 func NewExtractor(db *sql.DB) *Extractor {
-	policy := bluemonday.UGCPolicy()
-	policy.RequireNoReferrerOnLinks(true)
-	policy.AddTargetBlankToFullyQualifiedLinks(true)
-	policy.AllowAttrs("loading").OnElements("img")
 	return &Extractor{
-		db:        db,
-		sanitizer: policy,
-		client:    &http.Client{Timeout: extractTimeout},
+		db:     db,
+		client: &http.Client{Timeout: extractTimeout},
 	}
 }
 
-// Get returns an extracted article, hitting the SQLite cache first and falling
-// back to a live fetch + readability + sanitize. Concurrent calls for the same
-// URL are coalesced via singleflight.
 func (e *Extractor) Get(ctx context.Context, rawURL string) (*Article, error) {
 	if !isAllowedURL(rawURL) {
 		return nil, errors.New("url scheme not allowed")
@@ -116,7 +106,7 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 	if err != nil {
 		return nil, err
 	}
-	sanitized := e.sanitizer.Sanitize(parsed.Content)
+	sanitized := sanitizeHTML(parsed.Content)
 	if strings.TrimSpace(sanitized) == "" {
 		return nil, errors.New("no extractable content")
 	}

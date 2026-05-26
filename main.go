@@ -47,6 +47,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	mux.HandleFunc("GET /api/article", srv.ArticleAPI)
+	mux.HandleFunc("GET /api/discussion", srv.DiscussionAPI)
 	mux.HandleFunc("GET /{$}", srv.Index)
 	mux.HandleFunc("GET /s/{id}", srv.Index)
 

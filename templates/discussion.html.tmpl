@@ -1,0 +1,25 @@
+{{ define "comment" }}
+<li class="comment">
+  <div class="comment-header">
+    <span class="comment-author">{{ .Author }}</span>
+    <span class="comment-age">{{ .Age }}</span>
+    <a class="comment-link" href="{{ .HNURL }}" target="_blank" rel="noopener" title="open on HN">&uarr;</a>
+  </div>
+  <div class="comment-text">{{ .HTML }}</div>
+  {{ if .Children }}
+  <ul class="thread">
+    {{ range .Children }}{{ template "comment" . }}{{ end }}
+  </ul>
+  {{ end }}
+</li>
+{{ end }}
+
+<div class="discussion-content">
+  {{ if not .Comments }}
+    <p class="empty-note">No comments yet.</p>
+  {{ else }}
+    <ul class="thread">
+      {{ range .Comments }}{{ template "comment" . }}{{ end }}
+    </ul>
+  {{ end }}
+</div>

@@ -62,13 +62,16 @@
     {{ end }}
   </section>
 
-  <section class="pane pane-discussion">
+  <section class="pane pane-discussion"{{ if .Selected }} data-discussion-id="{{ .Selected.ID }}"{{ end }}>
     {{ if .Selected }}
       <div class="pane-header">
         <span class="pane-label">discussion</span>
         <a href="{{ .Selected.HNURL }}" target="_blank" rel="noopener">Open on HN &uarr;</a>
       </div>
-      <iframe src="{{ .Selected.HNURL }}" title="HN discussion"></iframe>
+      <div class="pane-body">
+        <p class="empty-note js-discussion-status">Loading discussion&hellip;</p>
+        <noscript><p class="empty-note">Discussion requires JavaScript. Use "Open on HN" above.</p></noscript>
+      </div>
     {{ else }}
       <div class="article-stub empty"><p>Click a story to view the discussion.</p></div>
     {{ end }}
