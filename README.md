@@ -20,6 +20,8 @@ Whenever I browse Hacker News, I find myself opening the discussion in a new tab
 
 YAVCHN lets me quickly browse an article in scaled-down reader mode in one pane and see the discussion in the pane below. If I find either one compelling, I can click "Open original" to see the original article or "Open on HN" to join the discussion on Hacker News.
 
+![YAVCHN, three-pane reader: story list, reader-mode article, and threaded discussion](screenshot.png)
+
 ## Live Site
 
 The site is live at https://yavchn.parkscomputing.com/ if you'd like to try it out.
