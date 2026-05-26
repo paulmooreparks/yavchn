@@ -11,10 +11,12 @@ A three-pane web reader for Hacker News:
 ## Running
 
 ```
-go run .
+go run ./src
 ```
 
 Serves on `http://localhost:8080`.
+
+The Go module lives at the repo root (`go.mod`); all source is under `src/`.
 
 ## Stack
 

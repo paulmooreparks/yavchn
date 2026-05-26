@@ -4,8 +4,8 @@
 *.dll
 *.so
 *.dylib
-yavchn
-yavchn.exe
+/yavchn
+/src/yavchn
 
 # Test binary
 *.test
