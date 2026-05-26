@@ -129,7 +129,8 @@ header .logo {
   background: var(--hover);
 }
 
-.help-button {
+.help-button,
+.mail-button {
   background: none;
   border: 1.5px solid var(--text-mute);
   color: var(--text-mute);
@@ -145,11 +146,14 @@ header .logo {
   align-items: center;
   justify-content: center;
   margin-left: 0.1rem;
+  text-decoration: none;
 }
-.help-button:hover {
+.help-button:hover,
+.mail-button:hover {
   color: var(--text);
   border-color: var(--text);
 }
+.mail-button { font-size: 0.7rem; font-weight: 400; }
 
 .help-dialog {
   border: 1px solid var(--pane-border);
