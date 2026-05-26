@@ -52,9 +52,8 @@ header h1 a {
   gap: 0.5rem;
 }
 header .logo {
-  width: 22px;
-  height: 22px;
-  image-rendering: pixelated;
+  width: 24px;
+  height: 24px;
 }
 
 .layout {
