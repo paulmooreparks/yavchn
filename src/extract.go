@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -22,6 +23,7 @@ const (
 	maxConcurrentExtractions = 20
 	rateLimitPerWindow       = 20
 	rateLimitWindow          = 60 * time.Second
+	maxResponseBytes         = 5 * 1024 * 1024 // 5 MiB upper bound on the source-page body we'll parse
 )
 
 // errRateLimited is returned by Extractor.Get when the caller's IP has
@@ -49,11 +51,25 @@ func NewExtractor(db *sql.DB) *Extractor {
 		db: db,
 		client: &http.Client{
 			Timeout:   extractTimeout,
-			Transport: newPoliteTransport(8),
+			Transport: newExtractorTransport(),
 		},
 		sem:  make(chan struct{}, maxConcurrentExtractions),
 		rate: newRateLimiter(rateLimitPerWindow, rateLimitWindow),
 	}
+}
+
+// newExtractorTransport wires the politeness wrapper around an http.Transport
+// whose DialContext refuses to connect to internal addresses. Used only for
+// the article-extraction client (HN / Algolia calls go via newPoliteTransport
+// which trusts the fixed upstream hosts).
+func newExtractorTransport() http.RoundTripper {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxConnsPerHost = 8
+	t.MaxIdleConnsPerHost = 3
+	t.IdleConnTimeout = 90 * time.Second
+	t.TLSHandshakeTimeout = 5 * time.Second
+	t.DialContext = newSafeDialContext()
+	return &uaTransport{rt: t, ua: userAgent}
 }
 
 func (e *Extractor) Get(ctx context.Context, rawURL, requesterIP string) (*Article, error) {
@@ -132,7 +148,7 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 		return nil, fmt.Errorf("not html: %s", ctype)
 	}
 
-	parsed, err := readability.FromReader(resp.Body, parsedURL)
+	parsed, err := readability.FromReader(io.LimitReader(resp.Body, maxResponseBytes), parsedURL)
 	if err != nil {
 		return nil, err
 	}
