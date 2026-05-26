@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yavchn</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header><h1><a href="/">yavchn</a></h1></header>
+<main>
+<ul class="stories">
+{{ range .Stories }}
+<li class="story">
+  <span class="rank">{{ .Rank }}.</span>
+  <div class="body">
+    <div class="title"><a href="{{ .URL }}" target="_blank" rel="noopener">{{ .Title }}</a> <span class="host">({{ .Host }})</span></div>
+    <div class="meta">{{ .Score }} points by {{ .By }} {{ .Age }} ago | <a href="{{ .HNURL }}" target="_blank" rel="noopener">{{ .Comments }} comments</a></div>
+  </div>
+</li>
+{{ end }}
+</ul>
+<nav class="pager">
+  {{ if .HasPrev }}<a href="/?page={{ .PrevPage }}">&larr; prev</a>{{ else }}<span class="disabled">&larr; prev</span>{{ end }}
+  <span class="page-num">page {{ .Page }}</span>
+  {{ if .HasNext }}<a href="/?page={{ .NextPage }}">next &rarr;</a>{{ else }}<span class="disabled">next &rarr;</span>{{ end }}
+</nav>
+</main>
+</body>
+</html>

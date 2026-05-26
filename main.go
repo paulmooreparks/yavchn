@@ -1,24 +1,57 @@
 package main
 
 import (
+	"context"
+	"embed"
+	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
-func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte("<!doctype html><meta charset=utf-8><title>yavchn</title><h1>yavchn</h1><p>placeholder.</p>"))
-	})
+//go:embed templates/*.tmpl static/*
+var assets embed.FS
 
-	addr := ":8080"
-	log.Printf("yavchn listening on %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+func main() {
+	tpl, err := template.ParseFS(assets, "templates/*.tmpl")
+	if err != nil {
 		log.Fatal(err)
 	}
+	staticFS, err := fs.Sub(assets, "static")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	hn := NewHN()
+	hn.StartBackgroundRefresh(ctx)
+
+	srv := NewServer(hn, tpl)
+	mux := http.NewServeMux()
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.HandleFunc("/", srv.Index)
+
+	httpSrv := &http.Server{
+		Addr:              ":8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go func() {
+		log.Printf("yavchn listening on %s", httpSrv.Addr)
+		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("shutting down")
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutCancel()
+	_ = httpSrv.Shutdown(shutCtx)
 }

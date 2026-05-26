@@ -18,7 +18,7 @@ Serves on `http://localhost:8080`.
 
 ## Stack
 
-- Go 1.24, standard `net/http` + `html/template`.
+- Go 1.25, standard `net/http` + `html/template`.
 - `golang.org/x/sync/singleflight` — coalesce concurrent upstream fetches.
 - `github.com/go-shiori/go-readability` — server-side article extraction.
 - `modernc.org/sqlite` — pure-Go SQLite for the article-extraction cache.
