@@ -17,12 +17,16 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-const extractTimeout = 8 * time.Second
+const (
+	extractTimeout           = 8 * time.Second
+	maxConcurrentExtractions = 20
+)
 
 type Extractor struct {
 	db     *sql.DB
 	sf     singleflight.Group
 	client *http.Client
+	sem    chan struct{}
 }
 
 type Article struct {
@@ -34,8 +38,12 @@ type Article struct {
 
 func NewExtractor(db *sql.DB) *Extractor {
 	return &Extractor{
-		db:     db,
-		client: &http.Client{Timeout: extractTimeout},
+		db: db,
+		client: &http.Client{
+			Timeout:   extractTimeout,
+			Transport: newPoliteTransport(8),
+		},
+		sem: make(chan struct{}, maxConcurrentExtractions),
 	}
 }
 
@@ -79,6 +87,14 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 		return nil, err
 	}
 
+	// Bound concurrent outbound article fetches across all hosts.
+	select {
+	case e.sem <- struct{}{}:
+		defer func() { <-e.sem }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	subCtx, cancel := context.WithTimeout(ctx, extractTimeout)
 	defer cancel()
 
@@ -86,7 +102,7 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; yavchn-reader/0.1)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; yavchn-reader/0.1; +https://github.com/paulmooreparks/yavchn)")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 
 	resp, err := e.client.Do(req)

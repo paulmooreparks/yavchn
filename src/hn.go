@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	expirable "github.com/hashicorp/golang-lru/v2/expirable"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -18,6 +19,11 @@ const (
 	itemTTL       = 5 * time.Minute
 	threadTTL     = 3 * time.Minute
 	httpTimeout   = 10 * time.Second
+
+	itemCacheCap   = 2048
+	threadCacheCap = 256
+
+	userAgent = "yavchn/0.1 (+https://github.com/paulmooreparks/yavchn)"
 )
 
 type Item struct {
@@ -64,26 +70,43 @@ type HN struct {
 	mu         sync.RWMutex
 	topIDs     []int64
 	topFetched time.Time
-	items      map[int64]itemEntry
-	threads    map[int64]threadEntry
-}
 
-type itemEntry struct {
-	item    *Item
-	fetched time.Time
-}
-
-type threadEntry struct {
-	thread  *StoryThread
-	fetched time.Time
+	items   *expirable.LRU[int64, *Item]
+	threads *expirable.LRU[int64, *StoryThread]
 }
 
 func NewHN() *HN {
 	return &HN{
-		http:    &http.Client{Timeout: httpTimeout},
-		items:   make(map[int64]itemEntry),
-		threads: make(map[int64]threadEntry),
+		http: &http.Client{
+			Timeout:   httpTimeout,
+			Transport: newPoliteTransport(30),
+		},
+		items:   expirable.NewLRU[int64, *Item](itemCacheCap, nil, itemTTL),
+		threads: expirable.NewLRU[int64, *StoryThread](threadCacheCap, nil, threadTTL),
 	}
+}
+
+// newPoliteTransport bounds per-host connections so we don't flood
+// firebaseio / algolia under a burst, and tags every request with our
+// User-Agent so HN ops folks can identify us if needed.
+func newPoliteTransport(maxPerHost int) http.RoundTripper {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxConnsPerHost = maxPerHost
+	t.MaxIdleConnsPerHost = maxPerHost / 3
+	t.IdleConnTimeout = 90 * time.Second
+	return &uaTransport{rt: t, ua: userAgent}
+}
+
+type uaTransport struct {
+	rt http.RoundTripper
+	ua string
+}
+
+func (u *uaTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Header.Get("User-Agent") == "" {
+		r.Header.Set("User-Agent", u.ua)
+	}
+	return u.rt.RoundTrip(r)
 }
 
 func (h *HN) TopIDs(ctx context.Context) ([]int64, error) {
@@ -133,23 +156,21 @@ func (h *HN) fetchTopIDs(ctx context.Context) ([]int64, error) {
 }
 
 func (h *HN) Item(ctx context.Context, id int64) (*Item, error) {
-	h.mu.RLock()
-	entry, ok := h.items[id]
-	h.mu.RUnlock()
-	if ok && time.Since(entry.fetched) < itemTTL {
-		return entry.item, nil
+	if item, ok := h.items.Get(id); ok {
+		return item, nil
 	}
 
 	v, err, _ := h.sf.Do(fmt.Sprintf("item:%d", id), func() (interface{}, error) {
+		if item, ok := h.items.Get(id); ok {
+			return item, nil
+		}
 		return h.fetchItem(ctx, id)
 	})
 	if err != nil {
 		return nil, err
 	}
 	item := v.(*Item)
-	h.mu.Lock()
-	h.items[id] = itemEntry{item: item, fetched: time.Now()}
-	h.mu.Unlock()
+	h.items.Add(id, item)
 	return item, nil
 }
 
@@ -195,23 +216,21 @@ func (h *HN) ItemsParallel(ctx context.Context, ids []int64) []*Item {
 // StoryThread returns the full comment tree for a story, fetched from the HN
 // Algolia API (one HTTP call returns the entire tree). Cached for threadTTL.
 func (h *HN) StoryThread(ctx context.Context, id int64) (*StoryThread, error) {
-	h.mu.RLock()
-	entry, ok := h.threads[id]
-	h.mu.RUnlock()
-	if ok && time.Since(entry.fetched) < threadTTL {
-		return entry.thread, nil
+	if thread, ok := h.threads.Get(id); ok {
+		return thread, nil
 	}
 
 	v, err, _ := h.sf.Do(fmt.Sprintf("thread:%d", id), func() (interface{}, error) {
+		if thread, ok := h.threads.Get(id); ok {
+			return thread, nil
+		}
 		return h.fetchThread(ctx, id)
 	})
 	if err != nil {
 		return nil, err
 	}
 	thread := v.(*StoryThread)
-	h.mu.Lock()
-	h.threads[id] = threadEntry{thread: thread, fetched: time.Now()}
-	h.mu.Unlock()
+	h.threads.Add(id, thread)
 	return thread, nil
 }
 
