@@ -1,6 +1,5 @@
 (function () {
-  function lazyLoad(paneSel, datasetKey, urlBuilder, fallbackSel) {
-    var pane = document.querySelector(paneSel);
+  function loadPane(pane, datasetKey, urlBuilder, fallbackSel) {
     if (!pane) return;
     var key = pane.dataset[datasetKey];
     if (!key) return;
@@ -23,17 +22,28 @@
       });
   }
 
-  lazyLoad(
-    '.pane-article',
-    'readerUrl',
-    function (u) { return '/api/article?url=' + encodeURIComponent(u); },
-    '.js-reader-status'
-  );
+  function loadArticlePane() {
+    loadPane(
+      document.querySelector('.pane-article'),
+      'readerUrl',
+      function (u) { return '/api/article?url=' + encodeURIComponent(u); },
+      '.js-reader-status'
+    );
+  }
 
-  lazyLoad(
-    '.pane-discussion',
-    'discussionId',
-    function (id) { return '/api/discussion?id=' + encodeURIComponent(id); },
-    '.js-discussion-status'
-  );
+  function loadDiscussionPane() {
+    loadPane(
+      document.querySelector('.pane-discussion'),
+      'discussionId',
+      function (id) { return '/api/discussion?id=' + encodeURIComponent(id); },
+      '.js-discussion-status'
+    );
+  }
+
+  // Exposed so swap.js can re-trigger after swapping pane sections.
+  window.yavchnLoadArticlePane = loadArticlePane;
+  window.yavchnLoadDiscussionPane = loadDiscussionPane;
+
+  loadArticlePane();
+  loadDiscussionPane();
 })();
