@@ -77,6 +77,8 @@ func main() {
 		mux.HandleFunc("GET /"+src+"/{$}", srv.Index)
 		mux.HandleFunc("GET /"+src+"/s/{id}", srv.Index)
 	}
+	mux.HandleFunc("GET /search", srv.Search)
+	mux.HandleFunc("GET /search/s/{id}", srv.Search)
 
 	httpSrv := &http.Server{
 		Addr:              ":8080",

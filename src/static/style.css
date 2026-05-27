@@ -270,6 +270,28 @@ header .logo {
   flex-direction: column;
 }
 
+.search-bar {
+  padding: 0.4rem 0.5rem;
+  background: var(--pane-header-bg);
+  border-bottom: 1px solid var(--pane-border);
+  flex-shrink: 0;
+}
+.search-bar input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.3rem 0.5rem;
+  background: var(--pane-bg);
+  color: var(--text);
+  border: 1px solid var(--pane-border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.85em;
+}
+.search-bar input:focus {
+  outline: none;
+  border-color: var(--link);
+}
+
 .source-tabs {
   display: flex;
   background: var(--pane-header-bg);

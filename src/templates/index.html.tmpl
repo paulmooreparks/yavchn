@@ -119,6 +119,9 @@
 <div class="layout">
 
   <aside class="pane pane-list">
+    <form class="search-bar" action="/search" method="get" role="search">
+      <input type="search" name="q" placeholder="Search HN&hellip;" value="{{ .Query }}" aria-label="Search Hacker News" autocomplete="off">
+    </form>
     <nav class="source-tabs">
     {{ range .Tabs }}
       <a href="{{ .URL }}"{{ if .Active }} class="active"{{ end }}>{{ .Label }}</a>

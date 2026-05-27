@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
 	expirable "github.com/hashicorp/golang-lru/v2/expirable"
 	"golang.org/x/sync/singleflight"
 )
+
+// urlQueryEscape is a tiny wrapper so this package doesn't import "net/url"
+// in two places. Keeps the search URL builder readable.
+func urlQueryEscape(s string) string { return url.QueryEscape(s) }
 
 const (
 	apiBase       = "https://hacker-news.firebaseio.com/v0"
@@ -80,6 +85,31 @@ type algoliaItem struct {
 	Text       string        `json:"text"`
 	CreatedAtI int64         `json:"created_at_i"`
 	Children   []algoliaItem `json:"children"`
+}
+
+// SearchHit represents one story matched by the HN Algolia search API.
+type SearchHit struct {
+	ID          int64
+	Title       string
+	URL         string
+	Author      string
+	Points      int
+	NumComments int
+	CreatedAt   int64
+}
+
+type algoliaSearchResponse struct {
+	Hits []struct {
+		ObjectID    string `json:"objectID"`
+		Title       string `json:"title"`
+		StoryText   string `json:"story_text"`
+		URL         string `json:"url"`
+		Author      string `json:"author"`
+		Points      int    `json:"points"`
+		NumComments int    `json:"num_comments"`
+		CreatedAtI  int64  `json:"created_at_i"`
+	} `json:"hits"`
+	NbPages int `json:"nbPages"`
 }
 
 type HN struct {
@@ -302,6 +332,48 @@ func (h *HN) fetchThread(ctx context.Context, id int64) (*StoryThread, error) {
 		st.Comments = append(st.Comments, convertComment(child))
 	}
 	return st, nil
+}
+
+// Search runs an HN Algolia search and returns the page's hits plus a hasMore
+// flag. Page is 1-based; Algolia is 0-based, translated here.
+func (h *HN) Search(ctx context.Context, query string, page int) ([]*SearchHit, bool, error) {
+	if page < 1 {
+		page = 1
+	}
+	apiPage := page - 1
+	u := fmt.Sprintf("%s/search?query=%s&tags=story&hitsPerPage=30&page=%d",
+		algoliaBase, urlQueryEscape(query), apiPage)
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	resp, err := h.http.Do(req)
+	if err != nil {
+		return nil, false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, false, fmt.Errorf("algolia search: %s", resp.Status)
+	}
+	var raw algoliaSearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, false, err
+	}
+	hits := make([]*SearchHit, 0, len(raw.Hits))
+	for _, r := range raw.Hits {
+		var id int64
+		_, _ = fmt.Sscanf(r.ObjectID, "%d", &id)
+		hits = append(hits, &SearchHit{
+			ID:          id,
+			Title:       r.Title,
+			URL:         r.URL,
+			Author:      r.Author,
+			Points:      r.Points,
+			NumComments: r.NumComments,
+			CreatedAt:   r.CreatedAtI,
+		})
+	}
+	return hits, apiPage+1 < raw.NbPages, nil
 }
 
 func convertComment(a algoliaItem) *Comment {

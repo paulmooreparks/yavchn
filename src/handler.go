@@ -48,6 +48,7 @@ func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
 
 type listVM struct {
 	Source      string
+	Query       string // populated when source == "search"; rendered into the search input's value=
 	Tabs        []tabVM
 	Stories     []storyVM
 	Page        int
@@ -263,6 +264,145 @@ func rateLimitedHTML(rawURL string) string {
 	var buf bytes.Buffer
 	_ = rateLimitedTmpl.Execute(&buf, rawURL)
 	return buf.String()
+}
+
+// Search handles /search and /search/s/{id}. URL state: ?q=<query> required;
+// optional &page=N (1-based) and path-segment /{id} for a selected story.
+func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	page := 1
+	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
+		page = p
+	}
+
+	var selectedID int64
+	if idStr := r.PathValue("id"); idStr != "" {
+		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+			selectedID = id
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	hits, hasMore, searchErr := s.hn.Search(ctx, q, page)
+	if searchErr != nil {
+		slog.Warn("search failed", "q", q, "err", searchErr)
+		vm := listVM{
+			Source:    "search",
+			Query:     q,
+			Tabs:      buildTabs("search"),
+			Page:      page,
+			ListError: "Search couldn't be run right now. The HN search service may be having a moment.",
+			RetryURL:  r.URL.RequestURI(),
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm)
+		return
+	}
+
+	var (
+		wg      sync.WaitGroup
+		selItem *Item
+		selErr  error
+	)
+	if selectedID != 0 {
+		wg.Add(1)
+		go func() { defer wg.Done(); selItem, selErr = s.hn.Item(ctx, selectedID) }()
+	}
+	wg.Wait()
+
+	vm := listVM{
+		Source:   "search",
+		Query:    q,
+		Tabs:     buildTabs("search"),
+		Page:     page,
+		HasPrev:  page > 1,
+		HasNext:  hasMore,
+		PrevURL:  buildSearchPagerURL(q, selectedID, page-1),
+		NextURL:  buildSearchPagerURL(q, selectedID, page+1),
+		RetryURL: r.URL.RequestURI(),
+	}
+
+	for i, h := range hits {
+		host, displayURL := searchHitURLs(h)
+		vm.Stories = append(vm.Stories, storyVM{
+			Rank:      (page-1)*pageSize + i + 1,
+			ID:        h.ID,
+			Title:     h.Title,
+			URL:       displayURL,
+			Host:      host,
+			Score:     h.Points,
+			By:        h.Author,
+			Age:       relTime(h.CreatedAt),
+			Comments:  h.NumComments,
+			HNURL:     fmt.Sprintf("https://news.ycombinator.com/item?id=%d", h.ID),
+			Selected:  h.ID == selectedID,
+			SelectURL: buildSearchSelectURL(q, h.ID),
+		})
+	}
+
+	if selectedID != 0 {
+		switch {
+		case selErr != nil || selItem == nil:
+			vm.SelectError = "Couldn't load this story. It may have been removed, or the HN API is having a moment."
+		case selItem.Dead || selItem.Deleted:
+			vm.SelectError = "This story has been removed."
+		default:
+			host, displayURL := storyURLs(selItem)
+			vm.Selected = &selectedVM{
+				ID:         selItem.ID,
+				Title:      selItem.Title,
+				URL:        displayURL,
+				Host:       host,
+				HNURL:      fmt.Sprintf("https://news.ycombinator.com/item?id=%d", selItem.ID),
+				HasArticle: selItem.URL != "",
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
+		slog.Error("render search", "err", err)
+	}
+}
+
+func searchHitURLs(h *SearchHit) (host, displayURL string) {
+	displayURL = h.URL
+	if displayURL == "" {
+		displayURL = fmt.Sprintf("https://news.ycombinator.com/item?id=%d", h.ID)
+		host = "news.ycombinator.com"
+		return
+	}
+	if u, err := url.Parse(displayURL); err == nil {
+		host = strings.TrimPrefix(u.Host, "www.")
+	}
+	return
+}
+
+func buildSearchSelectURL(q string, id int64) string {
+	qs := url.Values{}
+	qs.Set("q", q)
+	return fmt.Sprintf("/search/s/%d?%s", id, qs.Encode())
+}
+
+func buildSearchPagerURL(q string, selectedID int64, page int) string {
+	base := "/search"
+	if selectedID != 0 {
+		base = fmt.Sprintf("/search/s/%d", selectedID)
+	}
+	qs := url.Values{}
+	qs.Set("q", q)
+	if page > 1 {
+		qs.Set("page", strconv.Itoa(page))
+	}
+	return base + "?" + qs.Encode()
 }
 
 func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
