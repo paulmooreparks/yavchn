@@ -46,6 +46,46 @@
   // this story. Fires on yavchn:loaded (dispatched by reader.js after the
   // discussion fragment is injected) -- runs whether the discussion was
   // lazy-loaded on initial pageview or replaced via pane-swap.
+  // Jump-to-next / -previous top-level comment via n / N (shift). Index is
+  // reset on every yavchn:loaded so each new story starts at the first
+  // top-level comment.
+  var topIdx = -1;
+
+  function topLevelComments() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll('.pane-discussion .discussion-content > .thread > .comment')
+    );
+  }
+
+  function inEditable(t) {
+    if (!t) return false;
+    var tag = (t.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    return !!t.isContentEditable;
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.key !== 'n' && e.key !== 'N') return;
+    if (inEditable(e.target)) return;
+    var comments = topLevelComments();
+    if (!comments.length) return;
+    if (e.key === 'n') {
+      topIdx = topIdx < comments.length - 1 ? topIdx + 1 : comments.length - 1;
+    } else {
+      topIdx = topIdx > 0 ? topIdx - 1 : 0;
+    }
+    var c = comments[topIdx];
+    if (c && typeof c.scrollIntoView === 'function') {
+      c.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+    e.preventDefault();
+  });
+
+  document.addEventListener('yavchn:loaded', function (e) {
+    topIdx = -1;
+  });
+
   document.addEventListener('yavchn:loaded', function (e) {
     var body = e.target;
     var pane = body.closest('.pane-discussion');
