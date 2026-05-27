@@ -4,9 +4,21 @@
   if (!dialog || !openBtn) return;
   if (typeof dialog.showModal !== 'function') return; // no native <dialog> support
 
-  function open() { if (!dialog.open) dialog.showModal(); }
+  function open() {
+    if (dialog.open) return;
+    closeOthers(dialog);
+    dialog.showModal();
+  }
   function close() { if (dialog.open) dialog.close(); }
   function toggle() { dialog.open ? close() : open(); }
+
+  // Close any other open <dialog> so dialogs don't stack visually.
+  function closeOthers(self) {
+    var open = document.querySelectorAll('dialog[open]');
+    for (var i = 0; i < open.length; i++) {
+      if (open[i] !== self) open[i].close();
+    }
+  }
 
   openBtn.addEventListener('click', open);
 

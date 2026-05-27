@@ -90,7 +90,13 @@
   if (dialog && openBtn && typeof dialog.showModal === 'function') {
     openBtn.addEventListener('click', function () {
       renderList(dialog);
-      if (!dialog.open) dialog.showModal();
+      if (dialog.open) return;
+      // Close any other open <dialog> (e.g. help) so dialogs don't stack.
+      var others = document.querySelectorAll('dialog[open]');
+      for (var i = 0; i < others.length; i++) {
+        if (others[i] !== dialog) others[i].close();
+      }
+      dialog.showModal();
     });
     var closeBtn = dialog.querySelector('.help-dialog-close');
     if (closeBtn) closeBtn.addEventListener('click', function () { dialog.close(); });
