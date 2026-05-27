@@ -599,6 +599,10 @@ header .logo {
 .comment.collapsed > .comment-header > .comment-collapsed-count { display: inline; }
 .comment.collapsed > .comment-text,
 .comment.collapsed > .thread { display: none; }
+.comment-new {
+  box-shadow: inset 3px 0 0 var(--link);
+  padding-left: 0.4rem;
+}
 .comment-author { font-weight: 500; color: var(--text); }
 .comment-age { color: var(--text-dim); }
 .comment-link {

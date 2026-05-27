@@ -97,7 +97,8 @@ type commentVM struct {
 	HTML        template.HTML
 	HNURL       string
 	Children    []*commentVM
-	Descendants int // total nested comment count, for the "[N replies]" indicator when collapsed
+	Descendants int   // total nested comment count, for the "[N replies]" indicator when collapsed
+	CreatedAt   int64 // unix seconds; emitted as data-ts for the "new since last visit" highlight
 }
 
 type threadVM struct {
@@ -343,10 +344,11 @@ func buildThreadVM(t *StoryThread) *threadVM {
 
 func commentToVM(c *Comment) *commentVM {
 	cv := &commentVM{
-		Author: c.Author,
-		Age:    relTime(c.CreatedAt),
-		HTML:   template.HTML(sanitizeHTML(c.Text)),
-		HNURL:  fmt.Sprintf("https://news.ycombinator.com/item?id=%d", c.ID),
+		Author:    c.Author,
+		Age:       relTime(c.CreatedAt),
+		HTML:      template.HTML(sanitizeHTML(c.Text)),
+		HNURL:     fmt.Sprintf("https://news.ycombinator.com/item?id=%d", c.ID),
+		CreatedAt: c.CreatedAt,
 	}
 	for _, child := range c.Children {
 		ccv := commentToVM(child)

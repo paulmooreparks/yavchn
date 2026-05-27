@@ -12,6 +12,9 @@
         if (html && html.length) {
           body.innerHTML = html;
           body.scrollTop = 0;
+          // Let downstream listeners (e.g. discussion.js highlight-new)
+          // know fresh content is in the pane.
+          body.dispatchEvent(new CustomEvent('yavchn:loaded', { bubbles: true }));
         }
       })
       .catch(function () {
