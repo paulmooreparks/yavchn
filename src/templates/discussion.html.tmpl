@@ -1,8 +1,10 @@
 {{ define "comment" }}
 <li class="comment">
   <div class="comment-header">
+    <span class="comment-toggle" aria-hidden="true"></span>
     <span class="comment-author">{{ .Author }}</span>
     <span class="comment-age">{{ .Age }}</span>
+    {{ if gt .Descendants 0 }}<span class="comment-collapsed-count">[{{ .Descendants }} replies]</span>{{ end }}
     <a class="comment-link" href="{{ .HNURL }}" target="_blank" rel="noopener" title="open on HN">&uarr;</a>
   </div>
   <div class="comment-text">{{ .HTML }}</div>

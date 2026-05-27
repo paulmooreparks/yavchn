@@ -580,7 +580,25 @@ header .logo {
   font-size: 0.8em;
   color: var(--text-mute);
   margin-bottom: 0.25rem;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
 }
+.comment-toggle {
+  color: var(--text-dim);
+  font-size: 0.7em;
+  line-height: 1;
+}
+.comment-toggle::before { content: '\25bc'; } /* ▼ */
+.comment.collapsed > .comment-header > .comment-toggle::before { content: '\25b6'; } /* ▶ */
+.comment-collapsed-count {
+  display: none;
+  color: var(--text-mute);
+  font-style: italic;
+}
+.comment.collapsed > .comment-header > .comment-collapsed-count { display: inline; }
+.comment.collapsed > .comment-text,
+.comment.collapsed > .thread { display: none; }
 .comment-author { font-weight: 500; color: var(--text); }
 .comment-age { color: var(--text-dim); }
 .comment-link {

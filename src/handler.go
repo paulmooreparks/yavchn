@@ -92,11 +92,12 @@ type selectedVM struct {
 }
 
 type commentVM struct {
-	Author   string
-	Age      string
-	HTML     template.HTML
-	HNURL    string
-	Children []*commentVM
+	Author      string
+	Age         string
+	HTML        template.HTML
+	HNURL       string
+	Children    []*commentVM
+	Descendants int // total nested comment count, for the "[N replies]" indicator when collapsed
 }
 
 type threadVM struct {
@@ -348,7 +349,9 @@ func commentToVM(c *Comment) *commentVM {
 		HNURL:  fmt.Sprintf("https://news.ycombinator.com/item?id=%d", c.ID),
 	}
 	for _, child := range c.Children {
-		cv.Children = append(cv.Children, commentToVM(child))
+		ccv := commentToVM(child)
+		cv.Children = append(cv.Children, ccv)
+		cv.Descendants += 1 + ccv.Descendants
 	}
 	return cv
 }
