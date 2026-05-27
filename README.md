@@ -1,4 +1,4 @@
-# YAVCHN - Yet Another Vibe-Coded Hacker News
+# YAVCHN - Yet Another Vibe-Coded Hacker News (Wrapper)
 
 <img src="src/static/logo.png" align="right" width="200" alt="YAVCHN logo">
 
