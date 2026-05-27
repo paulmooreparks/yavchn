@@ -387,6 +387,11 @@ header .logo {
 }
 .story.selected.focused { background: var(--selected); }
 
+/* Visited stories fade their title + meta so the eye flows past them on
+   subsequent scans. Selection / focus win -- those rows aren't faded. */
+.story.visited:not(.selected):not(.focused) .title a { color: var(--text-mute); }
+.story.visited:not(.selected):not(.focused) .meta { color: var(--text-dim); }
+
 .rank {
   color: var(--text-dim);
   min-width: 1.75rem;

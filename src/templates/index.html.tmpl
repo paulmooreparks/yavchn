@@ -138,7 +138,7 @@
     {{ else }}
     <ul class="stories" data-has-next="{{ if .HasNext }}true{{ else }}false{{ end }}">
     {{ range .Stories }}
-    <li class="story{{ if .Selected }} selected{{ end }}">
+    <li class="story{{ if .Selected }} selected{{ end }}" data-id="{{ .ID }}">
       <span class="rank">{{ .Rank }}.</span>
       <div class="body">
         <div class="title"><a href="{{ .SelectURL }}">{{ .Title }}</a></div>
@@ -230,5 +230,6 @@
 <script src="/static/help.js" defer></script>
 <script src="/static/discussion.js" defer></script>
 <script src="/static/search.js" defer></script>
+<script src="/static/visited.js" defer></script>
 </body>
 </html>
