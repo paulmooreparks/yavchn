@@ -392,6 +392,49 @@ header .logo {
 .story.visited:not(.selected):not(.focused) .title a { color: var(--text-mute); }
 .story.visited:not(.selected):not(.focused) .meta { color: var(--text-dim); }
 
+/* Per-row dismiss control. Muted by default, full-contrast on row hover or
+   keyboard focus so it's discoverable but not noisy. */
+.dismiss-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+  align-self: flex-start;
+  margin-top: 0.1rem;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s;
+}
+.story:hover .dismiss-btn,
+.story.focused .dismiss-btn,
+.dismiss-btn:focus { opacity: 1; }
+.dismiss-btn:hover { color: var(--text); }
+
+/* Hidden rows are removed from the layout; the hidden-banner below the list
+   carries the recovery affordance ("show all"). */
+.story.dismissed { display: none; }
+
+.hidden-banner {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--row-border);
+  font-size: 0.85em;
+  color: var(--text-mute);
+  text-align: center;
+}
+.hidden-banner-show {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--link);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+.hidden-banner-show:hover { text-decoration: underline; }
+
 .rank {
   color: var(--text-dim);
   min-width: 1.75rem;

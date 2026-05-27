@@ -150,9 +150,11 @@
           &middot; {{ .Comments }} comments
         </div>
       </div>
+      <button type="button" class="dismiss-btn" title="Hide this story" aria-label="Hide this story">&times;</button>
     </li>
     {{ end }}
     </ul>
+    <div class="hidden-banner" hidden><button type="button" class="hidden-banner-show">&nbsp;</button></div>
     <nav class="pager">
       {{ if .HasPrev }}<a href="{{ .PrevURL }}">&larr; prev</a>{{ else }}<span class="disabled">&larr; prev</span>{{ end }}
       <span class="page-num">page {{ .Page }}</span>
@@ -232,5 +234,6 @@
 <script src="/static/search.js" defer></script>
 <script src="/static/visited.js" defer></script>
 <script src="/static/prefetch.js" defer></script>
+<script src="/static/dismissed.js" defer></script>
 </body>
 </html>
