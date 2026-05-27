@@ -211,6 +211,13 @@
     {{ else if .Selected }}
       <div class="pane-header">
         <span class="pane-label">discussion</span>
+        <label class="comment-sort-wrap"><span class="visually-hidden">Sort comments</span>
+          <select class="comment-sort" aria-label="Sort comments">
+            <option value="best">Best</option>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+        </label>
         <a href="{{ .Selected.HNURL }}" target="_blank" rel="noopener">Open on HN &uarr;</a>
       </div>
       <div class="pane-body">
@@ -235,5 +242,6 @@
 <script src="/static/visited.js" defer></script>
 <script src="/static/prefetch.js" defer></script>
 <script src="/static/dismissed.js" defer></script>
+<script src="/static/sort.js" defer></script>
 </body>
 </html>

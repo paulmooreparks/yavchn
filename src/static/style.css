@@ -372,6 +372,45 @@ header .logo {
 .pane-header a { color: var(--text); text-decoration: none; }
 .pane-header a:hover { text-decoration: underline; }
 
+/* Sort selector sits on the right edge of the discussion pane-header,
+   abutting the "Open on HN" link. */
+.pane-header .comment-sort-wrap {
+  margin-left: auto;
+  margin-right: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+.comment-sort {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--pane-border);
+  border-radius: 3px;
+  color: var(--text-mute);
+  cursor: pointer;
+  font: inherit;
+  padding: 0.1rem 1.25rem 0.1rem 0.4rem;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-mute) 50%),
+                    linear-gradient(135deg, var(--text-mute) 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+.comment-sort:hover { color: var(--text); }
+.comment-sort:focus { outline: 1px solid var(--link); outline-offset: 1px; }
+
+/* Screen-reader-only label for the sort select (visual cue is the select
+   itself; assistive tech needs a name). */
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .stories { list-style: none; padding: 0; margin: 0; flex: 1; }
 .story {
   display: flex;
