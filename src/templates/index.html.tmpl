@@ -45,6 +45,15 @@
     document.head.appendChild(s);
   } catch (e) { /* no storage */ }
 })();
+(function () {
+  // Apply persisted focus-mode before first paint so the list pane doesn't
+  // flash visible on reload of a focus-mode session.
+  try {
+    if (localStorage.getItem('yavchn-focus') === '1') {
+      document.documentElement.classList.add('focus-mode');
+    }
+  } catch (e) { /* no storage */ }
+})();
 </script>
 </head>
 <body>
@@ -81,6 +90,8 @@
           <dd>Open the focused story (loads its article and discussion in the right panes)</dd>
           <dt><kbd>n</kbd> / <kbd>N</kbd></dt>
           <dd>Jump to the next / previous top-level comment in the discussion</dd>
+          <dt><kbd>f</kbd></dt>
+          <dd>Toggle focus mode (hide the story list to give the article + discussion the full width)</dd>
           <dt><kbd>?</kbd></dt>
           <dd>Toggle this help</dd>
           <dt><kbd>Esc</kbd></dt>
@@ -243,5 +254,6 @@
 <script src="/static/prefetch.js" defer></script>
 <script src="/static/dismissed.js" defer></script>
 <script src="/static/sort.js" defer></script>
+<script src="/static/focus.js" defer></script>
 </body>
 </html>

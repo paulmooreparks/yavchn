@@ -261,6 +261,20 @@ header .logo {
   height: calc(100vh - var(--header-h));
 }
 
+/* Focus mode collapses the list + vertical splitter out of the layout so
+   the article and discussion panes take the full viewport width. Triggered
+   by the 'f' key (focus.js) and persisted across reloads -- the body class
+   is applied pre-paint in index.html.tmpl's inline head script. */
+html.focus-mode .layout {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "article"
+    "hsplit"
+    "discussion";
+}
+html.focus-mode .pane-list,
+html.focus-mode .splitter-v { display: none; }
+
 .pane { overflow: hidden; background: var(--pane-bg); }
 
 .pane-list {
