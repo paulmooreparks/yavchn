@@ -155,6 +155,14 @@ header .logo {
 }
 .mail-button { font-size: 0.7rem; font-weight: 400; }
 
+/* When focus mode is active, the focus button shows a filled state so
+   the visitor can see the mode is on (and click to leave it). */
+.focus-button[aria-pressed="true"] {
+  background: var(--text);
+  color: var(--pane-bg);
+  border-color: var(--text);
+}
+
 .help-dialog {
   border: 1px solid var(--pane-border);
   border-radius: 8px;
@@ -490,6 +498,13 @@ html.focus-mode .splitter-v { display: none; }
 }
 .comment-sort:hover { color: var(--text); }
 .comment-sort:focus { outline: 1px solid var(--link); outline-offset: 1px; }
+/* Native dropdown panel inherits the select's transparent background,
+   which collapses to low-contrast text in dark mode. Force a solid
+   background + full-contrast text on the option list itself. */
+.comment-sort option {
+  background: var(--pane-bg);
+  color: var(--text);
+}
 
 /* Screen-reader-only label for the sort select (visual cue is the select
    itself; assistive tech needs a name). */
