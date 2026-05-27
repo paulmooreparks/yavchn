@@ -67,9 +67,28 @@
     <button type="button" class="theme-toggle" title="Toggle light/dark theme" aria-label="Toggle theme">
       <span class="icon-dark" aria-hidden="true">&#9790;</span><span class="icon-light" aria-hidden="true">&#9728;</span>
     </button>
+    <button type="button" class="filters-button help-button" title="Domain filters" aria-label="Domain filters" aria-haspopup="dialog">&#9740;</button>
     <button type="button" class="help-button" title="Help (?)" aria-label="Help" aria-haspopup="dialog">?</button>
   </div>
 </header>
+
+<dialog id="filters-dialog" class="help-dialog" aria-labelledby="filters-dialog-title">
+  <div class="help-dialog-frame">
+    <header class="help-dialog-header">
+      <h2 id="filters-dialog-title">Domain filters</h2>
+      <button type="button" class="help-dialog-close" aria-label="Close domain filters">&times;</button>
+    </header>
+    <div class="help-dialog-body filters-body">
+      <p class="filters-intro">Stories from these domains are hidden from the list. Subdomains match too (blocking <code>substack.com</code> also hides <code>danluu.substack.com</code>).</p>
+      <ul class="filters-list" aria-label="Blocked domains"></ul>
+      <p class="filters-empty" hidden>No domains blocked yet.</p>
+      <form class="filters-add">
+        <input type="text" name="domain" class="filters-add-input" placeholder="example.com" autocomplete="off" spellcheck="false" aria-label="Add domain to block">
+        <button type="submit" class="filters-add-btn">Block</button>
+      </form>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-dialog-title">
   <div class="help-dialog-frame">
@@ -255,5 +274,6 @@
 <script src="/static/dismissed.js" defer></script>
 <script src="/static/sort.js" defer></script>
 <script src="/static/focus.js" defer></script>
+<script src="/static/filters.js" defer></script>
 </body>
 </html>

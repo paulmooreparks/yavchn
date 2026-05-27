@@ -245,6 +245,84 @@ header .logo {
 }
 .help-dialog-body p:last-child { margin-bottom: 0; }
 .help-dialog-body a { color: var(--link); }
+
+/* Filters dialog -- shares the help-dialog frame, adds list + form widgets. */
+.filters-body .filters-intro {
+  color: var(--text-mute);
+  margin: 0 0 0.75rem;
+  font-size: 0.9em;
+}
+.filters-body code {
+  background: var(--code-bg);
+  padding: 0.05rem 0.25rem;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.filters-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  border: 1px solid var(--pane-border);
+  border-radius: 4px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.filters-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--row-border);
+}
+.filters-list-item:last-child { border-bottom: 0; }
+.filters-list-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+.filters-list-remove {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+}
+.filters-list-remove:hover { color: var(--text); }
+.filters-empty {
+  color: var(--text-dim);
+  font-size: 0.9em;
+  margin: 0 0 0.75rem;
+  font-style: italic;
+}
+.filters-add {
+  display: flex;
+  gap: 0.4rem;
+}
+.filters-add-input {
+  flex: 1;
+  padding: 0.3rem 0.5rem;
+  background: var(--pane-bg);
+  color: var(--text);
+  border: 1px solid var(--pane-border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.9em;
+}
+.filters-add-input:focus { outline: none; border-color: var(--link); }
+.filters-add-btn {
+  appearance: none;
+  background: var(--cta-bg);
+  color: var(--cta-fg);
+  border: 0;
+  border-radius: 4px;
+  padding: 0.3rem 0.85rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9em;
+}
+.filters-add-btn:hover { background: var(--cta-hover-bg); }
 :root[data-theme="dark"] .theme-toggle .icon-dark { display: none; }
 :root[data-theme="dark"] .theme-toggle .icon-light { display: inline; }
 .theme-toggle .icon-dark { display: inline; }
@@ -469,6 +547,10 @@ html.focus-mode .splitter-v { display: none; }
 /* Hidden rows are removed from the layout; the hidden-banner below the list
    carries the recovery affordance ("show all"). */
 .story.dismissed { display: none; }
+
+/* Domain-filtered rows are also hidden. The filters dialog is the recovery
+   affordance (remove the domain from the block list to unhide). */
+.story.filtered { display: none; }
 
 .hidden-banner {
   padding: 0.5rem 0.75rem;
