@@ -521,6 +521,10 @@ func sourceFromPath(path string) string {
 		return SourceAsk
 	case strings.HasPrefix(path, "/new"):
 		return SourceNew
+	case strings.HasPrefix(path, "/best"):
+		return SourceBest
+	case strings.HasPrefix(path, "/jobs"):
+		return SourceJobs
 	default:
 		return SourceTop
 	}
@@ -534,6 +538,10 @@ func sourceLabel(source string) string {
 		return "Ask HN"
 	case SourceNew:
 		return "New"
+	case SourceBest:
+		return "Best of HN"
+	case SourceJobs:
+		return "HN Jobs"
 	default:
 		return "HN front page"
 	}
@@ -552,6 +560,8 @@ func buildTabs(active string) []tabVM {
 		{SourceShow, "Show HN"},
 		{SourceAsk, "Ask HN"},
 		{SourceNew, "New"},
+		{SourceBest, "Best"},
+		{SourceJobs, "Jobs"},
 	}
 	out := make([]tabVM, 0, len(defs))
 	for _, d := range defs {

@@ -34,6 +34,8 @@ const (
 	SourceShow = "show"
 	SourceAsk  = "ask"
 	SourceNew  = "new"
+	SourceBest = "best"
+	SourceJobs = "jobs"
 )
 
 // sourceEndpoints maps a source name to the firebaseio.com path. Sources
@@ -43,6 +45,8 @@ var sourceEndpoints = map[string]string{
 	SourceShow: "/showstories.json",
 	SourceAsk:  "/askstories.json",
 	SourceNew:  "/newstories.json",
+	SourceBest: "/beststories.json",
+	SourceJobs: "/jobstories.json",
 }
 
 func validSource(s string) bool {
