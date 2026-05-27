@@ -93,6 +93,7 @@ type selectedVM struct {
 }
 
 type commentVM struct {
+	ID          int64 // HN comment id; emitted as data-id so collapse state can be persisted by id (yavchn-33)
 	Author      string
 	Age         string
 	HTML        template.HTML
@@ -484,6 +485,7 @@ func buildThreadVM(t *StoryThread) *threadVM {
 
 func commentToVM(c *Comment) *commentVM {
 	cv := &commentVM{
+		ID:        c.ID,
 		Author:    c.Author,
 		Age:       relTime(c.CreatedAt),
 		HTML:      template.HTML(sanitizeHTML(c.Text)),

@@ -1,5 +1,5 @@
 {{ define "comment" }}
-<li class="comment" data-ts="{{ .CreatedAt }}">
+<li class="comment" data-id="{{ .ID }}" data-ts="{{ .CreatedAt }}">
   <div class="comment-header">
     <span class="comment-toggle" aria-hidden="true"></span>
     <span class="comment-author">{{ .Author }}</span>

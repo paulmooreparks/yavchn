@@ -1,4 +1,26 @@
 (function () {
+  function storyIDOfComment(comment) {
+    var pane = comment.closest('.pane-discussion');
+    return pane ? pane.dataset.discussionId : '';
+  }
+
+  function loadCollapsed(storyID) {
+    if (!storyID) return [];
+    try {
+      var raw = localStorage.getItem('yavchn-collapsed:' + storyID);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (err) { return []; }
+  }
+
+  function saveCollapsed(storyID, ids) {
+    if (!storyID) return;
+    // Cap so storage doesn't grow unboundedly on long busy threads.
+    if (ids.length > 500) ids = ids.slice(-500);
+    try { localStorage.setItem('yavchn-collapsed:' + storyID, JSON.stringify(ids)); } catch (err) {}
+  }
+
   // Delegated click handler: click anywhere on a comment header (but not
   // on a link / button) toggles the comment's collapsed state. Listens on
   // document so it survives pane-swap (yavchn-12) and lazy-load.
@@ -8,7 +30,16 @@
     if (!header) return;
     var comment = header.closest('.comment');
     if (!comment) return;
-    comment.classList.toggle('collapsed');
+    var nowCollapsed = comment.classList.toggle('collapsed');
+    var id = comment.dataset.id;
+    if (!id) return;
+    var storyID = storyIDOfComment(comment);
+    if (!storyID) return;
+    var ids = loadCollapsed(storyID);
+    var idx = ids.indexOf(id);
+    if (nowCollapsed && idx < 0) ids.push(id);
+    else if (!nowCollapsed && idx >= 0) ids.splice(idx, 1);
+    saveCollapsed(storyID, ids);
   });
 
   // Highlight comments newer than the visitor's last-visit timestamp for
@@ -21,6 +52,19 @@
     if (!pane) return;
     var storyID = pane.dataset.discussionId;
     if (!storyID) return;
+
+    // Restore persisted collapse state.
+    var collapsed = loadCollapsed(storyID);
+    if (collapsed.length) {
+      var set = {};
+      for (var ci = 0; ci < collapsed.length; ci++) set[collapsed[ci]] = true;
+      var coms = body.querySelectorAll('.comment[data-id]');
+      for (var k = 0; k < coms.length; k++) {
+        if (set[coms[k].dataset.id]) coms[k].classList.add('collapsed');
+      }
+    }
+
+    // Highlight comments newer than last visit.
     var key = 'yavchn-last-visit:' + storyID;
     var prev = 0;
     try {
