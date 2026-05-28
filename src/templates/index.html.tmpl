@@ -32,13 +32,26 @@
   } catch (e) { /* no storage / matchMedia */ }
 })();
 (function () {
+  // Clamp stored splitter sizes against the current viewport so a layout
+  // saved on a 4K monitor still fits an HD one. Mirrors the per-axis
+  // minimums in splitters.js. Header height is the --header-h CSS var
+  // (38px); the splitter glyphs are 4px each.
   try {
     var w = localStorage.getItem('yavchn-list-w');
     var h = localStorage.getItem('yavchn-article-h');
     if (!w && !h) return;
+    var narrow = window.innerWidth < 800;
+    var rightMin = narrow ? 120 : 320;
+    var discussionMin = 140;
+    var headerH = 38, splitter = 4;
+    function clamp(raw, maxPx) {
+      var n = parseFloat(raw);
+      if (isNaN(n)) return raw;
+      return Math.max(80, Math.min(n, maxPx)) + 'px';
+    }
     var css = '.layout {';
-    if (w) css += ' --list-w: ' + w + ';';
-    if (h) css += ' --article-h: ' + h + ';';
+    if (w) css += ' --list-w: ' + clamp(w, window.innerWidth - rightMin) + ';';
+    if (h) css += ' --article-h: ' + clamp(h, window.innerHeight - headerH - splitter - discussionMin) + ';';
     css += ' }';
     var s = document.createElement('style');
     s.textContent = css;
