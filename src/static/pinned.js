@@ -120,7 +120,7 @@
         ' data-by="' + escapeAttr(by) + '" data-score="' + (s.score || 0) + '"' +
         ' data-comments="' + (s.comments || 0) + '">' +
         '<button type="button" class="pin-btn" title="Unpin this story" aria-label="Unpin this story" aria-pressed="true">' +
-        '<svg class="pin-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">' +
+        '<svg class="pin-icon" viewBox="0 0 24 24" aria-hidden="true">' +
         '<path d="M14 4v6l4 4v2H6v-2l4-4V4h-2V2h8v2h-2z"/>' +
         '<line x1="12" y1="16" x2="12" y2="22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
         '</svg></button>' +

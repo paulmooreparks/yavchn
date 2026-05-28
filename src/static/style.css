@@ -394,6 +394,7 @@ html.focus-mode .splitter-v { display: none; }
 
 .source-tabs {
   display: flex;
+  flex-wrap: wrap;
   background: var(--pane-header-bg);
   border-bottom: 1px solid var(--pane-border);
   flex-shrink: 0;
@@ -410,6 +411,7 @@ html.focus-mode .splitter-v { display: none; }
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 500;
+  white-space: nowrap;
 }
 .source-tabs a:hover { color: var(--text); }
 .source-tabs a.active {
@@ -594,29 +596,37 @@ html.focus-mode .splitter-v { display: none; }
   padding-top: 0.1em;
 }
 
-/* Pin button at the far left of every row. Visible-but-muted by default
-   (discoverability), full-contrast filled glyph when the row is pinned.
+/* Pin button at the far left of every row. Subtle-but-visible by default
+   (discoverability without screaming), brightens on row hover (affordance),
+   filled in --link when the row is actually pinned (state cue).
    The same element is both the click target and the at-a-glance state cue. */
 .pin-btn {
   appearance: none;
   background: transparent;
   border: 0;
-  padding: 0 0.2rem;
+  padding: 0 0.15rem 0 0;
   margin: 0;
   cursor: pointer;
   display: flex;
   align-items: flex-start;
   color: var(--text-dim);
   line-height: 1;
+  opacity: 0.3;
+  transition: opacity 0.12s, color 0.12s;
 }
-.pin-btn:hover { color: var(--text); }
+.story:hover .pin-btn,
+.story.focused .pin-btn,
+.pin-btn:focus { opacity: 0.9; }
+.pin-btn:hover { color: var(--text); opacity: 1; }
 .pin-btn .pin-icon {
+  width: 10px;
+  height: 10px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.5;
-  margin-top: 0.15em;
+  margin-top: 0.35em;
 }
-.story.pinned .pin-btn { color: var(--link); }
+.story.pinned .pin-btn { color: var(--link); opacity: 1; }
 .story.pinned .pin-btn .pin-icon { fill: currentColor; }
 
 .body { flex: 1; min-width: 0; }
