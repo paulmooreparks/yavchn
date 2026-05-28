@@ -247,8 +247,7 @@ header { position: relative; }
   border-color: var(--text);
 }
 
-.help-button,
-.mail-button {
+.help-button {
   background: none;
   border: 1.5px solid var(--text-mute);
   color: var(--text-mute);
@@ -266,16 +265,13 @@ header { position: relative; }
   margin-left: 0.1rem;
   text-decoration: none;
 }
-.help-button:hover,
-.mail-button:hover {
+.help-button:hover {
   color: var(--text);
   border-color: var(--text);
 }
 .help-button:focus,
-.mail-button:focus,
 .source-link:focus,
 .theme-toggle:focus { outline: 1px solid var(--link); outline-offset: 2px; }
-.mail-button { font-size: 0.7rem; font-weight: 400; }
 
 /* When focus mode is active, the focus button shows a filled state so
    the visitor can see the mode is on (and click to leave it). */
