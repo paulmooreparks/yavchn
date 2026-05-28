@@ -477,8 +477,11 @@ html.focus-mode .splitter-v { display: none; }
   transition: background 0.1s;
 }
 .splitter:hover,
-.splitter.active {
-  background: var(--splitter-hover);
+.splitter.active,
+.splitter:focus { background: var(--splitter-hover); }
+.splitter:focus {
+  outline: 1px solid var(--link);
+  outline-offset: -1px;
 }
 .splitter-v {
   grid-area: vsplit;
