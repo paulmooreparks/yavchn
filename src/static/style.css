@@ -153,6 +153,10 @@ header .logo {
   color: var(--text);
   border-color: var(--text);
 }
+.help-button:focus,
+.mail-button:focus,
+.source-link:focus,
+.theme-toggle:focus { outline: 1px solid var(--link); outline-offset: 2px; }
 .mail-button { font-size: 0.7rem; font-weight: 400; }
 
 /* When focus mode is active, the focus button shows a filled state so
@@ -388,21 +392,44 @@ html.focus-mode .splitter-v { display: none; }
   border-bottom: 1px solid var(--pane-border);
   flex-shrink: 0;
 }
-.search-bar input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.3rem 0.5rem;
+.search-bar-frame {
+  display: flex;
+  align-items: stretch;
   background: var(--pane-bg);
-  color: var(--text);
   border: 1px solid var(--pane-border);
   border-radius: 4px;
+  overflow: hidden;
+}
+.search-bar-frame:focus-within { border-color: var(--link); }
+.search-bar input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.3rem 0.5rem;
+  background: transparent;
+  color: var(--text);
+  border: 0;
   font: inherit;
   font-size: 0.85em;
 }
 .search-bar input:focus {
   outline: none;
-  border-color: var(--link);
 }
+.search-submit {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--pane-border);
+  color: var(--text-mute);
+  cursor: pointer;
+  padding: 0 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.search-submit:hover { color: var(--text); background: var(--hover); }
+.search-submit:focus { outline: 1px solid var(--link); outline-offset: -1px; }
 
 .source-tabs {
   display: flex;
@@ -426,6 +453,7 @@ html.focus-mode .splitter-v { display: none; }
   white-space: nowrap;
 }
 .source-tabs a:hover { color: var(--text); }
+.source-tabs a:focus { outline: 1px solid var(--link); outline-offset: -2px; }
 .source-tabs a.active {
   color: var(--text);
   border-bottom-color: var(--link);
@@ -483,8 +511,13 @@ html.focus-mode .splitter-v { display: none; }
   letter-spacing: 0.06em;
   font-weight: 500;
 }
-.pane-header a { color: var(--text); text-decoration: none; }
-.pane-header a:hover { text-decoration: underline; }
+.pane-header a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--text-dim);
+  text-underline-offset: 2px;
+}
+.pane-header a:hover { text-decoration-color: var(--text); }
 
 /* Sort selector sits on the right edge of the discussion pane-header,
    abutting the "Open on HN" link. */
@@ -597,7 +630,12 @@ html.focus-mode .splitter-v { display: none; }
   font: inherit;
   padding: 0;
 }
-.hidden-banner-show:hover { text-decoration: underline; }
+.hidden-banner-show {
+  text-decoration: underline;
+  text-decoration-color: var(--text-dim);
+  text-underline-offset: 2px;
+}
+.hidden-banner-show:hover { text-decoration-color: var(--link); }
 
 .rank {
   color: var(--text-dim);
@@ -650,11 +688,13 @@ html.focus-mode .splitter-v { display: none; }
 .body { flex: 1; min-width: 0; }
 .title a {
   color: var(--text);
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-color: var(--text-dim);
+  text-underline-offset: 2px;
   display: block;
   line-height: 1.35;
 }
-.title a:hover { text-decoration: underline; }
+.title a:hover { text-decoration-color: var(--text); }
 .story.selected .title a { font-weight: 600; }
 
 .meta {
@@ -662,8 +702,13 @@ html.focus-mode .splitter-v { display: none; }
   font-size: 0.8em;
   margin-top: 0.2rem;
 }
-.meta a { color: var(--text-mute); text-decoration: none; }
-.meta a:hover { text-decoration: underline; }
+.meta a {
+  color: var(--text-mute);
+  text-decoration: underline;
+  text-decoration-color: var(--text-dim);
+  text-underline-offset: 2px;
+}
+.meta a:hover { color: var(--text); text-decoration-color: var(--text); }
 
 .pager {
   padding: 1rem;
@@ -674,8 +719,13 @@ html.focus-mode .splitter-v { display: none; }
   border-top: 1px solid var(--pane-border);
   flex-shrink: 0;
 }
-.pager a { color: var(--text); text-decoration: none; }
-.pager a:hover { text-decoration: underline; }
+.pager a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--text-dim);
+  text-underline-offset: 2px;
+}
+.pager a:hover { text-decoration-color: var(--text); }
 .pager .disabled { color: var(--disabled); }
 .page-num { color: var(--text-dim); }
 
