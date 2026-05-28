@@ -2,13 +2,22 @@
   var KEY = 'yavchn-pinned';
   var CAP = 500;
 
-  // Storage shape: { "<storyID>": { title, url, host, by, score, comments, pinned_at } }
+  // Storage shape (current): { "<storyID>": { source, title, url, host, by, score, comments, pinned_at } }
+  // Legacy entries (pre-multi-source) have no `source` field; load() backfills 'hn'.
   function load() {
     try {
       var raw = localStorage.getItem(KEY);
       if (!raw) return {};
       var obj = JSON.parse(raw);
-      return (obj && typeof obj === 'object' && !Array.isArray(obj)) ? obj : {};
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+      // Backfill missing source -> 'hn' so legacy entries route through the HN tab.
+      var migrated = false;
+      for (var k in obj) {
+        if (!obj[k] || typeof obj[k] !== 'object') continue;
+        if (!obj[k].source) { obj[k].source = 'hn'; migrated = true; }
+      }
+      if (migrated) { try { localStorage.setItem(KEY, JSON.stringify(obj)); } catch (e) {} }
+      return obj;
     } catch (e) { return {}; }
   }
 
@@ -46,9 +55,11 @@
   }
 
   // Denormalize the row's metadata so the Pinned tab can render it even
-  // after the story rolls off HN's front-page caches.
+  // after the story rolls off the source's caches. Captures `source` so
+  // the pinned-list row knows which source to route back to on click.
   function metaOfRow(row) {
     return {
+      source: row.dataset.source || 'hn',
       title: (row.querySelector('.title a') || {}).textContent || '',
       url: row.dataset.url || '',
       host: row.dataset.host || '',
@@ -77,13 +88,10 @@
 
   function updateTabBadge() {
     var count = Object.keys(load()).length;
-    var links = document.querySelectorAll('.source-tabs a');
+    // Pinned now lives in the source-picker row as a peer of HN/Lobsters.
+    var links = document.querySelectorAll('.source-picker a[data-source="pinned"]');
     for (var i = 0; i < links.length; i++) {
-      var a = links[i];
-      // Match the Pinned tab by its href ('/pinned/' or '/pinned').
-      var href = a.getAttribute('href') || '';
-      if (href !== '/pinned/' && href !== '/pinned') continue;
-      a.textContent = count > 0 ? ('Pinned (' + count + ')') : 'Pinned';
+      links[i].textContent = count > 0 ? ('Pinned (' + count + ')') : 'Pinned';
     }
   }
 
@@ -109,13 +117,20 @@
     for (var i = 0; i < ids.length; i++) {
       var id = ids[i];
       var s = store[id];
+      var source = s.source || 'hn';
       var title = escapeHTML(s.title || '(no title)');
-      var url = escapeAttr(s.url || ('https://news.ycombinator.com/item?id=' + id));
-      var host = escapeHTML(s.host || 'news.ycombinator.com');
+      var url = escapeAttr(s.url || (source === 'lobsters'
+        ? 'https://lobste.rs/s/' + id
+        : 'https://news.ycombinator.com/item?id=' + id));
+      var defaultHost = source === 'lobsters' ? 'lobste.rs' : 'news.ycombinator.com';
+      var host = escapeHTML(s.host || defaultHost);
       var by = escapeHTML(s.by || '');
-      var selectURL = escapeAttr('/pinned/s/' + id);
+      // Route back through /pinned/s/{source}/{id} so the article + discussion
+      // panes know which source to render.
+      var selectURL = escapeAttr('/pinned/s/' + source + '/' + id);
       var pinnedAt = relTime(s.pinned_at || 0);
       html += '<li class="story pinned" data-id="' + escapeAttr(id) + '"' +
+        ' data-source="' + escapeAttr(source) + '"' +
         ' data-url="' + url + '" data-host="' + host + '"' +
         ' data-by="' + escapeAttr(by) + '" data-score="' + (s.score || 0) + '"' +
         ' data-comments="' + (s.comments || 0) + '">' +

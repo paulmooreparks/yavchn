@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -30,31 +31,38 @@ const (
 
 	userAgent = "yavchn/0.1 (+https://github.com/paulmooreparks/yavchn)"
 
-	SourceTop  = "top"
-	SourceShow = "show"
-	SourceAsk  = "ask"
-	SourceNew  = "new"
-	SourceBest = "best"
-	SourceJobs = "jobs"
+	// HN-specific tab slugs. Internal — exposed externally via HN.Tabs().
+	hnTabTop  = "top"
+	hnTabShow = "show"
+	hnTabAsk  = "ask"
+	hnTabNew  = "new"
+	hnTabBest = "best"
+	hnTabJobs = "jobs"
 )
 
-// sourceEndpoints maps a source name to the firebaseio.com path. Sources
-// not in the map are unknown and rejected by validSource.
-var sourceEndpoints = map[string]string{
-	SourceTop:  "/topstories.json",
-	SourceShow: "/showstories.json",
-	SourceAsk:  "/askstories.json",
-	SourceNew:  "/newstories.json",
-	SourceBest: "/beststories.json",
-	SourceJobs: "/jobstories.json",
+// hnTabEndpoints maps an HN tab slug to its firebaseio.com path.
+var hnTabEndpoints = map[string]string{
+	hnTabTop:  "/topstories.json",
+	hnTabShow: "/showstories.json",
+	hnTabAsk:  "/askstories.json",
+	hnTabNew:  "/newstories.json",
+	hnTabBest: "/beststories.json",
+	hnTabJobs: "/jobstories.json",
 }
 
-func validSource(s string) bool {
-	_, ok := sourceEndpoints[s]
-	return ok
+// hnTabs is the tab set rendered in the source-tabs row when HN is active.
+var hnTabs = []TabDef{
+	{hnTabTop, "Top"},
+	{hnTabShow, "Show HN"},
+	{hnTabAsk, "Ask HN"},
+	{hnTabNew, "New"},
+	{hnTabBest, "Best"},
+	{hnTabJobs, "Jobs"},
 }
 
-type Item struct {
+// hnFirebaseItem is the raw shape firebaseio.com returns. Decoded internally
+// then normalized into the shared *Item before leaving the source.
+type hnFirebaseItem struct {
 	ID          int64   `json:"id"`
 	By          string  `json:"by"`
 	Time        int64   `json:"time"`
@@ -70,17 +78,26 @@ type Item struct {
 	Descendants int     `json:"descendants"`
 }
 
-type Comment struct {
-	ID        int64
-	Author    string
-	Text      string
-	CreatedAt int64
-	Children  []*Comment
-}
-
-type StoryThread struct {
-	StoryID  int64
-	Comments []*Comment
+// fromFirebase converts the raw HN shape into the shared *Item.
+func (r *hnFirebaseItem) toItem() *Item {
+	kids := make([]string, 0, len(r.Kids))
+	for _, k := range r.Kids {
+		kids = append(kids, strconv.FormatInt(k, 10))
+	}
+	return &Item{
+		ID:          strconv.FormatInt(r.ID, 10),
+		By:          r.By,
+		Time:        r.Time,
+		Text:        r.Text,
+		Dead:        r.Dead,
+		Deleted:     r.Deleted,
+		Kids:        kids,
+		URL:         r.URL,
+		Score:       r.Score,
+		Title:       r.Title,
+		Type:        r.Type,
+		Descendants: r.Descendants,
+	}
 }
 
 type algoliaItem struct {
@@ -93,7 +110,7 @@ type algoliaItem struct {
 
 // SearchHit represents one story matched by the HN Algolia search API.
 type SearchHit struct {
-	ID          int64
+	ID          string
 	Title       string
 	URL         string
 	Author      string
@@ -116,16 +133,17 @@ type algoliaSearchResponse struct {
 	NbPages int `json:"nbPages"`
 }
 
+// HN implements Source for Hacker News (firebaseio.com + Algolia).
 type HN struct {
 	http *http.Client
 	sf   singleflight.Group
 
 	mu          sync.RWMutex
-	listIDs     map[string][]int64
+	listIDs     map[string][]string
 	listFetched map[string]time.Time
 
-	items   *expirable.LRU[int64, *Item]
-	threads *expirable.LRU[int64, *StoryThread]
+	items   *expirable.LRU[string, *Item]
+	threads *expirable.LRU[string, *StoryThread]
 
 	// threadRate caps outbound Algolia thread fetches per requester IP.
 	// Cache hits never reach this gate (checked inside the singleflight
@@ -139,17 +157,30 @@ func NewHN() *HN {
 			Timeout:   httpTimeout,
 			Transport: newPoliteTransport(30),
 		},
-		listIDs:     make(map[string][]int64),
+		listIDs:     make(map[string][]string),
 		listFetched: make(map[string]time.Time),
-		items:       expirable.NewLRU[int64, *Item](itemCacheCap, nil, itemTTL),
-		threads:     expirable.NewLRU[int64, *StoryThread](threadCacheCap, nil, threadTTL),
+		items:       expirable.NewLRU[string, *Item](itemCacheCap, nil, itemTTL),
+		threads:     expirable.NewLRU[string, *StoryThread](threadCacheCap, nil, threadTTL),
 		threadRate:  newRateLimiter(30, 60*time.Second),
 	}
 }
 
-// newPoliteTransport bounds per-host connections so we don't flood
-// firebaseio / algolia under a burst, and tags every request with our
-// User-Agent so HN ops folks can identify us if needed.
+// --- Source interface ---
+
+func (h *HN) Name() string  { return "hn" }
+func (h *HN) Label() string { return "Hacker News" }
+func (h *HN) Tabs() []TabDef {
+	return hnTabs
+}
+func (h *HN) ValidTab(slug string) bool { _, ok := hnTabEndpoints[slug]; return ok }
+func (h *HN) DefaultTab() string        { return hnTabTop }
+
+func (h *HN) StoryDiscussionURL(id string) string {
+	return fmt.Sprintf("https://news.ycombinator.com/item?id=%s", id)
+}
+
+// --- newPoliteTransport (shared by Lobsters too) ---
+
 func newPoliteTransport(maxPerHost int) http.RoundTripper {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.MaxConnsPerHost = maxPerHost
@@ -170,41 +201,59 @@ func (u *uaTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	return u.rt.RoundTrip(r)
 }
 
-// StoryIDs returns the cached id list for source (top/show/ask/new), fetching
-// upstream if absent or stale. Sources are cached independently.
-func (h *HN) StoryIDs(ctx context.Context, source string) ([]int64, error) {
-	if !validSource(source) {
-		return nil, fmt.Errorf("unknown source %q", source)
+// --- list fetching ---
+
+// StoryIDs returns the page-th slice of the cached id list for an HN tab.
+// HN's firebaseio endpoints return the full ranked list in one call, so we
+// keep the full list cached and just slice for pagination here.
+func (h *HN) StoryIDs(ctx context.Context, tab string, page int) ([]string, bool, error) {
+	if !h.ValidTab(tab) {
+		return nil, false, fmt.Errorf("unknown HN tab %q", tab)
+	}
+	if page < 1 {
+		page = 1
 	}
 	h.mu.RLock()
-	fetched := h.listFetched[source]
-	ids := h.listIDs[source]
+	fetched := h.listFetched[tab]
+	ids := h.listIDs[tab]
 	h.mu.RUnlock()
-	if !fetched.IsZero() && time.Since(fetched) < topStoriesTTL {
-		return ids, nil
+	if fetched.IsZero() || time.Since(fetched) >= topStoriesTTL {
+		var err error
+		ids, err = h.refreshStoryIDs(ctx, tab)
+		if err != nil {
+			return nil, false, err
+		}
 	}
-	return h.refreshStoryIDs(ctx, source)
+	start := (page - 1) * pageSize
+	if start >= len(ids) {
+		return nil, false, nil
+	}
+	end := start + pageSize
+	if end > len(ids) {
+		end = len(ids)
+	}
+	return ids[start:end], end < len(ids), nil
 }
 
-func (h *HN) refreshStoryIDs(ctx context.Context, source string) ([]int64, error) {
-	v, err, _ := h.sf.Do("storyids:"+source, func() (interface{}, error) {
-		return h.fetchStoryIDs(ctx, source)
+func (h *HN) refreshStoryIDs(ctx context.Context, tab string) ([]string, error) {
+	v, err, _ := h.sf.Do("storyids:"+tab, func() (interface{}, error) {
+		return h.fetchStoryIDs(ctx, tab)
 	})
 	if err != nil {
 		return nil, err
 	}
-	ids := v.([]int64)
+	ids := v.([]string)
 	h.mu.Lock()
-	h.listIDs[source] = ids
-	h.listFetched[source] = time.Now()
+	h.listIDs[tab] = ids
+	h.listFetched[tab] = time.Now()
 	h.mu.Unlock()
 	return ids, nil
 }
 
-func (h *HN) fetchStoryIDs(ctx context.Context, source string) ([]int64, error) {
-	endpoint, ok := sourceEndpoints[source]
+func (h *HN) fetchStoryIDs(ctx context.Context, tab string) ([]string, error) {
+	endpoint, ok := hnTabEndpoints[tab]
 	if !ok {
-		return nil, fmt.Errorf("unknown source %q", source)
+		return nil, fmt.Errorf("unknown HN tab %q", tab)
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", apiBase+endpoint, nil)
 	if err != nil {
@@ -216,21 +265,27 @@ func (h *HN) fetchStoryIDs(ctx context.Context, source string) ([]int64, error) 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("%s: %s", source, resp.Status)
+		return nil, fmt.Errorf("%s: %s", tab, resp.Status)
 	}
-	var ids []int64
-	if err := json.NewDecoder(resp.Body).Decode(&ids); err != nil {
+	var raw []int64
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, err
+	}
+	ids := make([]string, len(raw))
+	for i, id := range raw {
+		ids[i] = strconv.FormatInt(id, 10)
 	}
 	return ids, nil
 }
 
-func (h *HN) Item(ctx context.Context, id int64) (*Item, error) {
+// --- single item fetching ---
+
+func (h *HN) Item(ctx context.Context, id string) (*Item, error) {
 	if item, ok := h.items.Get(id); ok {
 		return item, nil
 	}
 
-	v, err, _ := h.sf.Do(fmt.Sprintf("item:%d", id), func() (interface{}, error) {
+	v, err, _ := h.sf.Do("item:"+id, func() (interface{}, error) {
 		if item, ok := h.items.Get(id); ok {
 			return item, nil
 		}
@@ -244,8 +299,12 @@ func (h *HN) Item(ctx context.Context, id int64) (*Item, error) {
 	return item, nil
 }
 
-func (h *HN) fetchItem(ctx context.Context, id int64) (*Item, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/item/%d.json", apiBase, id), nil)
+func (h *HN) fetchItem(ctx context.Context, id string) (*Item, error) {
+	intID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("hn item id %q: %w", id, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/item/%d.json", apiBase, intID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -255,21 +314,21 @@ func (h *HN) fetchItem(ctx context.Context, id int64) (*Item, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("item %d: %s", id, resp.Status)
+		return nil, fmt.Errorf("item %s: %s", id, resp.Status)
 	}
-	var item Item
-	if err := json.NewDecoder(resp.Body).Decode(&item); err != nil {
+	var raw hnFirebaseItem
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, err
 	}
 	// firebaseio returns 200 + body "null" for unknown IDs; that decodes
 	// into a zero-value Item. Treat as not-found.
-	if item.ID == 0 {
-		return nil, fmt.Errorf("item %d: not found", id)
+	if raw.ID == 0 {
+		return nil, fmt.Errorf("item %s: not found", id)
 	}
-	return &item, nil
+	return raw.toItem(), nil
 }
 
-func (h *HN) ItemsParallel(ctx context.Context, ids []int64) []*Item {
+func (h *HN) ItemsParallel(ctx context.Context, ids []string) []*Item {
 	out := make([]*Item, len(ids))
 	var wg sync.WaitGroup
 	for i, id := range ids {
@@ -288,16 +347,18 @@ func (h *HN) ItemsParallel(ctx context.Context, ids []int64) []*Item {
 	return out
 }
 
+// --- thread / discussion fetching ---
+
 // StoryThread returns the full comment tree for a story, fetched from the HN
 // Algolia API (one HTTP call returns the entire tree). Cached for threadTTL.
 // requesterIP is rate-limited on cache miss only; cache hits and singleflight
 // piggy-backers don't consume the requester's budget.
-func (h *HN) StoryThread(ctx context.Context, id int64, requesterIP string) (*StoryThread, error) {
+func (h *HN) StoryThread(ctx context.Context, id, requesterIP string) (*StoryThread, error) {
 	if thread, ok := h.threads.Get(id); ok {
 		return thread, nil
 	}
 
-	v, err, _ := h.sf.Do(fmt.Sprintf("thread:%d", id), func() (interface{}, error) {
+	v, err, _ := h.sf.Do("thread:"+id, func() (interface{}, error) {
 		if thread, ok := h.threads.Get(id); ok {
 			return thread, nil
 		}
@@ -314,8 +375,12 @@ func (h *HN) StoryThread(ctx context.Context, id int64, requesterIP string) (*St
 	return thread, nil
 }
 
-func (h *HN) fetchThread(ctx context.Context, id int64) (*StoryThread, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/items/%d", algoliaBase, id), nil)
+func (h *HN) fetchThread(ctx context.Context, id string) (*StoryThread, error) {
+	intID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("hn thread id %q: %w", id, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/items/%d", algoliaBase, intID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +390,7 @@ func (h *HN) fetchThread(ctx context.Context, id int64) (*StoryThread, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("algolia %d: %s", id, resp.Status)
+		return nil, fmt.Errorf("algolia %s: %s", id, resp.Status)
 	}
 	var raw algoliaItem
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
@@ -333,10 +398,12 @@ func (h *HN) fetchThread(ctx context.Context, id int64) (*StoryThread, error) {
 	}
 	st := &StoryThread{StoryID: id}
 	for _, child := range raw.Children {
-		st.Comments = append(st.Comments, convertComment(child))
+		st.Comments = append(st.Comments, convertHNComment(child))
 	}
 	return st, nil
 }
+
+// --- HN-only: search (not part of Source interface) ---
 
 // Search runs an HN Algolia search and returns the page's hits plus a hasMore
 // flag. Page is 1-based; Algolia is 0-based, translated here.
@@ -365,10 +432,8 @@ func (h *HN) Search(ctx context.Context, query string, page int) ([]*SearchHit, 
 	}
 	hits := make([]*SearchHit, 0, len(raw.Hits))
 	for _, r := range raw.Hits {
-		var id int64
-		_, _ = fmt.Sscanf(r.ObjectID, "%d", &id)
 		hits = append(hits, &SearchHit{
-			ID:          id,
+			ID:          r.ObjectID,
 			Title:       r.Title,
 			URL:         r.URL,
 			Author:      r.Author,
@@ -380,24 +445,24 @@ func (h *HN) Search(ctx context.Context, query string, page int) ([]*SearchHit, 
 	return hits, apiPage+1 < raw.NbPages, nil
 }
 
-func convertComment(a algoliaItem) *Comment {
+func convertHNComment(a algoliaItem) *Comment {
 	author := a.Author
 	if author == "" {
 		author = "[deleted]"
 	}
 	c := &Comment{
-		ID:        a.ID,
+		ID:        strconv.FormatInt(a.ID, 10),
 		Author:    author,
 		Text:      a.Text,
 		CreatedAt: a.CreatedAtI,
 	}
 	for _, child := range a.Children {
-		c.Children = append(c.Children, convertComment(child))
+		c.Children = append(c.Children, convertHNComment(child))
 	}
 	return c
 }
 
-// StartBackgroundRefresh keeps the "top" source warm. Other sources fill
+// StartBackgroundRefresh keeps the default tab warm. Other tabs fill
 // lazily on first hit -- ok for niche tabs that don't need sub-minute freshness.
 func (h *HN) StartBackgroundRefresh(ctx context.Context) {
 	go func() {
@@ -409,7 +474,7 @@ func (h *HN) StartBackgroundRefresh(ctx context.Context) {
 				return
 			case <-ticker.C:
 				bgCtx, cancel := context.WithTimeout(ctx, httpTimeout)
-				_, _ = h.refreshStoryIDs(bgCtx, SourceTop)
+				_, _ = h.refreshStoryIDs(bgCtx, hnTabTop)
 				cancel()
 			}
 		}

@@ -35,10 +35,15 @@
   }
 
   function loadDiscussionPane() {
+    var pane = document.querySelector('.pane-discussion');
+    var source = pane ? (pane.dataset.discussionSource || 'hn') : 'hn';
     loadPane(
-      document.querySelector('.pane-discussion'),
+      pane,
       'discussionId',
-      function (id) { return '/api/discussion?id=' + encodeURIComponent(id); },
+      function (id) {
+        return '/api/discussion?id=' + encodeURIComponent(id) +
+               '&source=' + encodeURIComponent(source);
+      },
       '.js-discussion-status'
     );
   }

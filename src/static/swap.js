@@ -18,7 +18,7 @@
         var titleEl = doc.querySelector('title');
         if (titleEl && titleEl.textContent) document.title = titleEl.textContent;
 
-        var match = url.match(/\/s\/(\d+)/);
+        var match = url.match(/\/s\/([a-z0-9]+)/i);
         if (match) {
           var selectedID = match[1];
           var prevSelected = list.querySelectorAll('.story.selected');
@@ -60,8 +60,9 @@
     if (!a) return;
     var href = a.getAttribute('href');
     if (!href) return;
-    // Only swap for our own /s/{id} URLs (with or without source prefix).
-    if (!/\/s\/\d+($|\?)/.test(href)) return;
+    // Only swap for our own /{source}/[tab/]s/{id} URLs (HN uses digits,
+    // Lobsters uses base36 short_ids -- e.g. /lobsters/s/abc123).
+    if (!/\/s\/[a-z0-9]+($|\?)/i.test(href)) return;
     e.preventDefault();
     performSwap(href, true);
   });

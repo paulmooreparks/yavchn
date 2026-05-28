@@ -4,9 +4,10 @@
   var ul = pane.querySelector('.stories');
   if (!ul) return;
 
-  // Derive the base path for the current source-list.
-  // Strip a trailing /s/{id} so /show/s/123 becomes /show/, /s/123 becomes /.
-  var basePath = window.location.pathname.replace(/\/s\/\d+\/?$/, '/');
+  // Derive the base path for the current source-list. Strip a trailing
+  // /s/{id} so /hn/show/s/123 becomes /hn/show/. IDs are alphanumeric
+  // (HN: digits; Lobsters: base36) so the regex matches both.
+  var basePath = window.location.pathname.replace(/\/s\/[a-z0-9]+\/?$/i, '/');
   if (!basePath.endsWith('/')) basePath = basePath + '/';
 
   var params = new URLSearchParams(window.location.search);

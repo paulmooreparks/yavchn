@@ -96,6 +96,106 @@ header .logo {
   gap: 0.25rem;
 }
 
+/* Source picker styled as a TDL-flavored segmented control: a single
+   rounded frame with internal dividers and a --link underline on the
+   active segment. Centered in the viewport via absolute positioning so
+   it sits independent of the wordmark and action-button widths on either
+   side. On narrow viewports (< 800px) it falls back to inline flex
+   layout next to the wordmark. */
+header { position: relative; }
+.source-picker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  background: var(--pane-bg);
+  border: 1px solid var(--pane-border);
+  border-radius: 5px;
+  overflow: hidden;
+  font-size: 0.85em;
+}
+.source-pick {
+  color: var(--text-mute);
+  text-decoration: none;
+  padding: 0.28rem 0.8rem 0.18rem;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color 0.1s, background 0.1s, border-color 0.1s;
+}
+.source-pick + .source-pick { border-left: 1px solid var(--pane-border); }
+.source-pick:hover { color: var(--text); background: var(--hover); }
+.source-pick.active {
+  color: var(--text);
+  background: var(--pane-header-bg);
+  border-bottom-color: var(--link);
+}
+.source-pick:focus { outline: 1px solid var(--link); outline-offset: -1px; }
+/* Hamburger button. Hidden at wide -- the full action row shows in the
+   header normally. Shown at narrow, where it toggles the action row's
+   popup-panel display. */
+.hamburger-btn {
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--text-mute);
+  cursor: pointer;
+  padding: 0.2rem 0.35rem;
+  margin-left: auto;
+  border-radius: 4px;
+  line-height: 0;
+}
+.hamburger-btn:hover { color: var(--text); background: var(--hover); }
+.hamburger-btn:focus { outline: 1px solid var(--link); outline-offset: 1px; }
+
+@media (max-width: 800px) {
+  .source-picker {
+    position: static;
+    transform: none;
+    margin-left: 0.5rem;
+    font-size: 0.75em;
+  }
+  .source-pick { padding: 0.2rem 0.5rem 0.12rem; }
+  .hamburger-btn { display: inline-flex; align-items: center; justify-content: center; }
+  /* Collapse the action row into a popup panel anchored under the
+     hamburger. Hidden until html.menu-open is set by menu.js. */
+  .header-actions {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0.4rem;
+    margin-top: 0.25rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.15rem;
+    background: var(--pane-header-bg);
+    border: 1px solid var(--pane-border);
+    border-radius: 6px;
+    padding: 0.35rem;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    z-index: 20;
+  }
+  html.menu-open .header-actions { display: flex; align-items: center; }
+  /* In the popup all header buttons share a uniform 28px bounding box so
+     they stack with consistent vertical rhythm. Inner content (svg, img,
+     glyph) stays centered; per-element decoration (circle border, colored
+     fill, transparent) is preserved. */
+  .header-actions > * {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+}
+
 .source-link {
   color: var(--text-mute);
   display: flex;
@@ -113,26 +213,38 @@ header .logo {
   height: 20px;
   display: block;
 }
-.hn-link img {
+.hn-link img,
+.lobsters-link img {
   width: 18px;
   height: 18px;
   display: block;
   border-radius: 2px;
 }
+/* Lobsters site renders its glyph on a red square -- our vendored SVG is
+   transparent so we add the background here to match the source's brand. */
+.lobsters-link img { background: #ac130d; }
 
+/* Theme toggle matches the same circled-icon style as the help / mail /
+   focus / filters buttons so the header chrome reads as a unified row. */
 .theme-toggle {
   background: none;
-  border: 0;
+  border: 1.5px solid var(--text-mute);
   color: var(--text-mute);
   cursor: pointer;
-  font-size: 1.1rem;
-  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  padding: 0;
   line-height: 1;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.1rem;
 }
 .theme-toggle:hover {
   color: var(--text);
-  background: var(--hover);
+  border-color: var(--text);
 }
 
 .help-button,
