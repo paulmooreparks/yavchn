@@ -63,6 +63,9 @@
 
   applyAndBanner();
 
+  // Re-apply when infinite-scroll appends fresh rows from page 2/3/etc.
+  document.addEventListener('yavchn:rows-appended', function () { applyAndBanner(); });
+
   // Delegated click handler -- survives pane-swap and lazy-loaded list rows.
   document.addEventListener('click', function (e) {
     var dismissBtn = e.target.closest('.pane-list .dismiss-btn');

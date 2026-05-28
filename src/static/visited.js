@@ -39,13 +39,16 @@
   }
 
   function currentURLStoryID() {
-    var m = window.location.pathname.match(/\/s\/(\d+)/);
+    var m = window.location.pathname.match(/\/s\/([a-z0-9]+)/i);
     return m ? m[1] : null;
   }
 
   // Mark the URL's story (if any) visited on load, then apply classes.
   add(currentURLStoryID());
   apply();
+
+  // Re-apply when infinite-scroll appends fresh rows from page 2/3/etc.
+  document.addEventListener('yavchn:rows-appended', function () { apply(); });
 
   // Mark clicks immediately so the fade appears right away (before pane-swap
   // navigates away). swap.js handles the navigation; this just tracks state.

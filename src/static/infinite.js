@@ -60,6 +60,9 @@
         Array.prototype.forEach.call(newStories, function (li) {
           ul.appendChild(li);
         });
+        // Tell stateful modules (pin / dismiss / visited) that fresh rows
+        // are in the DOM so they can re-apply their per-row classes.
+        ul.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));
         currentPage = nextPage;
         hasNext = newUL.dataset.hasNext === 'true';
         if (!hasNext) markEnd();

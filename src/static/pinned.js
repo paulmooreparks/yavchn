@@ -228,4 +228,7 @@
     renderPinnedList();
   }
   applyState();
+
+  // Re-apply when infinite-scroll appends fresh rows from page 2/3/etc.
+  document.addEventListener('yavchn:rows-appended', function () { applyState(); });
 })();
