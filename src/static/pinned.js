@@ -161,14 +161,7 @@
     return Math.floor(d / 86400) + 'd ago';
   }
 
-  // Click handler -- document-level so it survives swap.js and any future
-  // list-content replacement.
-  document.addEventListener('click', function (e) {
-    var btn = e.target.closest('.pane-list .pin-btn');
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    var row = btn.closest('.story');
+  function togglePin(row) {
     if (!row || !row.dataset.id) return;
     var id = row.dataset.id;
     if (isPinned(id)) {
@@ -183,6 +176,35 @@
       setPinned(id, metaOfRow(row));
     }
     applyState();
+  }
+
+  function inEditable(t) {
+    if (!t) return false;
+    var tag = (t.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    return !!t.isContentEditable;
+  }
+
+  // Click handler -- document-level so it survives swap.js and any future
+  // list-content replacement.
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.pane-list .pin-btn');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    togglePin(btn.closest('.story'));
+  });
+
+  // Keyboard shortcut: 'p' toggles pin on the currently-focused row
+  // (keys.js maintains the .focused class via j/k navigation).
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+    if (e.key !== 'p') return;
+    if (inEditable(e.target)) return;
+    var focused = document.querySelector('.pane-list .story.focused');
+    if (!focused) return;
+    e.preventDefault();
+    togglePin(focused);
   });
 
   // Bootstrap: render Pinned tab content first (so applyState sees the
