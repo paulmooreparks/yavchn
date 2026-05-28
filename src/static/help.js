@@ -1,6 +1,6 @@
 (function () {
   var dialog = document.getElementById('help-dialog');
-  var openBtn = document.querySelector('.help-button');
+  var openBtn = document.querySelector('.help-trigger');
   if (!dialog || !openBtn) return;
   if (typeof dialog.showModal !== 'function') return; // no native <dialog> support
 
