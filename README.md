@@ -52,15 +52,15 @@ Serves on `http://localhost:8080`.
 
 - **No accounts, no per-user server state.** YAVCHN never sees your HN or Lobsters credentials. Comments are fetched from each site's public JSON API and rendered into the discussion pane. When you want to vote, reply, save, or hide a comment, click the upward arrow next to it (or the "Open on HN" / "Open on Lobsters" link at the top of the pane). That opens the item on the source's own site in a new tab, where your existing session does the work.
 
-- **Multi-source by design.** YAVCHN is built around a small Go interface called `Source` (see `src/source.go`). HN and Lobsters each have their own implementation that knows how to talk to their respective JSON APIs. Adding a third site means writing one more implementation; the rest of YAVCHN doesn't care which site a story came from.
+- **Multi-source by design.** YAVCHN is built around a small Go interface called `Source` (see `src/source.go`). HN and Lobsters each have their own implementation that knows how to talk to their respective JSON APIs. Adding a third site means writing one more implementation. The rest of YAVCHN doesn't care which site a story came from.
 
 - **Caching.** Story lists, individual items, and comment threads are cached in memory with a short time-to-live (a minute or two), so the front page doesn't hammer HN or Lobsters when many people are reading. Article extraction is much more expensive (fetch the source page, run readability, sanitize the HTML), so extracted articles are cached durably in SQLite and only re-fetched after 30 days.
 
-- **Progressive enhancement.** The page renders fully server-side, so it works without JavaScript. The article reader-mode pane and the comment thread are fetched separately after the page loads, via `GET /api/article` and `GET /api/discussion`. That keeps the first paint fast, and lets the heavier requests fail without breaking the page. Visitors with JavaScript disabled see plainly-labeled "Open article" and "Open on HN" / "Open on Lobsters" fallback links instead.
+- **Progressive enhancement.** The page renders fully server-side, so it works without JavaScript. The article reader-mode pane and the comment thread are fetched separately after the page loads, via `GET /api/article` and `GET /api/discussion`. That keeps the first paint fast, and it lets the heavier requests fail without breaking the page. Visitors with JavaScript disabled see plainly-labeled "Open article" and "Open on HN" / "Open on Lobsters" fallback links instead.
 
 - **Browser-local state.** Splitter positions, theme choice, focus mode, pinned stories, dismissed stories, visited stories, collapsed comment threads, the comment-sort preference, and the domain block-list all live in your browser's `localStorage`. Nothing is sent to the server. A small inline `<script>` in the page `<head>` applies your theme, splitter sizes, and focus mode before the first paint, so reloading doesn't flash the default layout for a moment.
 
-- **Search.** Search runs against HN only, at `/hn/search`. Lobsters has a search page, but it returns HTML rather than JSON; rather than scrape that and watch it break every time Lobsters tweaks its markup, YAVCHN returns 404 for `/lobsters/search`.
+- **Search.** Search runs against HN only, at `/hn/search`. Lobsters has a search page, but it returns HTML rather than JSON, so instead of scraping that HTML and watching it break every time Lobsters tweaks its markup, YAVCHN returns 404 for `/lobsters/search`.
 
 ## Docker
 
@@ -69,8 +69,8 @@ docker build -t yavchn .
 docker run --rm -p 8080:8080 yavchn
 ```
 
-Single-binary distroless image. SQLite article cache lives at `/home/nonroot/yavchn.db` inside the container; rebuilds from scratch after a container replace.
+YAVCHN is a single-binary distroless image. The SQLite article cache is in `/home/nonroot/yavchn.db` inside the container and rebuilds from scratch after a container replace.
 
 ## License
 
-[MIT](LICENSE). Use it, fork it, embed it, learn from it: just keep the copyright notice intact.
+[MIT](LICENSE). Feel free to use it, fork it, embed it, learn from it, whatever. Just keep the copyright notice intact.
