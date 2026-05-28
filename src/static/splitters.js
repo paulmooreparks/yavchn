@@ -137,4 +137,36 @@
 
   attach(layout.querySelector('.splitter-v'), 'x', '--list-w', 'yavchn-list-w', listMin, rightMin);
   attach(layout.querySelector('.splitter-h'), 'y', '--article-h', 'yavchn-article-h', 140, 140);
+
+  // 's' fast-path: cycles focus through the splitters so a user can start
+  // resizing without tabbing past every story link. First press focuses
+  // the vertical splitter, second press focuses the horizontal splitter,
+  // third press (or Esc on a focused splitter) blurs back to the body.
+  function inEditable(t) {
+    if (!t) return false;
+    var tag = (t.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    return !!t.isContentEditable;
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    var v = layout.querySelector('.splitter-v');
+    var h = layout.querySelector('.splitter-h');
+    if (e.key === 'Escape') {
+      if (document.activeElement === v || document.activeElement === h) {
+        e.preventDefault();
+        document.activeElement.blur();
+      }
+      return;
+    }
+    if (e.key !== 's' || e.shiftKey) return;
+    if (inEditable(e.target)) return;
+    e.preventDefault();
+    var active = document.activeElement;
+    if (active === v && h) { h.focus(); return; }
+    if (active === h) { h.blur(); return; }
+    if (v) { v.focus(); return; }
+    if (h) h.focus();
+  });
 })();
