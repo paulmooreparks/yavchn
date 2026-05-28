@@ -577,7 +577,7 @@ html.focus-mode .splitter-v { display: none; }
 .stories { list-style: none; padding: 0; margin: 0; flex: 1; }
 .story {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   padding: 0.55rem 0.75rem;
   border-bottom: 1px solid var(--row-border);
 }
@@ -648,7 +648,7 @@ html.focus-mode .splitter-v { display: none; }
 
 .rank {
   color: var(--text-dim);
-  min-width: 1.75rem;
+  min-width: 1.4rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-size: 0.85em;
