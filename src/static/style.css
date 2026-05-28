@@ -594,6 +594,31 @@ html.focus-mode .splitter-v { display: none; }
   padding-top: 0.1em;
 }
 
+/* Pin button at the far left of every row. Visible-but-muted by default
+   (discoverability), full-contrast filled glyph when the row is pinned.
+   The same element is both the click target and the at-a-glance state cue. */
+.pin-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0 0.2rem;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  color: var(--text-dim);
+  line-height: 1;
+}
+.pin-btn:hover { color: var(--text); }
+.pin-btn .pin-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  margin-top: 0.15em;
+}
+.story.pinned .pin-btn { color: var(--link); }
+.story.pinned .pin-btn .pin-icon { fill: currentColor; }
+
 .body { flex: 1; min-width: 0; }
 .title a {
   color: var(--text);

@@ -72,7 +72,7 @@ func main() {
 	mux.HandleFunc("GET /healthz", srv.Healthz)
 	mux.HandleFunc("GET /{$}", srv.Index)
 	mux.HandleFunc("GET /s/{id}", srv.Index)
-	for _, src := range []string{"show", "ask", "new", "best", "jobs"} {
+	for _, src := range []string{"show", "ask", "new", "best", "jobs", "pinned"} {
 		mux.HandleFunc("GET /"+src, srv.Index)
 		mux.HandleFunc("GET /"+src+"/{$}", srv.Index)
 		mux.HandleFunc("GET /"+src+"/s/{id}", srv.Index)

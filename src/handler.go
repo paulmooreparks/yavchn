@@ -125,6 +125,14 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
+	// The Pinned tab is rendered client-side from localStorage (no per-user
+	// state on the server). We still need to honor /pinned/s/{id} so the
+	// article + discussion panes load when a pinned row is clicked.
+	if source == "pinned" {
+		s.renderPinnedShell(w, r, page, selectedID, ctx)
+		return
+	}
+
 	ids, idsErr := s.hn.StoryIDs(ctx, source)
 	if idsErr != nil {
 		slog.Warn("storyids unavailable", "source", source, "err", idsErr, "path", r.URL.Path)
@@ -213,6 +221,50 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
 		slog.Error("render index", "err", err)
+	}
+}
+
+// renderPinnedShell renders the index template for the Pinned tab. The story
+// list is intentionally empty -- pinned.js populates it from localStorage on
+// the client. The selected-story handling still runs server-side so the
+// article + discussion panes work for /pinned/s/{id}.
+func (s *Server) renderPinnedShell(w http.ResponseWriter, r *http.Request, page int, selectedID int64, ctx context.Context) {
+	var selItem *Item
+	var selErr error
+	if selectedID != 0 {
+		selItem, selErr = s.hn.Item(ctx, selectedID)
+	}
+
+	vm := listVM{
+		Source:   "pinned",
+		Tabs:     buildTabs("pinned"),
+		Page:     page,
+		RetryURL: r.URL.RequestURI(),
+	}
+
+	if selectedID != 0 {
+		switch {
+		case selErr != nil || selItem == nil:
+			slog.Warn("item fetch failed", "id", selectedID, "err", selErr)
+			vm.SelectError = "Couldn't load this story. It may have been removed, or the HN API is having a moment."
+		case selItem.Dead || selItem.Deleted:
+			vm.SelectError = "This story has been removed."
+		default:
+			host, displayURL := storyURLs(selItem)
+			vm.Selected = &selectedVM{
+				ID:         selItem.ID,
+				Title:      selItem.Title,
+				URL:        displayURL,
+				Host:       host,
+				HNURL:      fmt.Sprintf("https://news.ycombinator.com/item?id=%d", selItem.ID),
+				HasArticle: selItem.URL != "",
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
+		slog.Error("render pinned shell", "err", err)
 	}
 }
 
@@ -515,6 +567,8 @@ func storyURLs(item *Item) (host, displayURL string) {
 
 func sourceFromPath(path string) string {
 	switch {
+	case strings.HasPrefix(path, "/pinned"):
+		return "pinned"
 	case strings.HasPrefix(path, "/show"):
 		return SourceShow
 	case strings.HasPrefix(path, "/ask"):
@@ -556,6 +610,7 @@ func sourceBase(source string) string {
 
 func buildTabs(active string) []tabVM {
 	defs := []struct{ src, label string }{
+		{"pinned", "Pinned"},
 		{SourceTop, "Top"},
 		{SourceShow, "Show HN"},
 		{SourceAsk, "Ask HN"},

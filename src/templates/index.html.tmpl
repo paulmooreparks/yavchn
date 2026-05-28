@@ -161,7 +161,12 @@
 
       <section>
         <h3>Source tabs</h3>
-        <p>The tabs above the story list switch the feed: <strong>Top</strong>, <strong>Show HN</strong>, <strong>Ask HN</strong>, <strong>New</strong>.</p>
+        <p>The tabs above the story list switch the feed: <strong>Pinned</strong>, <strong>Top</strong>, <strong>Show HN</strong>, <strong>Ask HN</strong>, <strong>New</strong>, <strong>Best</strong>, <strong>Jobs</strong>.</p>
+      </section>
+
+      <section>
+        <h3>Pinned</h3>
+        <p>Every story row carries a pin button on the far left. Click it to mark a story for later (it stays pinned across reloads). Pinned rows show a filled pin glyph; unpinned rows show an outline. The <strong>Pinned</strong> tab at the start of the source row lists everything you've pinned, even after it falls off the HN front page. Pinned state is stored in your browser only &mdash; nothing is sent to the server.</p>
       </section>
 
       <section>
@@ -180,7 +185,7 @@
 </dialog>
 <div class="layout">
 
-  <aside class="pane pane-list">
+  <aside class="pane pane-list" data-source="{{ .Source }}">
     <form class="search-bar" action="/search" method="get" role="search">
       <input type="search" name="q" placeholder="Search HN&hellip;" value="{{ .Query }}" aria-label="Search Hacker News" autocomplete="off">
     </form>
@@ -198,7 +203,13 @@
     {{ else }}
     <ul class="stories" data-has-next="{{ if .HasNext }}true{{ else }}false{{ end }}">
     {{ range .Stories }}
-    <li class="story{{ if .Selected }} selected{{ end }}" data-id="{{ .ID }}">
+    <li class="story{{ if .Selected }} selected{{ end }}" data-id="{{ .ID }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}">
+      <button type="button" class="pin-btn" title="Pin this story" aria-label="Pin this story" aria-pressed="false">
+        <svg class="pin-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path d="M14 4v6l4 4v2H6v-2l4-4V4h-2V2h8v2h-2z"/>
+          <line x1="12" y1="16" x2="12" y2="22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
       <span class="rank">{{ .Rank }}.</span>
       <div class="body">
         <div class="title"><a href="{{ .SelectURL }}">{{ .Title }}</a></div>
@@ -305,5 +316,6 @@
 <script src="/static/sort.js" defer></script>
 <script src="/static/focus.js" defer></script>
 <script src="/static/filters.js" defer></script>
+<script src="/static/pinned.js" defer></script>
 </body>
 </html>
