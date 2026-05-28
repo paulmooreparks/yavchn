@@ -113,6 +113,12 @@ header .logo {
   height: 20px;
   display: block;
 }
+.hn-link img {
+  width: 18px;
+  height: 18px;
+  display: block;
+  border-radius: 2px;
+}
 
 .theme-toggle {
   background: none;
