@@ -32,26 +32,42 @@
   } catch (e) { /* no storage / matchMedia */ }
 })();
 (function () {
-  // Clamp stored splitter sizes against the current viewport so a layout
-  // saved on a 4K monitor still fits an HD one. Mirrors the per-axis
-  // minimums in splitters.js. Header height is the --header-h CSS var
-  // (38px); the splitter glyphs are 4px each.
+  // Splitter positions are stored as percentages so the layout adapts to
+  // any viewport (different monitor, window resize). Legacy px values from
+  // older sessions are migrated to % against the current viewport on first
+  // read and re-persisted, so the next reload starts clean.
   try {
     var w = localStorage.getItem('yavchn-list-w');
     var h = localStorage.getItem('yavchn-article-h');
     if (!w && !h) return;
-    var narrow = window.innerWidth < 800;
-    var rightMin = narrow ? 120 : 320;
-    var discussionMin = 140;
-    var headerH = 38, splitter = 4;
-    function clamp(raw, maxPx) {
-      var n = parseFloat(raw);
-      if (isNaN(n)) return raw;
-      return Math.max(80, Math.min(n, maxPx)) + 'px';
+    var headerH = 38;
+    function toPercent(raw, totalPx, key) {
+      if (!raw) return null;
+      raw = raw.trim();
+      if (raw.endsWith('%')) {
+        var p = parseFloat(raw);
+        if (isNaN(p)) return null;
+        // Clamp to sane bounds to defang any corrupt value.
+        p = Math.max(10, Math.min(90, p));
+        return p.toFixed(2) + '%';
+      }
+      if (raw.endsWith('px') && totalPx > 0) {
+        var n = parseFloat(raw);
+        if (isNaN(n)) return null;
+        var pct = (n / totalPx) * 100;
+        pct = Math.max(10, Math.min(90, pct));
+        var out = pct.toFixed(2) + '%';
+        try { localStorage.setItem(key, out); } catch (e) {}
+        return out;
+      }
+      return null;
     }
+    var listW = toPercent(w, window.innerWidth, 'yavchn-list-w');
+    var artH  = toPercent(h, window.innerHeight - headerH, 'yavchn-article-h');
+    if (!listW && !artH) return;
     var css = '.layout {';
-    if (w) css += ' --list-w: ' + clamp(w, window.innerWidth - rightMin) + ';';
-    if (h) css += ' --article-h: ' + clamp(h, window.innerHeight - headerH - splitter - discussionMin) + ';';
+    if (listW) css += ' --list-w: ' + listW + ';';
+    if (artH)  css += ' --article-h: ' + artH + ';';
     css += ' }';
     var s = document.createElement('style');
     s.textContent = css;

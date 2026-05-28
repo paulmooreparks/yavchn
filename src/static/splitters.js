@@ -15,15 +15,20 @@
 
       function onMove(ev) {
         var rect = layout.getBoundingClientRect();
-        var size;
+        var size, total;
         if (axis === 'x') {
           size = ev.clientX - rect.left;
-          size = Math.max(minA, Math.min(rect.width - minB, size));
+          total = rect.width;
+          size = Math.max(minA, Math.min(total - minB, size));
         } else {
           size = ev.clientY - rect.top;
-          size = Math.max(minA, Math.min(rect.height - minB, size));
+          total = rect.height;
+          size = Math.max(minA, Math.min(total - minB, size));
         }
-        layout.style.setProperty(cssVar, size + 'px');
+        // Store as a percentage so the layout adapts to viewport changes
+        // (different monitor, window resize) without going off-screen.
+        var pct = total > 0 ? (size / total) * 100 : 50;
+        layout.style.setProperty(cssVar, pct.toFixed(2) + '%');
       }
 
       function onUp(ev) {
