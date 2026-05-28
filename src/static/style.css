@@ -936,6 +936,14 @@ html.focus-mode .splitter-v { display: none; }
   background: rgba(26, 115, 232, 0.07);
   padding-left: 0.5rem;
 }
+/* Keyboard-focused top-level comment (n / N navigation, c collapse target).
+   Distinct from .comment-new (which uses --link); .comment.focused uses
+   --text so the two cues co-exist legibly even when both apply. */
+.comment.focused {
+  box-shadow: inset 4px 0 0 var(--text);
+  background: var(--hover);
+  padding-left: 0.5rem;
+}
 :root[data-theme="dark"] .comment-new {
   background: rgba(107, 163, 255, 0.10);
 }

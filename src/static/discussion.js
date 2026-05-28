@@ -21,14 +21,10 @@
     try { localStorage.setItem('yavchn-collapsed:' + storyID, JSON.stringify(ids)); } catch (err) {}
   }
 
-  // Delegated click handler: click anywhere on a comment header (but not
-  // on a link / button) toggles the comment's collapsed state. Listens on
-  // document so it survives pane-swap (yavchn-12) and lazy-load.
-  document.addEventListener('click', function (e) {
-    if (e.target.closest('a, button')) return;
-    var header = e.target.closest('.pane-discussion .comment-header');
-    if (!header) return;
-    var comment = header.closest('.comment');
+  // Toggle a comment's collapsed state + persist the change. Shared between
+  // the click handler (clicking the comment header) and the keyboard handler
+  // (pressing `c` while a comment is focused), so the two paths can't drift.
+  function toggleCollapse(comment) {
     if (!comment) return;
     var nowCollapsed = comment.classList.toggle('collapsed');
     var id = comment.dataset.id;
@@ -40,6 +36,16 @@
     if (nowCollapsed && idx < 0) ids.push(id);
     else if (!nowCollapsed && idx >= 0) ids.splice(idx, 1);
     saveCollapsed(storyID, ids);
+  }
+
+  // Delegated click handler: click anywhere on a comment header (but not
+  // on a link / button) toggles the comment's collapsed state. Listens on
+  // document so it survives pane-swap (yavchn-12) and lazy-load.
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('a, button')) return;
+    var header = e.target.closest('.pane-discussion .comment-header');
+    if (!header) return;
+    toggleCollapse(header.closest('.comment'));
   });
 
   // Highlight comments newer than the visitor's last-visit timestamp for
@@ -64,22 +70,44 @@
     return !!t.isContentEditable;
   }
 
+  // Mark a single top-level comment as keyboard-focused (stripping the
+  // class from any other focused comment). Lets the visitor see which
+  // comment `c` will act on.
+  function setFocus(comments, idx) {
+    for (var i = 0; i < comments.length; i++) {
+      comments[i].classList.toggle('focused', i === idx);
+    }
+  }
+
   document.addEventListener('keydown', function (e) {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
-    if (e.key !== 'n' && e.key !== 'N') return;
     if (inEditable(e.target)) return;
-    var comments = topLevelComments();
-    if (!comments.length) return;
-    if (e.key === 'n') {
-      topIdx = topIdx < comments.length - 1 ? topIdx + 1 : comments.length - 1;
-    } else {
-      topIdx = topIdx > 0 ? topIdx - 1 : 0;
+
+    // n / N: navigate top-level comments + mark focus.
+    if (e.key === 'n' || e.key === 'N') {
+      var comments = topLevelComments();
+      if (!comments.length) return;
+      if (e.key === 'n') {
+        topIdx = topIdx < comments.length - 1 ? topIdx + 1 : comments.length - 1;
+      } else {
+        topIdx = topIdx > 0 ? topIdx - 1 : 0;
+      }
+      setFocus(comments, topIdx);
+      var c = comments[topIdx];
+      if (c && typeof c.scrollIntoView === 'function') {
+        c.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
+      e.preventDefault();
+      return;
     }
-    var c = comments[topIdx];
-    if (c && typeof c.scrollIntoView === 'function') {
-      c.scrollIntoView({ block: 'start', behavior: 'smooth' });
+
+    // c: toggle collapse on the focused top-level comment.
+    if (e.key === 'c' && !e.shiftKey) {
+      var topComments = topLevelComments();
+      if (!topComments.length || topIdx < 0 || topIdx >= topComments.length) return;
+      toggleCollapse(topComments[topIdx]);
+      e.preventDefault();
     }
-    e.preventDefault();
   });
 
   document.addEventListener('yavchn:loaded', function (e) {
