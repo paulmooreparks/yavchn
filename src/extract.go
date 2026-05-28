@@ -26,8 +26,14 @@ const (
 	rateLimitWindow          = 60 * time.Second
 	maxResponseBytes         = 5 * 1024 * 1024 // 5 MiB upper bound on the source-page body we'll parse
 
+	// articleCacheTTL is the storage TTL: rows older than this are deleted by
+	// runGC. Long because article extraction is expensive.
 	articleCacheTTL = 30 * 24 * time.Hour // 30 days
-	articleGCEvery  = 6 * time.Hour
+	// articleFreshnessTTL is the read-side freshness threshold. A cached row
+	// older than this is still served (within articleCacheTTL) but triggers a
+	// background re-extract so the next reader sees the publisher's updates.
+	articleFreshnessTTL = 1 * time.Hour
+	articleGCEvery      = 6 * time.Hour
 )
 
 // errRateLimited is returned by Extractor.Get when the caller's IP has
@@ -76,18 +82,27 @@ func newExtractorTransport() http.RoundTripper {
 	return &uaTransport{rt: t, ua: userAgent}
 }
 
+// Get returns the cached article when one is available (within
+// articleCacheTTL). If the cached row is older than articleFreshnessTTL,
+// the reader still sees the cached content immediately, but a background
+// re-extract is kicked off (singleflighted) so the next reader sees the
+// publisher's updates. Cold-cache or storage-TTL-expired path falls
+// through to a synchronous fetch with per-IP rate limiting.
 func (e *Extractor) Get(ctx context.Context, rawURL, requesterIP string) (*Article, error) {
 	if !isAllowedURL(rawURL) {
 		return nil, errors.New("url scheme not allowed")
 	}
 	hash := urlHash(rawURL)
 
-	if a, err := e.fromCache(ctx, hash); err == nil {
+	if a, fetchedAt, err := e.fromCacheWithAge(ctx, hash); err == nil {
+		if time.Since(time.Unix(fetchedAt, 0)) >= articleFreshnessTTL {
+			e.kickRevalidate(hash, rawURL)
+		}
 		return a, nil
 	}
 
 	v, err, _ := e.sf.Do(hash, func() (interface{}, error) {
-		if a, err := e.fromCache(ctx, hash); err == nil {
+		if a, _, err := e.fromCacheWithAge(ctx, hash); err == nil {
 			return a, nil
 		}
 		// Rate-check inside singleflight so cache hits and piggy-backers
@@ -103,16 +118,60 @@ func (e *Extractor) Get(ctx context.Context, rawURL, requesterIP string) (*Artic
 	return v.(*Article), nil
 }
 
-func (e *Extractor) fromCache(ctx context.Context, hash string) (*Article, error) {
-	row := e.db.QueryRowContext(ctx,
-		`SELECT url, title, byline, content FROM articles WHERE url_hash = ?`, hash)
-	var a Article
-	var content string
-	if err := row.Scan(&a.URL, &a.Title, &a.Byline, &content); err != nil {
+// ForceGet bypasses the freshness check and re-extracts the article
+// synchronously. Powers the per-visitor manual refresh button in the
+// article-pane header. Still rate-limited per IP and still goes through
+// singleflight so two visitors hammering refresh on the same URL only
+// trigger one upstream fetch.
+func (e *Extractor) ForceGet(ctx context.Context, rawURL, requesterIP string) (*Article, error) {
+	if !isAllowedURL(rawURL) {
+		return nil, errors.New("url scheme not allowed")
+	}
+	hash := urlHash(rawURL)
+	v, err, _ := e.sf.Do("force:"+hash, func() (interface{}, error) {
+		if !e.rate.Allow(requesterIP) {
+			return nil, errRateLimited
+		}
+		return e.fetchAndStore(ctx, hash, rawURL)
+	})
+	if err != nil {
 		return nil, err
 	}
+	return v.(*Article), nil
+}
+
+// kickRevalidate fires a background re-extract for the given URL. Uses
+// singleflight (with a distinct key prefix) so concurrent stale reads of
+// the same URL collapse to one upstream fetch. The background work uses
+// its own context so it survives the originating request's cancellation;
+// the per-IP rate limiter is bypassed because background work isn't
+// user-initiated, and the e.sem semaphore already bounds concurrent
+// upstream fetches across all background work.
+func (e *Extractor) kickRevalidate(hash, rawURL string) {
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), extractTimeout+2*time.Second)
+		defer cancel()
+		_, _, _ = e.sf.Do("revalidate:"+hash, func() (interface{}, error) {
+			a, err := e.fetchAndStore(bgCtx, hash, rawURL)
+			if err != nil {
+				slog.Info("article revalidate failed", "url", rawURL, "err", err)
+			}
+			return a, err
+		})
+	}()
+}
+
+func (e *Extractor) fromCacheWithAge(ctx context.Context, hash string) (*Article, int64, error) {
+	row := e.db.QueryRowContext(ctx,
+		`SELECT url, title, byline, content, fetched_at FROM articles WHERE url_hash = ?`, hash)
+	var a Article
+	var content string
+	var fetchedAt int64
+	if err := row.Scan(&a.URL, &a.Title, &a.Byline, &content, &fetchedAt); err != nil {
+		return nil, 0, err
+	}
 	a.Content = template.HTML(content)
-	return &a, nil
+	return &a, fetchedAt, nil
 }
 
 func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Article, error) {

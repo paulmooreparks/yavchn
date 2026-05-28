@@ -278,6 +278,7 @@
     {{ else if .Selected }}
       <div class="pane-header">
         <span class="pane-label">article</span>
+        {{ if .Selected.HasArticle }}<button type="button" class="article-refresh" title="Re-fetch the article from its source" aria-label="Refresh article">&#x21bb;</button>{{ end }}
         {{ if .Selected.HasArticle }}<a href="{{ .Selected.URL }}" target="_blank" rel="noopener">Open original &uarr;</a>{{ end }}
       </div>
       <div class="pane-body">

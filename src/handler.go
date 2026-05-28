@@ -509,10 +509,17 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 		writeFragment(w, http.StatusBadRequest, `<div class="article-stub"><p class="note">Missing URL.</p></div>`)
 		return
 	}
+	refresh := r.URL.Query().Get("refresh") == "1"
 	ctx, cancel := context.WithTimeout(r.Context(), extractTimeout+2*time.Second)
 	defer cancel()
 
-	article, err := s.extract.Get(ctx, rawURL, clientIP(r))
+	var article *Article
+	var err error
+	if refresh {
+		article, err = s.extract.ForceGet(ctx, rawURL, clientIP(r))
+	} else {
+		article, err = s.extract.Get(ctx, rawURL, clientIP(r))
+	}
 	if err != nil {
 		if errors.Is(err, errRateLimited) {
 			slog.Info("article extract rate-limited", "url", rawURL, "ip", clientIP(r))
