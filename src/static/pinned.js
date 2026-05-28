@@ -173,7 +173,11 @@
     if (d < 60) return 'just now';
     if (d < 3600) return Math.floor(d / 60) + 'm ago';
     if (d < 86400) return Math.floor(d / 3600) + 'h ago';
-    return Math.floor(d / 86400) + 'd ago';
+    if (d < 30 * 86400) return Math.floor(d / 86400) + 'd ago';
+    // Past 30 days: ISO date (YYYY-MM-DD) instead of "1638d ago".
+    var t = new Date(unix * 1000);
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate());
   }
 
   function togglePin(row) {

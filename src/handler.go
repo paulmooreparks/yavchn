@@ -721,8 +721,11 @@ func isDefaultTab(source, tab string) bool {
 	return false
 }
 
+// relTime renders relative-time for recent items and switches to a short
+// absolute date past 30 days. "12d" is easy to grok; "1638d" is not.
 func relTime(unix int64) string {
-	d := time.Since(time.Unix(unix, 0))
+	t := time.Unix(unix, 0)
+	d := time.Since(t)
 	switch {
 	case d < time.Minute:
 		return "just now"
@@ -730,7 +733,8 @@ func relTime(unix int64) string {
 		return fmt.Sprintf("%dm", int(d.Minutes()))
 	case d < 24*time.Hour:
 		return fmt.Sprintf("%dh", int(d.Hours()))
-	default:
+	case d < 30*24*time.Hour:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
+	return t.Format("2006-01-02")
 }
