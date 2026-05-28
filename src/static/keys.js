@@ -54,6 +54,22 @@
     return tag === 'button';
   }
 
+  // Unify mouse and keyboard: clicking a story row moves the j/k focus
+   // cursor onto it, so the .focused indicator always matches the user's
+  // most recent interaction. Skips clicks on row-action buttons (pin /
+  // dismiss) -- those have their own semantics and shouldn't drag focus.
+  list.addEventListener('click', function (e) {
+    if (e.button !== 0) return;
+    if (e.target.closest('.pin-btn, .dismiss-btn')) return;
+    var row = e.target.closest('.story');
+    if (!row) return;
+    var items = getItems();
+    var idx = items.indexOf(row);
+    if (idx < 0) return;
+    focusIdx = idx;
+    applyFocus(items);
+  });
+
   document.addEventListener('keydown', function (e) {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
 
