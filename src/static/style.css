@@ -596,35 +596,41 @@ html.focus-mode .splitter-v { display: none; }
   padding-top: 0.1em;
 }
 
-/* Pin button at the far left of every row. Subtle-but-visible by default
-   (discoverability without screaming), brightens on row hover (affordance),
-   filled in --link when the row is actually pinned (state cue).
-   The same element is both the click target and the at-a-glance state cue. */
+/* Pin button at the far left of every row. Always visible as a hollow
+   outline pin in --text-dim (subtle but discoverable). Brightens on
+   row hover. When the row is actually pinned, the glyph fills in with
+   --link so pinned rows are clearly distinguished at a glance. */
 .pin-btn {
+  -webkit-appearance: none;
   appearance: none;
   background: transparent;
   border: 0;
-  padding: 0 0.15rem 0 0;
+  outline: none;
+  padding: 0;
   margin: 0;
+  width: 14px;
+  height: 14px;
   cursor: pointer;
-  display: flex;
-  align-items: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-dim);
-  line-height: 1;
-  opacity: 0.3;
-  transition: opacity 0.12s, color 0.12s;
+  line-height: 0;
+  opacity: 0.55;
+  transition: opacity 0.1s, color 0.1s;
 }
 .story:hover .pin-btn,
 .story.focused .pin-btn,
-.pin-btn:focus { opacity: 0.9; }
-.pin-btn:hover { color: var(--text); opacity: 1; }
+.pin-btn:focus { opacity: 1; }
+.pin-btn:hover { color: var(--text); }
 .pin-btn .pin-icon {
-  width: 10px;
-  height: 10px;
+  display: block;
+  width: 12px;
+  height: 12px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
-  margin-top: 0.35em;
+  stroke-width: 1;
+  stroke-linejoin: round;
 }
 .story.pinned .pin-btn { color: var(--link); opacity: 1; }
 .story.pinned .pin-btn .pin-icon { fill: currentColor; }

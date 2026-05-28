@@ -166,7 +166,7 @@
 
       <section>
         <h3>Pinned</h3>
-        <p>Every story row carries a pin button on the far left. Click it to mark a story for later (it stays pinned across reloads). Pinned rows show a filled pin glyph; unpinned rows show an outline. The <strong>Pinned</strong> tab at the start of the source row lists everything you've pinned, even after it falls off the HN front page. Pinned state is stored in your browser only &mdash; nothing is sent to the server.</p>
+        <p>Each story row carries a small outline pin at the far left. Click it to save that story for later; the glyph fills in to show it's pinned. The <strong>Pinned</strong> tab at the start of the source-tabs row collects everything you've saved, even after it falls off the HN front page. Pinned state is stored in your browser only &mdash; nothing is sent to the server.</p>
       </section>
 
       <section>
@@ -205,9 +205,8 @@
     {{ range .Stories }}
     <li class="story{{ if .Selected }} selected{{ end }}" data-id="{{ .ID }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}">
       <button type="button" class="pin-btn" title="Pin this story" aria-label="Pin this story" aria-pressed="false">
-        <svg class="pin-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M14 4v6l4 4v2H6v-2l4-4V4h-2V2h8v2h-2z"/>
-          <line x1="12" y1="16" x2="12" y2="22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <svg class="pin-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M5 2h6v3l2 3H9v6l-1 1-1-1V8H3l2-3V2z"/>
         </svg>
       </button>
       <span class="rank">{{ .Rank }}.</span>
