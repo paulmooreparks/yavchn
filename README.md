@@ -2,7 +2,7 @@
 
 <img src="src/static/logo.png" align="right" width="200" alt="YAVCHN logo">
 
-A three-pane web reader for Hacker News and [Lobsters](https://lobste.rs):
+A three-pane web reader for [Hacker News](https://news.ycombinator.com/) and [Lobsters](https://lobste.rs):
 
 - **Left:** The list of articles from the active source
 - **Right-top:** The linked article, reader-mode extracted
@@ -39,22 +39,28 @@ Serves on `http://localhost:8080`.
 ## Stack
 
 - Go 1.25, standard `net/http` + `html/template`.
-- `golang.org/x/sync/singleflight` &mdash; coalesce concurrent upstream fetches.
-- `github.com/hashicorp/golang-lru/v2/expirable` &mdash; bounded LRU + TTL for HN item and thread caches.
-- `github.com/go-shiori/go-readability` &mdash; server-side article extraction.
-- `github.com/microcosm-cc/bluemonday` &mdash; HTML sanitisation for extracted articles and comment bodies.
-- `modernc.org/sqlite` &mdash; pure-Go SQLite for the article-extraction cache.
+- `golang.org/x/sync/singleflight`: coalesce concurrent upstream fetches.
+- `github.com/hashicorp/golang-lru/v2/expirable`: bounded LRU + TTL for HN item and thread caches.
+- `github.com/go-shiori/go-readability`: server-side article extraction.
+- `github.com/microcosm-cc/bluemonday`: HTML sanitisation for extracted articles and comment bodies.
+- `modernc.org/sqlite`: pure-Go SQLite for the article-extraction cache.
 - Vanilla JS frontend, CSS grid layout. No SPA framework.
 
 ## Design notes
 
-- **URL is king**: Every state is addressable. `/` redirects to `/hn/`; `/hn/{tab}/`, `/hn/s/{id}`, `/lobsters/`, `/lobsters/{tab}/`, `/lobsters/s/{id}`, `/pinned/`, `/hn/search?q=...` &mdash; all server-rendered, all bookmarkable. Legacy flat URLs (`/s/{id}`, `/show`, `/ask`, etc.) 301-redirect to their `/hn/*` equivalents.
-- **Zero auth, zero per-user server state**: Neither HN nor Lobsters has the kind of OAuth that would let YAVCHN act on your behalf. Comments are fetched server-side from each source's JSON API and rendered into the discussion pane. For vote / save / hide / reply, click the per-comment "&uarr;" or the pane-header "Open on HN" / "Open on Lobsters" link to open the item on the source's own site in a new tab where your existing session handles the action. YAVCHN never sees your credentials or cookies.
-- **Multi-source via a small `Source` interface** (`src/source.go`): `Name() / Label() / Tabs() / StoryIDs(tab, page) / Item(id) / StoryThread(id, ip) / ...`. HN (firebaseio + Algolia) and Lobsters (lobste.rs `.json` endpoints) each implement it; story IDs are strings throughout so HN's int64 IDs and Lobsters' base36 `short_id`s coexist.
-- **Cache hierarchy**: Story lists, items, and comment threads: in-memory LRU + TTL per source. Extracted articles: SQLite (expensive to recompute, but stable per URL).
-- **Progressive enhancement**: Pages render server-side without JavaScript. Article reader-mode and discussion rendering are lazy-loaded after first paint via `GET /api/article?url=...` and `GET /api/discussion?id=...&source=hn|lobsters`; no-JS visitors get prominent "Open article" / "Open on HN" / "Open on Lobsters" fallback links.
-- **Persisted UI state**: Splitter positions (as percentages so the layout survives different monitor sizes), light/dark theme, focus mode, pinned/dismissed/visited story IDs, collapsed comment IDs, comment sort, and the domain block-list all live in `localStorage`. An inline `<script>` in `<head>` applies theme + splitter sizes + focus mode before first paint to avoid flash.
-- **Search**: HN-only at `/hn/search`. Lobsters has no JSON search API (HTML only); `/lobsters/search` returns 404 with a clear message rather than introducing HTML-scraping fragility.
+- **The URL is king.** Every page in YAVCHN has its own URL. You can bookmark `/hn/show/`, `/lobsters/`, `/pinned/`, or a specific story like `/hn/s/12345678`, and reopening that URL takes you straight back to what you were reading. The source, the tab, the page number, and the selected story all live in the URL. Nothing important is hidden behind ephemeral client state.
+
+- **No accounts, no per-user server state.** YAVCHN never sees your HN or Lobsters credentials. Comments are fetched from each site's public JSON API and rendered into the discussion pane. When you want to vote, reply, save, or hide a comment, click the upward arrow next to it (or the "Open on HN" / "Open on Lobsters" link at the top of the pane). That opens the item on the source's own site in a new tab, where your existing session does the work.
+
+- **Multi-source by design.** YAVCHN is built around a small Go interface called `Source` (see `src/source.go`). HN and Lobsters each have their own implementation that knows how to talk to their respective JSON APIs. Adding a third site means writing one more implementation; the rest of YAVCHN doesn't care which site a story came from.
+
+- **Caching.** Story lists, individual items, and comment threads are cached in memory with a short time-to-live (a minute or two), so the front page doesn't hammer HN or Lobsters when many people are reading. Article extraction is much more expensive (fetch the source page, run readability, sanitize the HTML), so extracted articles are cached durably in SQLite and only re-fetched after 30 days.
+
+- **Progressive enhancement.** The page renders fully server-side, so it works without JavaScript. The article reader-mode pane and the comment thread are fetched separately after the page loads, via `GET /api/article` and `GET /api/discussion`. That keeps the first paint fast, and lets the heavier requests fail without breaking the page. Visitors with JavaScript disabled see plainly-labeled "Open article" and "Open on HN" / "Open on Lobsters" fallback links instead.
+
+- **Browser-local state.** Splitter positions, theme choice, focus mode, pinned stories, dismissed stories, visited stories, collapsed comment threads, the comment-sort preference, and the domain block-list all live in your browser's `localStorage`. Nothing is sent to the server. A small inline `<script>` in the page `<head>` applies your theme, splitter sizes, and focus mode before the first paint, so reloading doesn't flash the default layout for a moment.
+
+- **Search.** Search runs against HN only, at `/hn/search`. Lobsters has a search page, but it returns HTML rather than JSON; rather than scrape that and watch it break every time Lobsters tweaks its markup, YAVCHN returns 404 for `/lobsters/search`.
 
 ## Docker
 
@@ -67,4 +73,4 @@ Single-binary distroless image. SQLite article cache lives at `/home/nonroot/yav
 
 ## License
 
-[MIT](LICENSE). Use it, fork it, embed it, learn from it &mdash; just keep the copyright notice intact.
+[MIT](LICENSE). Use it, fork it, embed it, learn from it: just keep the copyright notice intact.
