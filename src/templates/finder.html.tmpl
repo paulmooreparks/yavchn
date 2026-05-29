@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>{{ if .URL }}Discussions of {{ .Host }} &middot; yavchn{{ else }}Find discussions &middot; yavchn{{ end }}</title>
+<title>{{ if .URL }}Discussions of {{ .Host }} &middot; YAVCHN{{ else }}Find discussions &middot; YAVCHN{{ end }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Find every discussion of a URL across Hacker News and Lobsters.">
 <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
@@ -38,7 +38,7 @@
 </head>
 <body class="finder-page">
 <header>
-  <h1><a href="/"><img src="/static/logo-24x24.png" alt="" class="logo"> yavchn</a></h1>
+  <h1><a href="/"><img src="/static/logo-24x24.png" alt="" class="logo"> YAVCHN</a></h1>
   <nav class="source-picker" aria-label="News source">
     {{ range .AllSources }}
     <a href="{{ .URL }}" class="source-pick{{ if .Active }} active{{ end }}" data-source="{{ .Name }}">{{ .Label }}</a>
@@ -75,7 +75,7 @@
 {{ if not .URL }}
 <div class="finder-empty">
   <h2>Find the conversation behind any link</h2>
-  <p>Paste a URL above. yavchn looks it up on Hacker News and Lobsters and shows every discussion of that exact link &mdash; including the times the same article was submitted years apart &mdash; alongside the reader-mode article.</p>
+  <p>Paste a URL above. YAVCHN looks it up on Hacker News and Lobsters and shows every discussion of that exact link &mdash; including the times the same article was submitted years apart &mdash; alongside the reader-mode article.</p>
 </div>
 {{ else }}
 <div class="layout finder-layout">
@@ -154,7 +154,7 @@
     <div class="help-dialog-body">
       <section>
         <h3>Find</h3>
-        <p>Paste any URL into the bar at the top. yavchn searches Hacker News and Lobsters for every submission of that exact link and lists them in the discussions pane. Pick a submission to read its thread; the same article is often submitted more than once, years apart.</p>
+        <p>Paste any URL into the bar at the top. YAVCHN searches Hacker News and Lobsters for every submission of that exact link and lists them in the discussions pane. Pick a submission to read its thread; the same article is often submitted more than once, years apart.</p>
       </section>
       <section>
         <h3>Reading a thread</h3>

@@ -2,18 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>{{ if .Selected }}{{ .Selected.Title }} &middot; yavchn{{ else }}yavchn{{ end }}</title>
+<title>{{ if .Selected }}{{ .Selected.Title }} &middot; YAVCHN{{ else }}YAVCHN{{ end }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Three-pane Hacker News reader: story list, reader-mode article, threaded discussion side by side.">
 <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 <link rel="stylesheet" href="/static/style.css">
-<meta property="og:title" content="yavchn">
+<meta property="og:title" content="YAVCHN">
 <meta property="og:description" content="Three-pane Hacker News reader: story list, reader-mode article, threaded discussion side by side.">
 <meta property="og:image" content="https://yavchn.parkscomputing.com/static/logo.png">
 <meta property="og:url" content="https://yavchn.parkscomputing.com/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="yavchn">
+<meta name="twitter:title" content="YAVCHN">
 <meta name="twitter:description" content="Three-pane Hacker News reader: story list, reader-mode article, threaded discussion side by side.">
 <meta name="twitter:image" content="https://yavchn.parkscomputing.com/static/logo.png">
 <script>
@@ -87,7 +87,7 @@
 </head>
 <body>
 <header>
-  <h1><a href="/"><img src="/static/logo-24x24.png" alt="" class="logo"> yavchn</a></h1>
+  <h1><a href="/"><img src="/static/logo-24x24.png" alt="" class="logo"> YAVCHN</a></h1>
   <nav class="source-picker" aria-label="News source">
     {{ range .AllSources }}
     <a href="{{ .URL }}" class="source-pick{{ if .Active }} active{{ end }}" data-source="{{ .Name }}">{{ .Label }}</a>
@@ -197,7 +197,7 @@
 
       <section>
         <h3>About</h3>
-        <p>yavchn never sees your HN credentials. The discussion is fetched server-side and rendered into the pane; logged-in actions hand off to news.ycombinator.com in a new tab where your existing session does the work.</p>
+        <p>YAVCHN never sees your HN credentials. The discussion is fetched server-side and rendered into the pane; logged-in actions hand off to news.ycombinator.com in a new tab where your existing session does the work.</p>
         <p>Open source: <a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">github.com/paulmooreparks/yavchn</a>.</p>
       </section>
 
