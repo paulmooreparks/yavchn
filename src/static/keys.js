@@ -76,9 +76,10 @@
     var items = getItems();
     if (!items.length) return;
 
+    // Arrow keys are intentionally NOT bound here: they belong to native
+    // scrolling of whichever pane has focus. List selection is j/k only.
     switch (e.key) {
       case 'j':
-      case 'ArrowDown':
         if (inEditable(e.target)) return;
         if (focusIdx < items.length - 1) {
           focusIdx++;
@@ -87,7 +88,6 @@
         e.preventDefault();
         break;
       case 'k':
-      case 'ArrowUp':
         if (inEditable(e.target)) return;
         if (focusIdx > 0) {
           focusIdx--;
