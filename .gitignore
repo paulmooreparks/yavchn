@@ -6,6 +6,7 @@
 *.dylib
 /yavchn
 /src/yavchn
+/bin/
 
 # Test binary
 *.test
@@ -16,7 +17,6 @@ coverage.*
 
 # IDE
 .idea/
-.vscode/
 *.swp
 
 # Local data

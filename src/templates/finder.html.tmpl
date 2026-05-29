@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ if .URL }}Discussions of {{ .Host }} &middot; YAVCHN{{ else }}Find discussions &middot; YAVCHN{{ end }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Find every discussion of a URL across Hacker News and Lobsters.">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="stylesheet" href="/static/style.css">
+<script>
+(function () {
+  try {
+    var pref = localStorage.getItem('yavchn-theme');
+    var theme;
+    if (pref === 'dark' || pref === 'light') { theme = pref; }
+    else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) { theme = 'dark'; }
+    else { theme = 'light'; }
+    document.documentElement.dataset.theme = theme;
+  } catch (e) {}
+})();
+(function () {
+  // Reuse the persisted article-pane height for the finder's article/discussion split.
+  try {
+    var h = localStorage.getItem('yavchn-article-h');
+    if (!h) return;
+    var headerH = 38;
+    var raw = h.trim();
+    var pct = null;
+    if (raw.endsWith('%')) { var p = parseFloat(raw); if (!isNaN(p)) pct = Math.max(10, Math.min(90, p)).toFixed(2) + '%'; }
+    else if (raw.endsWith('px')) { var n = parseFloat(raw); var t = window.innerHeight - headerH; if (!isNaN(n) && t > 0) pct = Math.max(10, Math.min(90, (n / t) * 100)).toFixed(2) + '%'; }
+    if (!pct) return;
+    var s = document.createElement('style');
+    s.textContent = '.finder-layout { --article-h: ' + pct + '; }';
+    document.head.appendChild(s);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="finder-page">
+<header>
+  <h1><a href="/"><img src="/static/logo-24x24.png" alt="" class="logo"> YAVCHN</a></h1>
+  <nav class="source-picker" aria-label="News source">
+    {{ range .AllSources }}
+    <a href="{{ .URL }}" class="source-pick{{ if .Active }} active{{ end }}" data-source="{{ .Name }}">{{ .Label }}</a>
+    {{ end }}
+  </nav>
+  <button type="button" class="hamburger-btn" aria-label="Header menu" aria-expanded="false" aria-controls="header-actions">
+    <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" fill="none"/></svg>
+  </button>
+  <div class="header-actions" id="header-actions">
+    <a class="source-link hn-link" href="https://news.ycombinator.com/" target="_blank" rel="noopener" title="Hacker News (source)" aria-label="Hacker News (source)">
+      <img src="https://news.ycombinator.com/y18.svg" alt="" width="18" height="18">
+    </a>
+    <a class="source-link lobsters-link" href="https://lobste.rs/" target="_blank" rel="noopener" title="Lobsters (source)" aria-label="Lobsters (source)">
+      <img src="/static/lobsters.svg" alt="" width="18" height="18">
+    </a>
+    <a class="source-link github-link" href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener" title="Source on GitHub" aria-label="Source on GitHub">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.4 3-.405 1.02.005 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+    </a>
+    <button type="button" class="theme-toggle" title="Toggle light/dark theme" aria-label="Toggle theme">
+      <span class="icon-dark" aria-hidden="true">&#9790;</span><span class="icon-light" aria-hidden="true">&#9728;</span>
+    </button>
+    <button type="button" class="help-trigger help-button" title="Help (?)" aria-label="Help" aria-haspopup="dialog">?</button>
+  </div>
+</header>
+
+<form class="finder-bar" action="/find" method="get" role="search">
+  <label for="finder-url">Find discussions of</label>
+  <div class="finder-frame">
+    <input id="finder-url" type="text" name="url" value="{{ .URL }}" placeholder="https://example.com/article" autocomplete="off" spellcheck="false" aria-label="URL to find discussions for">
+    <button type="submit">Find &rarr;</button>
+  </div>
+</form>
+
+{{ if not .URL }}
+<div class="finder-empty">
+  <h2>Find the conversation behind any link</h2>
+  <p>Paste a URL above. YAVCHN looks it up on Hacker News and Lobsters and shows every discussion of that exact link &mdash; including the times the same article was submitted years apart &mdash; alongside the reader-mode article.</p>
+</div>
+{{ else }}
+<div class="layout finder-layout">
+
+  <section class="pane pane-article"{{ if .HasArticle }} data-reader-url="{{ .URL }}"{{ end }}>
+    <div class="pane-header">
+      <span class="pane-label">article</span>
+      <a href="{{ .URL }}" target="_blank" rel="noopener">Open original &uarr;</a>
+    </div>
+    <div class="pane-body">
+      {{ if .HasArticle }}
+        <div class="article-stub">
+          <h2>{{ .Host }}</h2>
+          <a class="cta" href="{{ .URL }}" target="_blank" rel="noopener">Open article &uarr;</a>
+          <p class="note js-reader-status">Loading reader-mode&hellip;</p>
+          <noscript><p class="note">Reader-mode requires JavaScript. The "Open article" link above works without it.</p></noscript>
+        </div>
+      {{ else }}
+        <div class="article-stub"><p class="note">This URL can't be loaded in reader-mode. Use "Open original" above.</p></div>
+      {{ end }}
+    </div>
+  </section>
+
+  <div class="splitter splitter-h" role="separator" aria-orientation="horizontal"></div>
+
+  <section class="pane pane-discussion finder-disc">
+    <div class="pane-header">
+      <span class="pane-label">discussions{{ if .Total }} &middot; {{ .Total }} found{{ end }}</span>
+      <label class="comment-sort-wrap"><span class="visually-hidden">Sort comments</span>
+        <select class="comment-sort" aria-label="Sort comments">
+          <option value="best">Best</option>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+      </label>
+    </div>
+
+    {{ if .LookupError }}
+      <div class="pane-body"><p class="empty-note">{{ .LookupError }}</p></div>
+    {{ else if not .Groups }}
+      <div class="pane-body"><p class="empty-note">No discussions found for this URL on Hacker News or Lobsters. The "Open original" link above still works.</p></div>
+    {{ else }}
+      <nav class="finder-tabs">
+        {{ range .Groups }}
+        <button type="button" class="finder-tab" data-source="{{ .Source }}">{{ .Label }} <span class="count">{{ len .Subs }}</span></button>
+        {{ end }}
+      </nav>
+      <div class="finder-subs">
+        {{ range .Groups }}
+        <div class="finder-group" data-source="{{ .Source }}">
+          {{ range .Subs }}
+          <div class="finder-sub{{ if .First }} active{{ end }}" data-source="{{ .Source }}" data-id="{{ .ID }}">
+            <span class="finder-sub-dot" aria-hidden="true"></span>
+            <span class="finder-sub-meta">{{ if .Where }}{{ .Where }} &middot; {{ end }}{{ .Score }} pts &middot; {{ .Age }} &middot; {{ .Comments }} comments</span>
+            <a class="finder-sub-open" href="{{ .SourceURL }}" target="_blank" rel="noopener" title="open on the source site">open &uarr;</a>
+          </div>
+          {{ end }}
+        </div>
+        {{ end }}
+      </div>
+      <div class="pane-body finder-thread">
+        <p class="empty-note js-discussion-status">Loading discussion&hellip;</p>
+      </div>
+    {{ end }}
+  </section>
+
+</div>
+{{ end }}
+
+<dialog id="help-dialog" class="help-dialog" aria-labelledby="help-dialog-title">
+  <div class="help-dialog-frame">
+    <header class="help-dialog-header">
+      <h2 id="help-dialog-title">Help</h2>
+      <button type="button" class="help-dialog-close" aria-label="Close help">&times;</button>
+    </header>
+    <div class="help-dialog-body">
+      <section>
+        <h3>Find</h3>
+        <p>Paste any URL into the bar at the top. YAVCHN searches Hacker News and Lobsters for every submission of that exact link and lists them in the discussions pane. Pick a submission to read its thread; the same article is often submitted more than once, years apart.</p>
+      </section>
+      <section>
+        <h3>Reading a thread</h3>
+        <dl>
+          <dt><kbd>n</kbd> / <kbd>N</kbd></dt><dd>Next / previous top-level comment</dd>
+          <dt><kbd>c</kbd></dt><dd>Collapse / expand the focused comment</dd>
+        </dl>
+      </section>
+    </div>
+  </div>
+</dialog>
+
+<script src="/static/reader.js" defer></script>
+<script src="/static/splitters.js" defer></script>
+<script src="/static/theme.js" defer></script>
+<script src="/static/discussion.js" defer></script>
+<script src="/static/sort.js" defer></script>
+<script src="/static/help.js" defer></script>
+<script src="/static/menu.js" defer></script>
+<script src="/static/finder.js" defer></script>
+</body>
+</html>
