@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>yavchn · discussion-finder mockup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Palette lifted from yavchn's style.css (dark theme) so this reads in context. */
+  :root[data-theme="dark"] {
+    --header-h: 38px;
+    --pane-border: #2a2a2a;
+    --pane-bg: #161616;
+    --pane-header-bg: #1f1f1f;
+    --text: #e8e8e8;
+    --text-mute: #a0a0a0;
+    --text-dim: #707070;
+    --hover: #1f1f1f;
+    --selected: #1e2b3d;
+    --link: #6ba3ff;
+    --thread-rule: #2a2a2a;
+    --comment-border: #222;
+    --article-text: #d8d8d8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--text);
+    background: var(--pane-bg);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ---- header ---- */
+  header {
+    height: var(--header-h);
+    padding: 0 1rem;
+    background: var(--pane-header-bg);
+    border-bottom: 1px solid var(--pane-border);
+    display: flex;
+    align-items: center;
+    position: relative;
+    flex-shrink: 0;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .logo-mark {
+    background: #1a7f37;
+    color: #fff;
+    font-size: 0.5rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 3px 3px;
+    border-radius: 3px;
+    letter-spacing: 0;
+  }
+  .source-picker {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    background: var(--pane-bg);
+    border: 1px solid var(--pane-border);
+    border-radius: 5px;
+    overflow: hidden;
+    font-size: 0.85em;
+  }
+  .source-pick {
+    color: var(--text-mute);
+    text-decoration: none;
+    padding: 0.28rem 0.8rem 0.18rem;
+    font-weight: 500;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+  }
+  .source-pick + .source-pick { border-left: 1px solid var(--pane-border); }
+  .source-pick.active {
+    color: var(--text);
+    background: var(--pane-header-bg);
+    border-bottom-color: var(--link);
+  }
+  .header-actions { margin-left: auto; display: flex; align-items: center; gap: 0.4rem; color: var(--text-dim); font-size: 0.8em; }
+  .header-actions .chip { border: 1px solid var(--text-dim); border-radius: 50%; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* ---- finder bar ---- */
+  .finder-bar {
+    flex-shrink: 0;
+    padding: 0.55rem 0.9rem;
+    background: var(--pane-bg);
+    border-bottom: 1px solid var(--pane-border);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .finder-bar label { color: var(--text-mute); font-size: 0.85em; white-space: nowrap; }
+  .finder-frame {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    background: var(--pane-bg);
+    border: 1px solid var(--pane-border);
+    border-radius: 5px;
+    overflow: hidden;
+    max-width: 760px;
+  }
+  .finder-frame:focus-within { border-color: var(--link); }
+  .finder-frame input {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.9em;
+    padding: 0.4rem 0.6rem;
+  }
+  .finder-frame input:focus { outline: none; }
+  .finder-frame button {
+    border: 0;
+    border-left: 1px solid var(--pane-border);
+    background: transparent;
+    color: var(--text-mute);
+    cursor: pointer;
+    padding: 0 0.8rem;
+    font-size: 0.95em;
+  }
+  .finder-frame button:hover { color: var(--text); background: var(--hover); }
+
+  /* ---- panes ---- */
+  .panes { flex: 1; display: grid; grid-template-rows: 42% 4px 1fr; min-height: 0; }
+  .pane { overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  .pane-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.4rem 0.9rem;
+    background: var(--pane-header-bg);
+    border-bottom: 1px solid var(--pane-border);
+    font-size: 0.8em;
+    flex-shrink: 0;
+  }
+  .pane-label { color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
+  .pane-header a { color: var(--text); text-decoration: underline; text-decoration-color: var(--text-dim); text-underline-offset: 2px; font-size: 0.95em; }
+  .pane-body { overflow-y: auto; padding: 1.1rem 1.4rem; }
+  .splitter { background: var(--pane-border); }
+
+  /* article */
+  .article-title { font-size: 1.5rem; font-weight: 700; margin: 0 0 0.2rem; line-height: 1.25; }
+  .article-host { color: var(--text-dim); font-size: 0.85em; margin: 0 0 1rem; }
+  .article-body { color: var(--article-text); max-width: 60ch; }
+  .article-body p { margin: 0 0 0.9em; }
+
+  /* discussions */
+  .disc-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--pane-border); background: var(--pane-header-bg); flex-shrink: 0; }
+  .disc-tab {
+    appearance: none; background: transparent; border: 0; cursor: pointer;
+    color: var(--text-mute); font: inherit; font-size: 0.82em; font-weight: 500;
+    padding: 0.45rem 0.95rem;
+    border-bottom: 2px solid transparent;
+  }
+  .disc-tab:hover { color: var(--text); background: var(--hover); }
+  .disc-tab.active { color: var(--text); border-bottom-color: var(--link); }
+  .disc-tab .count { color: var(--text-dim); font-weight: 400; }
+  .disc-tab.active .count { color: var(--link); }
+
+  /* submission picker */
+  .submissions { padding: 0.6rem 0.9rem; border-bottom: 1px dashed var(--thread-rule); }
+  .submissions-label { color: var(--text-dim); font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.35rem; }
+  .submission {
+    display: flex; align-items: center; gap: 0.55rem;
+    padding: 0.3rem 0.4rem; border-radius: 4px; cursor: pointer;
+    font-size: 0.85em; color: var(--text-mute);
+  }
+  .submission:hover { background: var(--hover); }
+  .submission.active { background: var(--selected); color: var(--text); }
+  .submission .dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text-dim); flex-shrink: 0; }
+  .submission.active .dot { border-color: var(--link); background: var(--link); }
+  .submission .where { color: var(--text-dim); }
+  .submission.active .where { color: var(--text-mute); }
+  .submission .open { margin-left: auto; color: var(--link); text-decoration: none; font-size: 0.92em; }
+
+  /* thread */
+  .thread { padding: 0.4rem 0.9rem 1.2rem; }
+  .comment { padding: 0.55rem 0; border-bottom: 1px solid var(--comment-border); }
+  .comment:last-child { border-bottom: 0; }
+  .comment.child { margin-left: 1.1rem; border-left: 2px solid var(--thread-rule); padding-left: 0.8rem; }
+  .comment-head { font-size: 0.78em; color: var(--text-mute); margin-bottom: 0.2rem; }
+  .comment-head .author { color: var(--text); font-weight: 500; }
+  .comment-head .age { color: var(--text-dim); }
+  .comment-text { color: var(--article-text); font-size: 0.92em; }
+  .empty { color: var(--text-dim); padding: 1rem 0.9rem; font-style: italic; }
+
+  .mock-flag {
+    position: fixed; bottom: 8px; right: 10px;
+    font-size: 0.68em; color: var(--text-dim);
+    background: var(--pane-header-bg); border: 1px solid var(--pane-border);
+    border-radius: 4px; padding: 2px 7px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="logo-mark">YAV<br>CHN</span> yavchn</h1>
+  <nav class="source-picker">
+    <span class="source-pick">Hacker News</span>
+    <span class="source-pick">Lobsters</span>
+    <span class="source-pick">Pinned</span>
+    <span class="source-pick active">Find</span>
+  </nav>
+  <div class="header-actions">
+    <span class="chip">Y</span><span class="chip">L</span><span class="chip">?</span>
+  </div>
+</header>
+
+<div class="finder-bar">
+  <label for="url">Find discussions of</label>
+  <div class="finder-frame">
+    <input id="url" type="text" value="https://infiniteundo.com/post/25326999628/falsehoods-programmers-believe-about-time" spellcheck="false">
+    <button type="button">Find &rarr;</button>
+  </div>
+</div>
+
+<div class="panes">
+
+  <!-- article pane -->
+  <section class="pane">
+    <div class="pane-header">
+      <span class="pane-label">article</span>
+      <a href="#">Open original &uarr;</a>
+    </div>
+    <div class="pane-body">
+      <h2 class="article-title">Falsehoods programmers believe about time</h2>
+      <p class="article-host">infiniteundo.com</p>
+      <div class="article-body">
+        <p>This is the reader-mode extraction of the article, exactly as it appears in normal browse mode. Nothing changes up here. The novel part is the pane below.</p>
+        <p>There are 2 dozen things we assume about time that are wrong. There are 365 days in a year. There are 24 hours in a day. There are 60 minutes in an hour. A minute has 60 seconds. Days are 86,400 seconds long&hellip;</p>
+        <p>(&hellip; the rest of the extracted article continues here &hellip;)</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="splitter"></div>
+
+  <!-- discussions pane: the new thing -->
+  <section class="pane">
+    <div class="disc-tabs" id="tabs"></div>
+    <div class="pane-body" style="padding:0;">
+      <div class="submissions" id="submissions"></div>
+      <div class="thread" id="thread"></div>
+    </div>
+  </section>
+
+</div>
+
+<div class="mock-flag">static mockup &mdash; sample data, click the tabs and submissions</div>
+
+<script>
+// ---- sample data: one URL, discussed many places over many years ----
+var DATA = {
+  hn: {
+    label: 'HN', site: 'news.ycombinator.com',
+    submissions: [
+      { id:'a', meta:'487 pts · 2019 · 212 comments', where:'',
+        comments:[
+          {a:'tptacek', age:'2019', t:'The classic. Every line of this is a scar someone earned in production. The timezone ones especially.'},
+          {a:'jerf', age:'2019', t:'"A day is 86,400 seconds" is the one that gets everyone. Leap seconds say hi.', child:true},
+          {a:'kibwen', age:'2019', t:'We had a billing bug from exactly this. DST transition double-charged a subscription window.'}
+        ]},
+      { id:'b', meta:'156 pts · 2015 · 67 comments', where:'',
+        comments:[
+          {a:'userfoo', age:'2015', t:'Reposting because it bears repeating every few years. Still 100% accurate.'},
+          {a:'barbaz', age:'2015', t:'The "every region uses the Gregorian calendar" assumption broke a date picker we shipped to a client in Iran.', child:true}
+        ]},
+      { id:'c', meta:'89 pts · 2012 · 34 comments', where:'',
+        comments:[
+          {a:'oldtimer', age:'2012', t:'First time this hit the front page. The original list was shorter back then.'}
+        ]}
+    ]
+  },
+  reddit: {
+    label: 'Reddit', site: 'reddit.com',
+    submissions: [
+      { id:'r1', meta:'1.2k pts · 2019 · 340 comments', where:'r/programming',
+        comments:[
+          {a:'u/devlife', age:'2019', t:'My team printed this and pinned it above the standup board. Half are still open bugs.'},
+          {a:'u/tzwrangler', age:'2019', t:'"The system clock will never be set to a time in the past." I have seen NTP do exactly this. Chaos.', child:true}
+        ]},
+      { id:'r2', meta:'890 pts · 2014 · 200 comments', where:'r/programming',
+        comments:[
+          {a:'u/legacycoder', age:'2014', t:'Older thread, but the comments here actually go deeper on the leap-second handling than the newer one.'}
+        ]},
+      { id:'r3', meta:'215 pts · 2020 · 56 comments', where:'r/webdev',
+        comments:[
+          {a:'u/frontendfran', age:'2020', t:'JS Date is a war crime and this list explains why every one of my forms breaks at midnight UTC.'}
+        ]},
+      { id:'r4', meta:'78 pts · 2021 · 12 comments', where:'r/golang',
+        comments:[
+          {a:'u/gopher', age:'2021', t:'time.Time carrying a monotonic clock reading actually saves you from a couple of these. Go got it right.'}
+        ]},
+      { id:'r5', meta:'45 pts · 2016 · 8 comments', where:'r/compsci',
+        comments:[
+          {a:'u/theory', age:'2016', t:'Worth pairing with the "falsehoods about names" and "falsehoods about addresses" lists.'}
+        ]}
+    ]
+  },
+  lobsters: {
+    label: 'Lobsters', site: 'lobste.rs',
+    submissions: [
+      { id:'l1', meta:'34 pts · 2019 · 11 comments', where:'',
+        comments:[
+          {a:'pushcx', age:'2019', t:'Smaller thread than HN but the practitioners here all have a specific horror story to add.'},
+          {a:'calvin', age:'2019', t:'The monotonic-vs-wall-clock distinction is the one I wish every junior learned on day one.', child:true}
+        ]}
+    ]
+  }
+};
+
+var ORDER = ['hn','reddit','lobsters'];
+var state = { source:'hn', sub:'a' };
+
+function renderTabs() {
+  var el = document.getElementById('tabs');
+  el.innerHTML = ORDER.map(function(k){
+    var s = DATA[k];
+    var active = k === state.source ? ' active' : '';
+    return '<button class="disc-tab'+active+'" data-src="'+k+'">'+
+      s.label+' <span class="count">&middot; '+s.submissions.length+'</span></button>';
+  }).join('');
+}
+
+function renderSubmissions() {
+  var s = DATA[state.source];
+  var el = document.getElementById('submissions');
+  el.innerHTML =
+    '<div class="submissions-label">This URL on '+s.site+' &mdash; '+s.submissions.length+' submission'+(s.submissions.length>1?'s':'')+'</div>' +
+    s.submissions.map(function(sub){
+      var active = sub.id === state.sub ? ' active' : '';
+      var where = sub.where ? '<span class="where">'+sub.where+' &middot; </span>' : '';
+      return '<div class="submission'+active+'" data-sub="'+sub.id+'">'+
+        '<span class="dot"></span>'+
+        '<span>'+where+sub.meta+'</span>'+
+        '<a class="open" href="#" onclick="return false">open &uarr;</a>'+
+        '</div>';
+    }).join('');
+}
+
+function renderThread() {
+  var s = DATA[state.source];
+  var sub = s.submissions.filter(function(x){return x.id===state.sub;})[0];
+  var el = document.getElementById('thread');
+  if (!sub) { el.innerHTML = '<div class="empty">Pick a submission above.</div>'; return; }
+  el.innerHTML = sub.comments.map(function(c){
+    return '<div class="comment'+(c.child?' child':'')+'">'+
+      '<div class="comment-head"><span class="author">'+c.a+'</span> <span class="age">'+c.age+'</span></div>'+
+      '<div class="comment-text">'+c.t+'</div>'+
+      '</div>';
+  }).join('');
+}
+
+function renderAll() { renderTabs(); renderSubmissions(); renderThread(); }
+
+document.addEventListener('click', function(e){
+  var tab = e.target.closest('.disc-tab');
+  if (tab) {
+    state.source = tab.dataset.src;
+    state.sub = DATA[state.source].submissions[0].id;
+    renderAll();
+    return;
+  }
+  var sub = e.target.closest('.submission');
+  if (sub) {
+    state.sub = sub.dataset.sub;
+    renderSubmissions();
+    renderThread();
+  }
+});
+
+renderAll();
+</script>
+</body>
+</html>
