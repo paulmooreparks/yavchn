@@ -19,16 +19,17 @@ import (
 const pageSize = 30
 
 type Server struct {
-	sources       map[string]Source // "hn", "lobsters"
-	defaultSource string            // "hn" — used when / is hit with no stored choice
-	hn            *HN               // direct ref for search (HN-only)
+	sources       map[string]Source    // "hn", "lobsters"
+	finders       []DiscussionProvider // ordered: HN, Lobsters — used by the discussion-finder
+	defaultSource string               // "hn" — used when / is hit with no stored choice
+	hn            *HN                  // direct ref for search (HN-only)
 	tpl           *template.Template
 	extract       *Extractor
 	db            *sql.DB
 }
 
-func NewServer(sources map[string]Source, defaultSource string, hn *HN, tpl *template.Template, extract *Extractor, db *sql.DB) *Server {
-	return &Server{sources: sources, defaultSource: defaultSource, hn: hn, tpl: tpl, extract: extract, db: db}
+func NewServer(sources map[string]Source, finders []DiscussionProvider, defaultSource string, hn *HN, tpl *template.Template, extract *Extractor, db *sql.DB) *Server {
+	return &Server{sources: sources, finders: finders, defaultSource: defaultSource, hn: hn, tpl: tpl, extract: extract, db: db}
 }
 
 func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +120,36 @@ type commentVM struct {
 
 type threadVM struct {
 	Comments []*commentVM
+}
+
+// --- discussion-finder view models ---
+
+type finderVM struct {
+	URL         string        // the URL being looked up; "" renders the empty state
+	Host        string        // display host of the URL
+	AllSources  []sourceOptVM // header source-picker (Find active)
+	Groups      []finderGroup // one per source with >= 1 submission
+	Total       int           // total submissions across all sources
+	HasArticle  bool          // whether to lazy-load reader-mode for the URL
+	LookupError string        // set if all providers errored
+}
+
+type finderGroup struct {
+	Source string // "hn" / "lobsters"
+	Label  string // "HN" / "Lobsters"
+	Subs   []finderSubVM
+}
+
+type finderSubVM struct {
+	Source    string
+	ID        string
+	Title     string
+	Score     int
+	Comments  int
+	Age       string
+	Where     string // subreddit etc.; "" for HN/Lobsters
+	SourceURL string // link to the submission on its own site
+	First     bool   // the default-selected submission in its group
 }
 
 // SourceIndex serves a list page for a specific source + tab. Routed by
@@ -471,6 +502,115 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Finder handles /find (empty state) and /find?url=<encoded> (results). It
+// fans out across the registered DiscussionProviders, groups submissions by
+// source, and renders the finder shell. The article (reader-mode) and each
+// submission's thread are lazy-loaded client-side via the existing
+// /api/article and /api/discussion endpoints.
+func (s *Server) Finder(w http.ResponseWriter, r *http.Request) {
+	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
+
+	vm := finderVM{
+		URL:        rawURL,
+		AllSources: s.buildSourceOpts("find"),
+	}
+
+	if rawURL == "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := s.tpl.ExecuteTemplate(w, "finder.html.tmpl", vm); err != nil {
+			slog.Error("render finder empty", "err", err)
+		}
+		return
+	}
+
+	if u, err := url.Parse(rawURL); err == nil {
+		vm.Host = strings.TrimPrefix(u.Host, "www.")
+	}
+	vm.HasArticle = isAllowedURL(rawURL)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	// Fan out across providers concurrently; one slow/erroring source
+	// shouldn't sink the page.
+	type result struct {
+		idx  int
+		subs []Submission
+		err  error
+	}
+	results := make([]result, len(s.finders))
+	var wg sync.WaitGroup
+	for i, p := range s.finders {
+		i, p := i, p
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			subs, err := p.FindByURL(ctx, rawURL)
+			results[i] = result{idx: i, subs: subs, err: err}
+		}()
+	}
+	wg.Wait()
+
+	errCount := 0
+	for _, res := range results {
+		if res.err != nil {
+			slog.Warn("finder provider failed", "provider", s.finders[res.idx].ProviderName(), "url", rawURL, "err", res.err)
+			errCount++
+			continue
+		}
+		if len(res.subs) == 0 {
+			continue
+		}
+		g := finderGroup{
+			Source: s.finders[res.idx].ProviderName(),
+			Label:  finderSourceLabel(s.finders[res.idx].ProviderName()),
+		}
+		for j, sub := range res.subs {
+			g.Subs = append(g.Subs, finderSubVM{
+				Source:    sub.Source,
+				ID:        sub.ID,
+				Title:     sub.Title,
+				Score:     sub.Score,
+				Comments:  sub.NumComments,
+				Age:       relTime(sub.CreatedAt),
+				Where:     sub.Where,
+				SourceURL: finderSubmissionURL(sub),
+				First:     j == 0 && len(vm.Groups) == 0, // first sub of the first non-empty group
+			})
+			vm.Total++
+		}
+		vm.Groups = append(vm.Groups, g)
+	}
+
+	// All providers errored and produced nothing → surface a soft error.
+	if vm.Total == 0 && errCount == len(s.finders) && len(s.finders) > 0 {
+		vm.LookupError = "Couldn't reach the discussion sources right now. Try again in a moment."
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tpl.ExecuteTemplate(w, "finder.html.tmpl", vm); err != nil {
+		slog.Error("render finder", "err", err)
+	}
+}
+
+func finderSourceLabel(name string) string {
+	switch name {
+	case "lobsters":
+		return "Lobsters"
+	default:
+		return "HN"
+	}
+}
+
+func finderSubmissionURL(sub Submission) string {
+	switch sub.Source {
+	case "lobsters":
+		return fmt.Sprintf("https://lobste.rs/s/%s", sub.ID)
+	default:
+		return fmt.Sprintf("https://news.ycombinator.com/item?id=%s", sub.ID)
+	}
+}
+
 func searchHitURLs(h *SearchHit) (host, displayURL string) {
 	displayURL = h.URL
 	if displayURL == "" {
@@ -672,6 +812,12 @@ func (s *Server) buildSourceOpts(activeName string) []sourceOptVM {
 		Label:  "Pinned",
 		URL:    "/pinned/",
 		Active: activeName == "pinned",
+	})
+	out = append(out, sourceOptVM{
+		Name:   "find",
+		Label:  "Find",
+		URL:    "/find",
+		Active: activeName == "find",
 	})
 	return out
 }

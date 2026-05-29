@@ -70,16 +70,21 @@ func main() {
 		"hn":       hn,
 		"lobsters": lobsters,
 	}
+	// Ordered provider list for the discussion-finder (HN first, then Lobsters).
+	finders := []DiscussionProvider{hn, lobsters}
 
 	extract := NewExtractor(db)
 	extract.StartGC(ctx)
 
-	srv := NewServer(sources, "hn", hn, tpl, extract, db)
+	srv := NewServer(sources, finders, "hn", hn, tpl, extract, db)
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	mux.HandleFunc("GET /api/article", srv.ArticleAPI)
 	mux.HandleFunc("GET /api/discussion", srv.DiscussionAPI)
 	mux.HandleFunc("GET /healthz", srv.Healthz)
+
+	// Discussion-finder: /find (empty) and /find?url=<encoded> (results).
+	mux.HandleFunc("GET /find", srv.Finder)
 
 	// Root → redirect to the default source. The client-side dropdown can
 	// override this on subsequent visits by navigating to /{stored-source}/
