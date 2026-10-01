@@ -41,12 +41,34 @@
         {{ range .Tabs }}<a href="{{ .URL }}"{{ if .Active }} aria-current="page"{{ end }}>{{ .Label }}</a>{{ end }}
       </nav>
       {{ end }}
-      {{ if eq .Source "pinned" }}<span class="list-name">Pinned stories</span>{{ end }}
+      {{ with .Pin }}
+      <form class="md-filter-group pin-filter" action="/pinned/" method="get" role="search">
+        <input class="md-filter" type="search" name="q" value="{{ .Q }}" placeholder="Filter pinned stories&hellip;" aria-label="Filter pinned stories by title, site or author" autocomplete="off">
+        {{ if .Source }}<input type="hidden" name="source" value="{{ .Source }}">{{ end }}
+        {{ if .Unread }}<input type="hidden" name="show" value="unread">{{ end }}
+        {{ if .Sort }}<input type="hidden" name="sort" value="{{ .Sort }}">{{ end }}
+        <button class="icon-btn md-filter-go" type="submit" aria-label="Apply the filter"></button>
+      </form>
+      <nav class="seg sm" data-seg-menu aria-label="Source">{{ range .Sources }}<a href="{{ .URL }}"{{ if .Current }} aria-current="page"{{ end }}>{{ .Label }}</a>{{ end }}</nav>
+      <nav class="seg sm" data-seg-menu aria-label="Show">{{ range .Shows }}<a href="{{ .URL }}"{{ if .Current }} aria-current="page"{{ end }}>{{ .Label }}</a>{{ end }}</nav>
+      <span class="md-toolbar-sep" aria-hidden="true"></span>
+      <nav class="seg sm" data-seg-menu aria-label="Order">{{ range .Sorts }}<a href="{{ .URL }}"{{ if .Current }} aria-current="page"{{ end }}>{{ .Label }}</a>{{ end }}</nav>
+      {{ end }}
     {{ end }}
   </div>
 
+  {{/* The filters in force, as chips, each removing its filter. Every list
+       renders the row, empty but for Pinned, since a region swap needs a
+       counterpart on every page; PUDL hides a row with no chips. */}}
+  <div class="md-chips" data-region="chips">
+    {{ with .Pin }}{{ if .Chips }}
+      {{ range .Chips }}<span class="filter-chip"><span class="filter-chip-kind">{{ .Kind }}</span> {{ .Label }}<a class="filter-chip-x" href="{{ .RemoveURL }}" aria-label="Remove the filter {{ .Label }}"></a></span>{{ end }}
+      <a class="md-chips-clear" href="{{ .ClearURL }}">Clear the filters</a>
+    {{ end }}{{ end }}
+  </div>
+
   <div class="md-body">
-    <nav class="md-sidebar story-list" data-region="list" data-source="{{ .Source }}"{{ if and .Finder .Stories }} data-auto-open{{ end }} aria-label="Stories">
+    <nav class="md-sidebar story-list" data-region="list" data-source="{{ .Source }}"{{ if and .Finder .Stories }} data-auto-open{{ end }}{{ with .Pin }} data-pin-q="{{ .Q }}" data-pin-source="{{ .Source }}" data-pin-sort="{{ .Sort }}"{{ if .Unread }} data-pin-unread{{ end }}{{ end }} aria-label="Stories">
       {{ if .ListError }}
       <div class="notice danger list-notice" role="alert">
         <div class="notice-content">

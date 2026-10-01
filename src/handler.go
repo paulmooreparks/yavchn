@@ -73,8 +73,110 @@ type listVM struct {
 	Finder      bool // the /find view: the toolbar takes a URL, the list its submissions
 	FindURL     string
 	FindHost    string
-	FindNote    string // why the finder's list is empty, when it is
+	FindNote    string       // why the finder's list is empty, when it is
+	Pin         *pinFilterVM // the Pinned view's filters, from its address
 	Win         windowsVM
+}
+
+// pinFilterVM is how the Pinned view is filtered and ordered. The pins
+// live in the reader's browser, so pinned.js applies these; the server
+// reads them from the address and renders the controls and chips, so a
+// filtered view is an address like any other.
+type pinFilterVM struct {
+	Q      string
+	Source string // "", "hn" or "lobsters"
+	Unread bool   // only the stories the reader has not opened
+	Sort   string // "" (newest pin first), "oldest", "points" or "comments"
+
+	Sources, Shows, Sorts []choiceVM
+	Chips                 []chipVM
+	ClearURL              string
+}
+
+type choiceVM struct {
+	Label, URL string
+	Current    bool
+}
+
+type chipVM struct {
+	Kind, Label, RemoveURL string
+}
+
+// params is the filters as the address writes them, from their checked
+// values, so a value the server refused is not carried into any link.
+func (f *pinFilterVM) params() url.Values {
+	v := url.Values{}
+	if f.Q != "" {
+		v.Set("q", f.Q)
+	}
+	if f.Source != "" {
+		v.Set("source", f.Source)
+	}
+	if f.Unread {
+		v.Set("show", "unread")
+	}
+	if f.Sort != "" {
+		v.Set("sort", f.Sort)
+	}
+	return v
+}
+
+func pinFilter(r *http.Request) *pinFilterVM {
+	q := r.URL.Query()
+	f := &pinFilterVM{Q: strings.TrimSpace(q.Get("q"))}
+	if len([]rune(f.Q)) > 100 {
+		f.Q = string([]rune(f.Q)[:100])
+	}
+	if s := q.Get("source"); s == "hn" || s == "lobsters" {
+		f.Source = s
+	}
+	f.Unread = q.Get("show") == "unread"
+	if s := q.Get("sort"); s == "oldest" || s == "points" || s == "comments" {
+		f.Sort = s
+	}
+	// The Pinned view's address with one filter set, or removed when value
+	// is empty, keeping the others and the windows.
+	wins := parseWinState(q)
+	pinnedHref := func(name, value string) string {
+		v := f.params()
+		if value == "" {
+			v.Del(name)
+		} else {
+			v.Set(name, value)
+		}
+		return winURL("/pinned/", v, wins)
+	}
+	choices := func(name, current string, opts [][2]string) []choiceVM {
+		out := make([]choiceVM, len(opts))
+		for i, o := range opts {
+			out[i] = choiceVM{Label: o[1], URL: pinnedHref(name, o[0]), Current: o[0] == current}
+		}
+		return out
+	}
+	f.Sources = choices("source", f.Source, [][2]string{{"", "All"}, {"hn", "Hacker News"}, {"lobsters", "Lobsters"}})
+	show := ""
+	if f.Unread {
+		show = "unread"
+	}
+	f.Shows = choices("show", show, [][2]string{{"", "All"}, {"unread", "Unread"}})
+	f.Sorts = choices("sort", f.Sort, [][2]string{{"", "Newest pin"}, {"oldest", "Oldest pin"}, {"points", "Points"}, {"comments", "Comments"}})
+
+	if f.Q != "" {
+		f.Chips = append(f.Chips, chipVM{"Words", f.Q, pinnedHref("q", "")})
+	}
+	if f.Source != "" {
+		f.Chips = append(f.Chips, chipVM{"Source", map[string]string{"hn": "Hacker News", "lobsters": "Lobsters"}[f.Source], pinnedHref("source", "")})
+	}
+	if f.Unread {
+		f.Chips = append(f.Chips, chipVM{"Show", "Unread", pinnedHref("show", "")})
+	}
+	// Clearing the filters keeps the order, which is not one.
+	rest := url.Values{}
+	if f.Sort != "" {
+		rest.Set("sort", f.Sort)
+	}
+	f.ClearURL = winURL("/pinned/", rest, wins)
+	return f
 }
 
 type sourceOptVM struct {
@@ -243,6 +345,7 @@ func (s *Server) Pinned(w http.ResponseWriter, r *http.Request) {
 		AllSources:  s.buildSourceOpts("pinned"),
 		Page:        pageParam(r),
 		RetryURL:    r.URL.RequestURI(),
+		Pin:         pinFilter(r),
 	}
 	s.renderList(w, &vm, s.startWindows(ctx, r), 0)
 }

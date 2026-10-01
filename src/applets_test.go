@@ -43,6 +43,27 @@ func TestAuthorLink(t *testing.T) {
 	}
 }
 
+func TestRender_PinnedFilters(t *testing.T) {
+	_, mux := testServer(t)
+	body := get(t, mux, "/pinned/?q=rust&source=hn&show=unread&sort=points&source=bogus&open=hn-1").Body.String()
+	for _, want := range []string{
+		`data-pin-q="rust" data-pin-source="hn" data-pin-sort="points" data-pin-unread`,
+		`<span class="filter-chip-kind">Words</span> rust`,
+		// Removing one filter keeps the others, the order and the windows.
+		`href="/pinned/?show=unread&amp;sort=points&amp;source=hn&amp;open=hn-1"`,
+		// Clearing them keeps only the order and the windows.
+		`<a class="md-chips-clear" href="/pinned/?sort=points&amp;open=hn-1">`,
+		`<a href="/pinned/?q=rust&amp;show=unread&amp;sort=points&amp;open=hn-1">All</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Pinned lacks %q", want)
+		}
+	}
+	if !strings.Contains(get(t, mux, "/hn/").Body.String(), `<div class="md-chips" data-region="chips">`) {
+		t.Error("every list needs the chips region, empty or not, for region swaps")
+	}
+}
+
 func TestRender_LookupWindow(t *testing.T) {
 	_, mux := testServer(t)
 	rec := get(t, mux, "/window/user")

@@ -94,21 +94,74 @@
     return t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate());
   }
 
+  /* The words filter: every word must appear in the title, the site or the
+     author; a "quoted phrase" is taken whole, and a -word leaves out the
+     stories that have it, as in the hiring filter. */
+  function parseTerms(q) {
+    var want = [], not = [];
+    (String(q || '').toLowerCase().match(/-?"[^"]*"|\S+/g) || []).forEach(function (tok) {
+      var neg = tok.charAt(0) === '-' && tok.length > 1;
+      tok = tok.replace(/^-/, '').replace(/^"|"$/g, '');
+      if (tok) (neg ? not : want).push(tok);
+    });
+    return { want: want, not: not };
+  }
+
+  /* The filters and order come from the list's attributes, which the
+     server renders from the address, so a filtered Pinned view is an
+     address like any other. The words box overrides the words as the
+     reader types, before Enter puts them in the address. */
+  function filtersOf(view) {
+    var input = document.querySelector('.pin-filter input[name="q"]');
+    return {
+      terms: parseTerms(input ? input.value : view.dataset.pinQ),
+      source: view.dataset.pinSource || '',
+      unread: view.hasAttribute('data-pin-unread'),
+      sort: view.dataset.pinSort || ''
+    };
+  }
+
+  var ORDERS = {
+    '': function (a, b) { return (b.pinned_at || 0) - (a.pinned_at || 0); },
+    oldest: function (a, b) { return (a.pinned_at || 0) - (b.pinned_at || 0); },
+    points: function (a, b) { return (b.score || 0) - (a.score || 0); },
+    comments: function (a, b) { return (b.comments || 0) - (a.comments || 0); }
+  };
+
   /* The Pinned view's rows, the same markup the server renders for every
-     other list, newest pin first. */
+     other list, filtered and ordered as the address says. */
   function renderPinnedList() {
     var view = pinnedView();
     var box = view && view.querySelector('.stories');
     if (!box) return;
     var store = load();
-    var ids = Object.keys(store).sort(function (a, b) { return (store[b].pinned_at || 0) - (store[a].pinned_at || 0); });
-    if (!ids.length) {
+    var all = Object.keys(store);
+    if (!all.length) {
       box.innerHTML = '<div class="empty-state list-empty"><p class="empty-state-title">No pinned stories</p>' +
         '<p class="empty-state-body">The pin at the start of a story\'s row, or the p key, keeps the story here.</p></div>';
       return;
     }
+    var f = filtersOf(view);
+    var visited = window.yavchn.visited;
+    var ids = all.filter(function (id) {
+      var s = store[id];
+      if (f.source && (s.source || 'hn') !== f.source) return false;
+      if (f.unread && visited && visited.has(id)) return false;
+      var text = ((s.title || '') + ' ' + (s.host || '') + ' ' + (s.by || '')).toLowerCase();
+      return f.terms.want.every(function (w) { return text.indexOf(w) >= 0; }) &&
+        !f.terms.not.some(function (n) { return text.indexOf(n) >= 0; });
+    }).sort(function (a, b) { return (ORDERS[f.sort] || ORDERS[''])(store[a], store[b]); });
+
+    var filtered = ids.length !== all.length;
+    var count = filtered ? '<p class="pin-count num">' + ids.length + ' of ' + all.length + ' pinned stories</p>' : '';
+    if (!ids.length) {
+      box.innerHTML = count + '<div class="empty-state list-empty"><p class="empty-state-title">No pinned story matches</p>' +
+        '<p class="empty-state-body">None of your ' + all.length + ' pinned stories passes these filters.</p></div>';
+      box.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));
+      return;
+    }
     var front = window.pudlWindows ? window.pudlWindows.state() : null;
-    box.innerHTML = ids.map(function (id) {
+    box.innerHTML = count + ids.map(function (id) {
       var s = store[id];
       var source = s.source || 'hn';
       var key = source + '-' + id;
@@ -165,6 +218,14 @@
     if (!row) return;
     e.preventDefault();
     toggleRow(row);
+  });
+
+  // The words filter narrows the list as the reader types.
+  var typing = 0;
+  document.addEventListener('input', function (e) {
+    if (!e.target.matches || !e.target.matches('.pin-filter input[name="q"]')) return;
+    clearTimeout(typing);
+    typing = setTimeout(renderPinnedList, 120);
   });
 
   // A pin made in another tab shows here too.

@@ -121,10 +121,12 @@ body.desktop .md-layout {
   width: 100%;
 }
 
-.list-name {
-  font-size: var(--text-sm);
-  font-weight: 600;
+.pin-count {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
   color: var(--text-muted);
+  border-bottom: 1px solid var(--surface-alt);
 }
 
 .reader-stage {

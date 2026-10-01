@@ -38,6 +38,9 @@
     });
   }
 
+  // For Pinned's Unread filter.
+  window.yavchn.visited = { has: function (id) { return load().indexOf(id) >= 0; } };
+
   function visit(story) {
     if (story && story.dataset.storyId) add(story.dataset.storyId);
   }
