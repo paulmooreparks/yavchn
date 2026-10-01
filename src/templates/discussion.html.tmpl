@@ -2,7 +2,7 @@
 <li class="comment" data-id="{{ .ID }}" data-ts="{{ .CreatedAt }}">
   <div class="comment-header">
     <span class="comment-toggle" aria-hidden="true"></span>
-    <span class="comment-author">{{ .Author }}</span>
+    {{ if .AuthorKey }}<a class="comment-author" href="{{ .AuthorURL }}" data-win-open="{{ .AuthorKey }}">{{ .Author }}</a>{{ else }}<span class="comment-author">{{ .Author }}</span>{{ end }}
     <span class="comment-age">{{ .Age }}</span>
     {{ if gt .Descendants 0 }}<span class="comment-collapsed-count">[{{ .Descendants }} replies]</span>{{ end }}
     <span class="comment-new-badge" aria-hidden="true">new</span>

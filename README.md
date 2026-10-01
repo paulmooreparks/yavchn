@@ -21,6 +21,14 @@ YAVCHN lets me quickly browse an article in scaled-down reader mode with the dis
 
 The same treatment works on [Lobsters](https://lobste.rs) (a smaller, computing-focused link aggregator) thanks to a tiny `Source` abstraction in the Go backend; pick the source from the segmented control at the right of the top bar. Switching sources or lists only swaps the list, so open windows stay put.
 
+The YAVCHN menu also has an Applets submenu with three tools, each in a window of its own:
+
+- **Replies to me** watches the replies to your Hacker News comments and stories, which HN itself never tells you about. Give it your user name and it checks every three minutes while it's open, marking what's new.
+- **Look up a user** opens a Hacker News or Lobsters profile with the user's recent activity. Clicking a commenter's name in any discussion does the same.
+- **Who is hiring?** filters the posts of HN's monthly hiring threads as you type: `remote rust -crypto "new york"`.
+
+None of them needs a login. They read only what each site publishes for anyone to read.
+
 The UI is built with [PUDL](https://github.com/paulmooreparks/pudl), my design language, and it borrows the window view of [parkscomputing.com](https://parkscomputing.com/).
 
 ![YAVCHN: the story list beside two story windows, each holding a reader-mode article above its threaded discussion](screenshot.png)

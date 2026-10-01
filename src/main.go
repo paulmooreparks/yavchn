@@ -91,6 +91,15 @@ func main() {
 	mux.HandleFunc("GET /window/{key}", srv.Window)
 	mux.HandleFunc("GET /story/{source}/{id}", srv.StoryPage)
 
+	// The applets, each a page of its own as well as a window, and the
+	// fragments their scripts fetch.
+	mux.HandleFunc("GET /applets/replies", srv.appletPage("replies"))
+	mux.HandleFunc("GET /applets/hiring", srv.appletPage("hiring"))
+	mux.HandleFunc("GET /user", srv.UserLookup)
+	mux.HandleFunc("GET /user/{source}/{name}", srv.UserPage)
+	mux.HandleFunc("GET /api/replies", srv.RepliesAPI)
+	mux.HandleFunc("GET /api/hiring", srv.HiringAPI)
+
 	// Root → redirect to the default source. The client-side dropdown can
 	// override this on subsequent visits by navigating to /{stored-source}/
 	// directly; we just need a sensible landing page for first-touch.

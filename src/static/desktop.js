@@ -138,6 +138,48 @@
     fromHistory = false;
   });
 
+  /* === Where windows open ===============================================
+     PUDL opens a window from a link in another window in that window's
+     state, which suits a story opened from a story. An applet is a tool
+     beside the reading rather than more of it, so it opens where its
+     markup places it however it is opened, and a story opened from an
+     applet's window opens as a story does from the list, maximised. The
+     server's markup (applets.go, windows.go) is where those places are
+     written; this only stops the opener from overriding them. */
+  var STORY_PLACE = { mode: 'maximized', x: 0.06, y: 0.05, w: 0.55, h: 0.75 }; // windows.go: storyWinMode, storyWinFloat
+
+  function winEl(layer, key) { return key ? layer.querySelector(':scope > .win[data-win="' + CSS.escape(key) + '"]') : null; }
+
+  function markupPlace(el) {
+    var s = el.style;
+    var n = ['--win-x', '--win-y', '--win-w', '--win-h'].map(function (p) { return parseFloat(s.getPropertyValue(p)); });
+    if (n.some(isNaN)) return null;
+    return { mode: el.getAttribute('data-win-mode') || 'floating', x: n[0], y: n[1], w: n[2], h: n[3] };
+  }
+
+  function placeWindows(layer) {
+    layer.addEventListener('pudl:window-place', function (e) {
+      if (e.detail.placement || !e.detail.opener) return;
+      var el = winEl(layer, e.detail.key), opener = winEl(layer, e.detail.opener);
+      if (!el) return;
+      if (el.classList.contains('app-win')) e.detail.placement = markupPlace(el);
+      else if (opener && opener.classList.contains('app-win')) e.detail.placement = Object.assign({}, STORY_PLACE);
+    });
+  }
+
+  /* The lookup form in its window opens the profile in the window's place;
+     on its own page it is an ordinary form, which the server redirects. */
+  document.addEventListener('submit', function (e) {
+    var form = e.target.closest && e.target.closest('.user-lookup');
+    var win = form && form.closest('.win[data-win]');
+    if (!win || !window.pudlWindows) return;
+    var name = form.elements.name.value.trim();
+    var source = form.elements.source.value;
+    if (!/^[A-Za-z0-9_-]{1,32}$/.test(name)) return;
+    e.preventDefault();
+    window.pudlWindows.replace(win.getAttribute('data-win'), 'user-' + source + '-' + name);
+  });
+
   /* === Search ===========================================================
      Clearing the search box on a results page returns to the front page,
      through the list's own Top tab, so the windows stay. */
@@ -148,6 +190,12 @@
     var top = document.querySelector('.list-tabs a');
     if (top) top.click();
   });
+
+  /* Before pudl-windows.js lays out the windows the address names, which
+     it does a task after it starts, so a profile in the address with no
+     placement floats where the listener says. */
+  var layerNow = document.querySelector('[data-win-layer]');
+  if (layerNow) placeWindows(layerNow);
 
   function init() {
     syncCloseAll();

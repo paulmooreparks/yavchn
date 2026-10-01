@@ -57,6 +57,14 @@
             <li><a href="/pinned/">Pinned stories</a></li>
             <li><a href="/find">Find the discussions of a link</a></li>
             <li>-</li>
+            <li>Applets
+              <ul>
+                <li><a href="/applets/replies" data-win-open="replies">Replies to me</a></li>
+                <li><a href="/user" data-win-open="user">Look up a user&hellip;</a></li>
+                <li><a href="/applets/hiring" data-win-open="hiring">Who is hiring?</a></li>
+              </ul>
+            </li>
+            <li>-</li>
             <li><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN on GitHub</a></li>
           </ul>
         </li>
@@ -105,7 +113,7 @@
 {{/* A story's article above its discussion, with a splitter between
      them: the body of a story window, and of a story's own page. */}}
 {{ define "storybody" }}
-<div class="story" data-story-key="{{ .Key }}" data-story-id="{{ .ID }}" data-story-source="{{ .Source }}" data-title="{{ .Title }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}"{{ if .HasArticle }} data-reader-url="{{ .URL }}"{{ end }}{{ if .Error }} data-error{{ else }} data-applet="story" data-applet-page="{{ .PageURL }}"{{ end }}>
+<div class="story" data-story-key="{{ .Key }}" data-story-id="{{ .ID }}" data-story-source="{{ .Source }}" data-title="{{ .Title }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}"{{ if .HasArticle }} data-reader-url="{{ .URL }}"{{ end }}{{ if .Error }} data-error{{ else }} data-applet="story" data-applet-page="{{ .PageURL }}" data-state-key="{{ .Key }}"{{ end }}>
 {{ if .Error }}
   <div class="empty-state story-note">
     <p class="empty-state-title">{{ .Title }}</p>
@@ -171,7 +179,7 @@
 {{/* One story window, the same markup whether the page renders it for
      its address or /window/{key} returns it. */}}
 {{ define "window" }}
-<section class="win story-win{{ if .Active }} active{{ end }}" data-win="{{ .Key }}" data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
+<section class="win {{ if .App }}app-win app-win-{{ .App.Kind }}{{ else }}story-win{{ end }}{{ if .Active }} active{{ end }}" data-win="{{ .Key }}" data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
   <header class="win-head">
     <h2 class="win-title" id="win-{{ .Key }}-title">{{ .Title }}</h2>
     <nav class="win-chrome" aria-label="Window">
@@ -181,7 +189,7 @@
       <a class="win-btn" data-win-action="close" href="{{ .CloseHref }}" aria-label="Close"></a>
     </nav>
   </header>
-  <div class="win-body story-win-body">{{ template "storybody" . }}</div>
+  {{ if .App }}<div class="win-body app-win-body">{{ template "appbody" .App }}</div>{{ else }}<div class="win-body story-win-body">{{ template "storybody" . }}</div>{{ end }}
 </section>
 {{ end }}
 
@@ -237,6 +245,11 @@
       <p>The pin at the start of a row keeps the story in Pinned, and the cross at its end hides it. Scroll past the end of the list to load more. Domain filters, in the View menu, hide every story from a site.</p>
     </section>
     <section>
+      <h4>Applets</h4>
+      <p>The Applets submenu of the YAVCHN menu holds three tools, each a window of its own. <strong>Replies to me</strong> takes your Hacker News user name and lists the replies to your last thirty comments and stories, checking again every three minutes while it is open, and marking what is new since you last marked them read. <strong>Look up a user</strong> opens a profile on Hacker News or Lobsters, as a commenter's name in any discussion does. <strong>Who is hiring?</strong> filters the posts of HN's monthly hiring threads by the words you type.</p>
+      <p>They read only what the sites publish to everyone, so none of them asks for a login, and your user name stays in this browser.</p>
+    </section>
+    <section>
       <h4>Find</h4>
       <p>Find takes any link and lists every time it was submitted to Hacker News and Lobsters, so you can read each discussion of it.</p>
     </section>
@@ -263,6 +276,8 @@
 <script src="/static/pudl/pudl-dialog.js" defer></script>
 <script src="/static/pudl/pudl-tooltip.js" defer></script>
 <script src="/static/desktop.js" defer></script>
+<script src="/static/continuity.js" defer></script>
+<script src="/static/applets/registry.js" defer></script>
 <script src="/static/story.js" defer></script>
 <script src="/static/discussion.js" defer></script>
 <script src="/static/sort.js" defer></script>

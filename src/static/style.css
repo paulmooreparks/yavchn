@@ -494,6 +494,247 @@ body.story-page {
   font-size: var(--text-sm);
 }
 
+/* === Applets ==============================================================
+   The replies watcher, the profiles and the hiring filter, in a window or
+   on a page of their own. A window's body scrolls as PUDL draws it, except
+   the hiring filter's, whose bar stays put above its scrolling posts. */
+.app-win-body {
+  padding: var(--space-3) var(--space-4);
+}
+
+.app-win-hiring .app-win-body {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+body.app-page {
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-page-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-page-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+}
+
+.app-page-body > .app {
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.app-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.profile-name {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.app-facts,
+.app-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.app-site-link {
+  margin-inline-start: auto;
+  font-size: var(--text-sm);
+}
+
+.profile-roles {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.profile-about {
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  background: var(--surface-alt);
+  border-radius: var(--radius-xs);
+}
+
+.profile .md-section-label {
+  padding-inline: 0;
+}
+
+.profile .md-item .md-meta + .md-meta {
+  margin-top: 2px;
+}
+
+.user-lookup {
+  max-width: 420px;
+}
+
+.app-actions {
+  margin-top: var(--space-3);
+}
+
+.user-lookup .app-note {
+  margin-top: var(--space-4);
+}
+
+.replies-user {
+  display: flex;
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: var(--space-2);
+}
+
+.replies-user .md-filter {
+  flex: 1;
+  width: auto;
+}
+
+.replies-status {
+  min-height: 1.5em;
+  margin-bottom: var(--space-2);
+}
+
+.replies,
+.jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reply,
+.job {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--surface-alt);
+}
+
+.reply:last-child,
+.job:last-child {
+  border-bottom: 0;
+}
+
+.reply-head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
+}
+
+/* A reply newer than the reader last marked read carries the word "new"
+   as well as the accent edge, as a new comment in a discussion does. */
+.reply-new-badge {
+  display: none;
+  color: var(--accent);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.reply.reply-new {
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  padding-inline: var(--space-2);
+}
+
+.reply.reply-new .reply-new-badge {
+  display: inline;
+}
+
+.reply-parent {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.reply-actions {
+  display: flex;
+  gap: var(--space-4);
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+}
+
+.hiring-app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hiring-bar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+}
+
+.hiring-thread {
+  width: auto;
+  max-width: 100%;
+}
+
+.hiring-filter {
+  flex: 1 1 260px;
+  height: 32px;
+}
+
+.hiring-filter .md-filter {
+  width: 100%;
+}
+
+.hiring-help {
+  flex: none;
+  padding: var(--space-2) var(--space-4) 0;
+}
+
+.hiring-posts {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.hiring-posts:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 3px var(--focus-ring);
+}
+
+.app-page-body > .hiring-app {
+  max-width: 980px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+a.comment-author {
+  color: var(--text);
+}
+
 /* === Reader-mode prose ==================================================== */
 .article-content {
   max-width: 720px;

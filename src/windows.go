@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 // Stories open as PUDL floating windows over the list. The window grammar
@@ -236,11 +235,18 @@ func (st winState) minimizeToggled(k string) winState {
 	return c
 }
 
-func (st winState) maximizeToggled(k string) winState {
+// maximizeToggled is the state the maximise button produces. def is the
+// placement the window's markup gives it, which applies while the address
+// gives it none.
+func (st winState) maximizeToggled(k string, def winAttrs) winState {
 	c := st.clone()
 	p, ok := c.place[k]
 	if !ok {
-		p = placement{Mode: storyWinMode, N: append([]float64(nil), storyWinFloat...)}
+		float := def.Float
+		if float == nil {
+			float = storyWinFloat
+		}
+		p = placement{Mode: def.Mode, N: append([]float64(nil), float...)}
 	}
 	if p.Mode == "floating" {
 		p.Mode = "maximized"
@@ -308,17 +314,34 @@ func winURL(path string, rest url.Values, st winState) string {
 }
 
 type winAttrs struct {
-	Mode  string
-	Style template.CSS
-	Edge  string
+	Mode     string
+	Style    template.CSS
+	Edge     string
+	DockSize float64   // a docked window's strip, as a fraction of the layer
+	Float    []float64 // the floating geometry its markup gives it, if any
+}
+
+// floatingAt is the attributes of a window floating at x, y with size w, h,
+// fractions of the layer.
+func floatingAt(x, y, w, h float64) winAttrs {
+	return winAttrs{Mode: "floating", Float: []float64{x, y, w, h},
+		Style: template.CSS("--win-x:" + num(x) + "; --win-y:" + num(y) + "; --win-w:" + num(w) + "; --win-h:" + num(h))}
+}
+
+// dockedAt is the attributes of a window docked at edge, taking size of
+// the layer.
+func dockedAt(edge string, size float64) winAttrs {
+	return winAttrs{Mode: "dock-" + edge, Edge: edge, DockSize: size, Style: template.CSS("--win-dock-size:" + num(size))}
 }
 
 // attrs is how the window markup states k's placement: data-win-mode, the
-// --win- properties, and for a zone or a dock the properties that place it.
-func (st winState) attrs(k string) winAttrs {
+// --win- properties, and for a zone or a dock the properties that place
+// it. def is what the window's markup gives it while the address gives it
+// no placement.
+func (st winState) attrs(k string, def winAttrs) winAttrs {
 	p, ok := st.place[k]
 	if !ok {
-		return winAttrs{Mode: storyWinMode}
+		return def
 	}
 	style := []string{"--win-x:" + num(p.N[0]), "--win-y:" + num(p.N[1]), "--win-w:" + num(p.N[2]), "--win-h:" + num(p.N[3])}
 	var edge string
@@ -329,16 +352,21 @@ func (st winState) attrs(k string) winAttrs {
 		edge = strings.TrimPrefix(p.Mode, "dock-")
 		style = append(style, "--win-dock-size:"+num(p.N[4]))
 	}
-	return winAttrs{Mode: p.Mode, Style: template.CSS(strings.Join(style, "; ")), Edge: edge}
+	a := winAttrs{Mode: p.Mode, Style: template.CSS(strings.Join(style, "; ")), Edge: edge}
+	if edge != "" {
+		a.DockSize = p.N[4]
+	}
+	return a
 }
 
-// layerStyle gives the layer the strip each edge's dock takes. An edge
-// shows its most recently opened dock; the script refines this at once.
-func (st winState) layerStyle() template.CSS {
+// layerStyle gives the layer the strip each edge's dock takes, from each
+// window's attrs. An edge shows its most recently opened dock; the script
+// refines this at once.
+func (st winState) layerStyle(attrs map[string]winAttrs) template.CSS {
 	strips := map[string]float64{}
 	for _, k := range st.open {
-		if p, ok := st.place[k]; ok && strings.HasPrefix(p.Mode, "dock-") && !st.min[k] {
-			strips[strings.TrimPrefix(p.Mode, "dock-")] = p.N[4]
+		if a, ok := attrs[k]; ok && a.Edge != "" && !st.min[k] {
+			strips[a.Edge] = a.DockSize
 		}
 	}
 	var out []string
@@ -352,9 +380,12 @@ func (st winState) layerStyle() template.CSS {
 
 // --- view models ---
 
-// windowVM is one story window: the same markup whether the page renders
-// it or /window/{key} returns it.
+// windowVM is one window, a story's or an applet's: the same markup
+// whether the page renders it or /window/{key} returns it. App is set for
+// an applet's window, and the story fields for a story's.
 type windowVM struct {
+	App              *appVM
+	Def              winAttrs // the placement the window's markup gives it
 	Key, Source, ID  string
 	Title, URL, Host string
 	By, Age          string
@@ -405,6 +436,7 @@ func (s *Server) storyWindow(ctx context.Context, key string) (windowVM, bool) {
 		PageURL:     storyPageURL(srcName, id),
 		SourceURL:   src.StoryDiscussionURL(id),
 		SourceLabel: externalLabelForSource(srcName),
+		Def:         winAttrs{Mode: storyWinMode},
 		Mode:        storyWinMode,
 		MinHref:     "?", MaxHref: "?", CloseHref: "?",
 	}
@@ -436,7 +468,7 @@ func (s *Server) storyWindow(ctx context.Context, key string) (windowVM, bool) {
 	return w, true
 }
 
-// startWindows fetches the stories the request's address opens while the
+// startWindows fetches the windows the request's address opens while the
 // handler fetches its list, and returns a function that waits for them and
 // lays them out.
 func (s *Server) startWindows(ctx context.Context, r *http.Request) func() windowsVM {
@@ -444,22 +476,15 @@ func (s *Server) startWindows(ctx context.Context, r *http.Request) func() windo
 	st := parseWinState(q)
 	rest := restParams(q)
 	path := r.URL.Path
-	got := make(map[string]windowVM, len(st.open))
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	for _, k := range st.open {
-		wg.Add(1)
-		go func(k string) {
-			defer wg.Done()
-			if w, ok := s.storyWindow(ctx, k); ok {
-				mu.Lock()
-				got[k] = w
-				mu.Unlock()
-			}
-		}(k)
-	}
+	done := make(chan map[string]windowVM, 1)
+	// A window built for a list page reads its own parameters, not the
+	// list's, so an applet such as the hiring filter starts as its markup
+	// says rather than from the list's ?q=.
+	bare := r.Clone(ctx)
+	bare.URL = &url.URL{Path: path}
+	go func() { done <- s.windowsParallel(ctx, bare, st.open) }()
 	return func() windowsVM {
-		wg.Wait()
+		got := <-done
 		// A key the server does not recognise is ignored, as PUDL asks.
 		for _, k := range st.open {
 			if _, ok := got[k]; !ok {
@@ -467,8 +492,12 @@ func (s *Server) startWindows(ctx context.Context, r *http.Request) func() windo
 			}
 		}
 		front := st.front()
+		attrs := make(map[string]winAttrs, len(st.open))
+		for _, k := range st.open {
+			attrs[k] = st.attrs(k, got[k].Def)
+		}
 		vm := windowsVM{
-			LayerStyle:     st.layerStyle(),
+			LayerStyle:     st.layerStyle(attrs),
 			Shown:          st.shown(),
 			Open:           len(st.open) > 0,
 			AnyMin:         len(st.min) > 0,
@@ -478,12 +507,12 @@ func (s *Server) startWindows(ctx context.Context, r *http.Request) func() windo
 		}
 		for _, k := range st.stack() {
 			w := got[k]
-			a := st.attrs(k)
+			a := attrs[k]
 			w.Mode, w.Style, w.Edge = a.Mode, a.Style, a.Edge
 			w.Hidden = st.min[k]
 			w.Active = k == front
 			w.MinHref = winURL(path, rest, st.minimizeToggled(k))
-			w.MaxHref = winURL(path, rest, st.maximizeToggled(k))
+			w.MaxHref = winURL(path, rest, st.maximizeToggled(k, w.Def))
 			w.CloseHref = winURL(path, rest, st.closed(k))
 			vm.List = append(vm.List, w)
 		}

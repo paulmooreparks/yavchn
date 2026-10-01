@@ -1,0 +1,143 @@
+{{/* The applets' bodies, the same in a window and on each applet's own
+     page, and the fragments their scripts fetch. Each takes an appVM, or
+     for a fragment the view model it renders. */}}
+
+{{ define "appbody" }}
+{{ if eq .Kind "profile" }}{{ template "profile" .Profile }}
+{{ else if eq .Kind "lookup" }}{{ template "lookup" . }}
+{{ else if eq .Kind "replies" }}{{ template "repliesapp" .Replies }}
+{{ else if eq .Kind "hiring" }}{{ template "hiringapp" .Hiring }}{{ end }}
+{{ end }}
+
+{{ define "profile" }}
+<div class="app profile">
+{{ if .Error }}
+  <div class="empty-state story-note">
+    <p class="empty-state-title">{{ .Name }}</p>
+    <p class="empty-state-body">{{ .Error }}</p>
+    <div class="empty-state-actions"><a class="btn btn-sm" href="{{ .SiteURL }}" target="_blank" rel="noopener">{{ .SiteLabel }}</a></div>
+  </div>
+{{ else }}
+  <header class="app-head">
+    <h3 class="profile-name">{{ .Name }}</h3>
+    <p class="app-facts num">{{ .SourceLabel }}{{ if .Since }} &middot; joined {{ .Since }}{{ end }}{{ if .HasKarma }} &middot; {{ .Karma }} karma{{ end }}</p>
+    {{ if .Roles }}<p class="profile-roles">{{ range .Roles }}<span class="badge accent">{{ . }}</span> {{ end }}</p>{{ end }}
+    <a class="app-site-link" href="{{ .SiteURL }}" target="_blank" rel="noopener">{{ .SiteLabel }}</a>
+  </header>
+  {{ if .About }}<div class="profile-about comment-text">{{ .About }}</div>{{ end }}
+  <div class="md-section-label">Recent activity</div>
+  {{ if .RecentNote }}<p class="app-note">{{ .RecentNote }}</p>{{ end }}
+  {{ range .Recent }}
+  <div class="md-row"><a class="md-item" href="{{ .PageURL }}" data-win-open="{{ .Key }}">{{ if .Comment }}Comment{{ else }}{{ .Title }}{{ end }}<span class="md-meta num">{{ .Age }}{{ if not .Comment }} &middot; {{ .Score }} points &middot; {{ .Comments }} comments{{ end }}</span>{{ if .Excerpt }}<span class="md-meta">{{ .Excerpt }}</span>{{ end }}</a></div>
+  {{ else }}
+  <p class="app-note">Nothing recent to show.</p>
+  {{ end }}
+{{ end }}
+</div>
+{{ end }}
+
+{{ define "lookup" }}
+<form class="app user-lookup" action="/user" method="get">
+  <div class="form-group">
+    <label class="form-label" for="lookup-name">User name</label>
+    <input class="form-input" id="lookup-name" name="name" required pattern="[A-Za-z0-9_\-]{1,32}" autocomplete="off" spellcheck="false" autofocus>
+  </div>
+  <fieldset class="form-fieldset">
+    <legend>Site</legend>
+    <div class="form-options inline">
+      <label class="check"><input type="radio" name="source" value="hn" checked> Hacker News</label>
+      <label class="check"><input type="radio" name="source" value="lobsters"> Lobsters</label>
+    </div>
+  </fieldset>
+  <div class="app-actions"><button class="btn btn-primary" type="submit">Look up</button></div>
+  <p class="app-note">A commenter's name in any discussion opens their profile too.</p>
+</form>
+{{ end }}
+
+{{/* The replies watcher. Without script the form loads its own page with
+     the user's replies; with it, the applet checks every few minutes and
+     marks what is new since the reader last marked them read. */}}
+{{ define "repliesapp" }}
+<div class="app replies-app" data-applet="replies" data-applet-page="/applets/replies" data-state-key="replies" data-state-keep>
+  <form class="md-filter-group replies-user" action="/applets/replies" method="get" role="search">
+    <input class="md-filter" type="search" name="u" value="{{ .User }}" placeholder="Your Hacker News user name" aria-label="Your Hacker News user name" pattern="[A-Za-z0-9_\-]{1,32}" autocomplete="username" spellcheck="false">
+    <button class="icon-btn md-filter-go" type="submit" aria-label="Watch this user's replies"></button>
+  </form>
+  <p class="app-note replies-status" role="status"></p>
+  <div class="replies-list">{{ if .Checked }}{{ template "replieslist" . }}{{ else }}
+    <div class="empty-state story-note">
+      <p class="empty-state-title">Replies to you on Hacker News</p>
+      <p class="empty-state-body">Enter your HN user name and this lists the replies to your recent comments and stories, checking again every few minutes while it is open. It needs no login: everything it reads is public.</p>
+    </div>{{ end }}
+  </div>
+</div>
+{{ end }}
+
+{{ define "replieslist" }}
+{{ if .Error }}
+<div class="empty-state story-note"><p class="empty-state-body">{{ .Error }}</p></div>
+{{ else if not .Replies }}
+<div class="empty-state story-note"><p class="empty-state-body">No replies to {{ .User }}'s last thirty comments and stories.</p></div>
+{{ else }}
+<ol class="replies" data-user="{{ .User }}">
+  {{ range .Replies }}
+  <li class="reply" data-time="{{ .Time }}">
+    <div class="reply-head">
+      <span class="reply-new-badge">new</span>
+      {{ if .AuthorKey }}<a class="comment-author" href="{{ .AuthorURL }}" data-win-open="{{ .AuthorKey }}">{{ .Author }}</a>{{ else }}<span class="comment-author">{{ .Author }}</span>{{ end }}
+      <span class="num">{{ .Age }}</span>
+    </div>
+    <p class="reply-parent">on <a href="{{ .ParentURL }}" data-win-open="{{ .ParentKey }}">{{ .ParentLabel }}</a></p>
+    <div class="comment-text">{{ .HTML }}</div>
+    <p class="reply-actions"><a href="{{ .PageURL }}" data-win-open="{{ .Key }}">Open the thread</a> <a href="{{ .ReplyURL }}" target="_blank" rel="noopener">Reply on HN</a></p>
+  </li>
+  {{ end }}
+</ol>
+{{ end }}
+{{ end }}
+
+{{/* The hiring filter. Without script the form reloads its own page with
+     the posts the words leave; with it, the applet filters as the reader
+     types. */}}
+{{ define "hiringapp" }}
+<div class="app hiring-app" data-applet="hiring" data-applet-page="/applets/hiring" data-state-key="hiring">
+{{ if .Error }}
+  <div class="empty-state story-note"><p class="empty-state-body">{{ .Error }}</p></div>
+{{ else }}
+  <form class="hiring-bar" action="/applets/hiring" method="get" role="search">
+    <select class="form-select hiring-thread" name="t" aria-label="The thread">
+      {{ range .Threads }}<option value="{{ .ID }}"{{ if .Selected }} selected{{ end }}>{{ .Title }}</option>{{ end }}
+    </select>
+    <div class="md-filter-group hiring-filter">
+      <input class="md-filter" type="search" name="q" value="{{ .Query }}" placeholder="remote rust -crypto &quot;new york&quot;" aria-label="Words every post must have" autocomplete="off" spellcheck="false">
+      <button class="icon-btn md-filter-go" type="submit" aria-label="Filter the posts"></button>
+    </div>
+    <span class="app-note hiring-count num" role="status">{{ if .Loaded }}{{ .Total }} of {{ len .Jobs }} posts{{ end }}</span>
+  </form>
+  <p class="app-note hiring-help">Every word must appear in a post. Put a phrase in quotes to keep it whole, and a minus before a word to leave out the posts that have it.</p>
+  <div class="hiring-posts" tabindex="0" data-thread="{{ .ThreadID }}">{{ if .Loaded }}{{ template "hiringposts" . }}{{ else }}
+    <div class="loading" role="status"><span class="spinner" aria-hidden="true"></span> Loading the posts&hellip;</div>
+    <noscript><p class="app-note">Without JavaScript, the Filter button loads the posts on a page of their own.</p></noscript>{{ end }}
+  </div>
+{{ end }}
+</div>
+{{ end }}
+
+{{ define "hiringposts" }}
+{{ if .Error }}
+<div class="empty-state story-note"><p class="empty-state-body">{{ .Error }}</p></div>
+{{ else }}
+<ol class="jobs" data-thread="{{ .ThreadID }}">
+  {{ range .Jobs }}
+  <li class="job"{{ if .Hidden }} hidden{{ end }}>
+    <div class="reply-head">
+      {{ if .AuthorKey }}<a class="comment-author" href="{{ .AuthorURL }}" data-win-open="{{ .AuthorKey }}">{{ .Author }}</a>{{ else }}<span class="comment-author">{{ .Author }}</span>{{ end }}
+      <span class="num">{{ .Age }}</span>
+      <a class="comment-link" href="{{ .URL }}" target="_blank" rel="noopener" aria-label="Open on HN">&uarr;</a>
+    </div>
+    <div class="comment-text">{{ .HTML }}</div>
+  </li>
+  {{ end }}
+</ol>
+{{ end }}
+{{ end }}

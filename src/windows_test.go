@@ -97,30 +97,40 @@ func TestWinState_ButtonAddresses(t *testing.T) {
 	if got := winURL("/hn/", rest, st.minimizeToggled("hn-2")); got != "/hn/?page=2&open=hn-1,hn-2&min=hn-2&p.hn-2=floating:0.1,0.1,0.5,0.5" {
 		t.Errorf("minimize = %q", got)
 	}
-	if got := winURL("/hn/", rest, st.maximizeToggled("hn-2")); got != "/hn/?page=2&open=hn-1,hn-2&top=hn-2&p.hn-2=maximized:0.1,0.1,0.5,0.5" {
+	if got := winURL("/hn/", rest, st.maximizeToggled("hn-2", storyDef)); got != "/hn/?page=2&open=hn-1,hn-2&top=hn-2&p.hn-2=maximized:0.1,0.1,0.5,0.5" {
 		t.Errorf("maximize a floating window = %q", got)
 	}
 	// A window with no placement opens maximised, so its button restores it.
-	if got := winURL("/hn/", rest, st.maximizeToggled("hn-1")); !strings.Contains(got, "p.hn-1=floating:0.06,0.05,0.55,0.75") {
+	if got := winURL("/hn/", rest, st.maximizeToggled("hn-1", storyDef)); !strings.Contains(got, "p.hn-1=floating:0.06,0.05,0.55,0.75") {
 		t.Errorf("restore a maximised window = %q", got)
 	}
 }
 
 func TestWinState_Attrs(t *testing.T) {
 	st := parseWinState(mustQuery(t, "open=a,b,c&p.a=zone:0.06,0.05,0.55,0.75,0,0,0.5,0.5&p.b=dock-bottom:0.06,0.05,0.55,0.75,0.22"))
-	if a := st.attrs("a"); a.Mode != "zone" || !strings.Contains(string(a.Style), "--zone-w:0.5") {
+	if a := st.attrs("a", storyDef); a.Mode != "zone" || !strings.Contains(string(a.Style), "--zone-w:0.5") {
 		t.Errorf("zone attrs = %+v", a)
 	}
-	if a := st.attrs("b"); a.Mode != "dock-bottom" || a.Edge != "bottom" || !strings.Contains(string(a.Style), "--win-dock-size:0.22") {
+	if a := st.attrs("b", storyDef); a.Mode != "dock-bottom" || a.Edge != "bottom" || !strings.Contains(string(a.Style), "--win-dock-size:0.22") {
 		t.Errorf("dock attrs = %+v", a)
 	}
-	if a := st.attrs("c"); a.Mode != storyWinMode || a.Style != "" {
+	if a := st.attrs("c", storyDef); a.Mode != storyWinMode || a.Style != "" {
 		t.Errorf("default attrs = %+v", a)
 	}
-	if got := string(st.layerStyle()); got != "--dock-bottom:22%" {
+	attrs := map[string]winAttrs{"a": st.attrs("a", storyDef), "b": st.attrs("b", storyDef), "c": st.attrs("c", storyDef)}
+	if got := string(st.layerStyle(attrs)); got != "--dock-bottom:22%" {
 		t.Errorf("layer style = %q", got)
 	}
+	// A window whose markup docks it takes its strip with no placement in
+	// the address, as the replies watcher does.
+	st = parseWinState(mustQuery(t, "open=replies"))
+	attrs = map[string]winAttrs{"replies": st.attrs("replies", dockedAt("right", 0.3))}
+	if got := string(st.layerStyle(attrs)); got != "--dock-right:30%" {
+		t.Errorf("default dock layer style = %q", got)
+	}
 }
+
+var storyDef = winAttrs{Mode: storyWinMode}
 
 // --- rendering ---
 

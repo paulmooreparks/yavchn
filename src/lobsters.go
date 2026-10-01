@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -130,8 +131,70 @@ type Lobsters struct {
 
 	items   *expirable.LRU[string, *Item]
 	threads *expirable.LRU[string, *StoryThread]
+	users   *expirable.LRU[string, *LobstersUser]
 
 	threadRate *rateLimiter
+}
+
+// LobstersUser is the public profile at /~{name}.json, with the stories
+// from /~{name}/stories.json. Lobsters publishes no list of a user's
+// comments as JSON, so a profile shows their stories alone.
+type LobstersUser struct {
+	Username    string  `json:"username"`
+	CreatedAt   string  `json:"created_at"`
+	IsAdmin     bool    `json:"is_admin"`
+	IsModerator bool    `json:"is_moderator"`
+	About       string  `json:"about"`
+	Stories     []*Item `json:"-"`
+}
+
+func (l *Lobsters) getJSON(ctx context.Context, path string, into any) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", lobstersBase+path, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := l.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("%s: %w", path, errNoSuchUser)
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("%s: %s", path, resp.Status)
+	}
+	return json.NewDecoder(resp.Body).Decode(into)
+}
+
+// User returns a user's public profile and their recent stories, cached
+// like items.
+func (l *Lobsters) User(ctx context.Context, name string) (*LobstersUser, error) {
+	if u, ok := l.users.Get(name); ok {
+		return u, nil
+	}
+	v, err, _ := l.sf.Do("user:"+name, func() (interface{}, error) {
+		var u LobstersUser
+		if err := l.getJSON(ctx, "/~"+url.PathEscape(name)+".json", &u); err != nil {
+			return nil, err
+		}
+		var stories []lobstersStory
+		if err := l.getJSON(ctx, "/~"+url.PathEscape(name)+"/stories.json", &stories); err == nil {
+			for i := range stories {
+				if i == 20 {
+					break
+				}
+				u.Stories = append(u.Stories, stories[i].toItem())
+			}
+		}
+		return &u, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	u := v.(*LobstersUser)
+	l.users.Add(name, u)
+	return u, nil
 }
 
 func NewLobsters() *Lobsters {
@@ -145,17 +208,18 @@ func NewLobsters() *Lobsters {
 		listCache:   make(map[string]map[string]*Item),
 		items:       expirable.NewLRU[string, *Item](itemCacheCap, nil, itemTTL),
 		threads:     expirable.NewLRU[string, *StoryThread](threadCacheCap, nil, threadTTL),
+		users:       expirable.NewLRU[string, *LobstersUser](userCacheCap, nil, itemTTL),
 		threadRate:  newRateLimiter(30, 60*time.Second),
 	}
 }
 
 // --- Source interface ---
 
-func (l *Lobsters) Name() string             { return "lobsters" }
-func (l *Lobsters) Label() string            { return "Lobsters" }
-func (l *Lobsters) Tabs() []TabDef           { return lobstersTabs }
+func (l *Lobsters) Name() string              { return "lobsters" }
+func (l *Lobsters) Label() string             { return "Lobsters" }
+func (l *Lobsters) Tabs() []TabDef            { return lobstersTabs }
 func (l *Lobsters) ValidTab(slug string) bool { _, ok := lobstersTabPaths[slug]; return ok }
-func (l *Lobsters) DefaultTab() string       { return lobstersTabHottest }
+func (l *Lobsters) DefaultTab() string        { return lobstersTabHottest }
 func (l *Lobsters) StoryDiscussionURL(id string) string {
 	return fmt.Sprintf("https://lobste.rs/s/%s", id)
 }

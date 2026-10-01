@@ -26,10 +26,12 @@ type Server struct {
 	tpl           *template.Template
 	extract       *Extractor
 	db            *sql.DB
+	appletRate    *rateLimiter // caps the replies watcher's checks per visitor
 }
 
 func NewServer(sources map[string]Source, finders []DiscussionProvider, defaultSource string, hn *HN, tpl *template.Template, extract *Extractor, db *sql.DB) *Server {
-	return &Server{sources: sources, finders: finders, defaultSource: defaultSource, hn: hn, tpl: tpl, extract: extract, db: db}
+	return &Server{sources: sources, finders: finders, defaultSource: defaultSource, hn: hn, tpl: tpl, extract: extract, db: db,
+		appletRate: newRateLimiter(20, 60*time.Second)}
 }
 
 func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +121,8 @@ func newStoryVM(rank int, src Source, item *Item) storyVM {
 type commentVM struct {
 	ID          string
 	Author      string
+	AuthorKey   string // the window of the author's profile, when the name can have one
+	AuthorURL   string
 	Age         string
 	HTML        template.HTML
 	HNURL       string
@@ -243,12 +247,12 @@ func (s *Server) Pinned(w http.ResponseWriter, r *http.Request) {
 	s.renderList(w, &vm, s.startWindows(ctx, r), 0)
 }
 
-// Window serves /window/{key}, the markup of one story window, which
-// pudl-windows.js fetches when a story opens without a page load.
+// Window serves /window/{key}, the markup of one window, a story's or an
+// applet's, which pudl-windows.js fetches when it opens without a page load.
 func (s *Server) Window(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	vm, ok := s.storyWindow(ctx, r.PathValue("key"))
+	vm, ok := s.window(ctx, r, r.PathValue("key"))
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -591,6 +595,7 @@ func commentToVM(c *Comment, src Source) *commentVM {
 		HNURL:     commentExternalURL(src, c.ID),
 		CreatedAt: c.CreatedAt,
 	}
+	cv.AuthorKey, cv.AuthorURL = authorLink(src.Name(), c.Author)
 	for _, child := range c.Children {
 		ccv := commentToVM(child, src)
 		cv.Children = append(cv.Children, ccv)

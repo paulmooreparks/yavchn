@@ -28,6 +28,7 @@ const (
 
 	itemCacheCap   = 2048
 	threadCacheCap = 256
+	userCacheCap   = 512
 
 	userAgent = "yavchn/0.1 (+https://github.com/paulmooreparks/yavchn)"
 
@@ -84,8 +85,13 @@ func (r *hnFirebaseItem) toItem() *Item {
 	for _, k := range r.Kids {
 		kids = append(kids, strconv.FormatInt(k, 10))
 	}
+	parent := ""
+	if r.Parent != 0 {
+		parent = strconv.FormatInt(r.Parent, 10)
+	}
 	return &Item{
 		ID:          strconv.FormatInt(r.ID, 10),
+		Parent:      parent,
 		By:          r.By,
 		Time:        r.Time,
 		Text:        r.Text,
@@ -144,6 +150,7 @@ type HN struct {
 
 	items   *expirable.LRU[string, *Item]
 	threads *expirable.LRU[string, *StoryThread]
+	users   *expirable.LRU[string, *HNUser]
 
 	// threadRate caps outbound Algolia thread fetches per requester IP.
 	// Cache hits never reach this gate (checked inside the singleflight
@@ -161,8 +168,56 @@ func NewHN() *HN {
 		listFetched: make(map[string]time.Time),
 		items:       expirable.NewLRU[string, *Item](itemCacheCap, nil, itemTTL),
 		threads:     expirable.NewLRU[string, *StoryThread](threadCacheCap, nil, threadTTL),
+		users:       expirable.NewLRU[string, *HNUser](userCacheCap, nil, itemTTL),
 		threadRate:  newRateLimiter(30, 60*time.Second),
 	}
+}
+
+// HNUser is the public profile firebaseio.com returns at /v0/user/{id}.
+// Submitted holds the ids of the user's stories, comments and polls,
+// newest first.
+type HNUser struct {
+	ID        string  `json:"id"`
+	Created   int64   `json:"created"`
+	Karma     int     `json:"karma"`
+	About     string  `json:"about"`
+	Submitted []int64 `json:"submitted"`
+}
+
+// User returns a user's public profile, cached like items.
+func (h *HN) User(ctx context.Context, id string) (*HNUser, error) {
+	if u, ok := h.users.Get(id); ok {
+		return u, nil
+	}
+	v, err, _ := h.sf.Do("user:"+id, func() (interface{}, error) {
+		req, err := http.NewRequestWithContext(ctx, "GET", apiBase+"/user/"+url.PathEscape(id)+".json", nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := h.http.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("user %s: %s", id, resp.Status)
+		}
+		var u HNUser
+		if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
+			return nil, err
+		}
+		// firebaseio answers an unknown user with 200 and "null".
+		if u.ID == "" {
+			return nil, fmt.Errorf("user %s: %w", id, errNoSuchUser)
+		}
+		return &u, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	u := v.(*HNUser)
+	h.users.Add(id, u)
+	return u, nil
 }
 
 // --- Source interface ---

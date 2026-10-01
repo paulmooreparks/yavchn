@@ -11,7 +11,7 @@
    - gives the menu bar a Story and a Discussion menu while its window is
      in front (menus(), asked afresh as each menu opens);
    - keeps its place, the two panes' scroll positions and the comment the
-     keyboard reached, as its state, which the host below remembers per
+     keyboard reached, as its state, which continuity.js remembers per
      story, so a reload or a story opened again comes back where it was.
 
    The article's share of a story is the reader's, kept as a percentage
@@ -21,8 +21,6 @@
   'use strict';
 
   var SPLIT_KEY = 'yavchn-article-h';
-  var STATE_KEY = 'yavchn-story-state';
-  var STATE_CAP = 100;
 
   var failed = '<div class="empty-state story-note"><p class="empty-state-title">This could not be loaded</p>' +
     '<p class="empty-state-body">The link above opens it on its own site.</p></div>';
@@ -167,52 +165,6 @@
   }
 
   window.pudlApplets.register('story', { init: init });
-
-  /* === The host's side of the state ======================================
-     PUDL keeps no applet state; it asks the host before an instance starts
-     and says when the state changes. YAVCHN keeps the last hundred stories'
-     places in this browser, by story, and forgets a story's place when the
-     reader closes its window, but not when Next replaced it or Back moved
-     past it, since then the reader may well return. */
-  function kept() {
-    try { return JSON.parse(localStorage.getItem(STATE_KEY) || '{}') || {}; } catch (e) { return {}; }
-  }
-
-  function keep(all) {
-    var keys = Object.keys(all);
-    if (keys.length > STATE_CAP) {
-      keys.sort(function (a, b) { return (all[a].t || 0) - (all[b].t || 0); });
-      keys.slice(0, keys.length - STATE_CAP).forEach(function (k) { delete all[k]; });
-    }
-    try { localStorage.setItem(STATE_KEY, JSON.stringify(all)); } catch (e) { /* not kept, then */ }
-  }
-
-  function storyKeyOf(mount) { return mount.getAttribute('data-story-key'); }
-
-  document.addEventListener('pudl:applet-state', function (e) {
-    if (e.detail.name !== 'story') return;
-    var s = kept()[storyKeyOf(e.target)];
-    if (s && s.s != null) e.detail.state = s.s;
-  });
-
-  document.addEventListener('pudl:applet-change', function (e) {
-    var k = e.target.matches && e.target.matches('[data-applet="story"]') && storyKeyOf(e.target);
-    if (!k) return;
-    var all = kept();
-    if (e.detail.state) all[k] = { s: e.detail.state, t: Date.now() };
-    else delete all[k];
-    keep(all);
-  });
-
-  document.addEventListener('pudl:window-close', function (e) {
-    var why = e.detail && e.detail.reason;
-    if (why !== 'button' && why !== 'key' && why !== 'script') return;
-    var mount = e.target.querySelector && e.target.querySelector('[data-applet="story"]');
-    var k = mount && storyKeyOf(mount);
-    if (!k) return;
-    var all = kept();
-    if (all[k]) { delete all[k]; keep(all); }
-  });
 
   /* === The split ======================================================== */
   function applySplit(pct) {

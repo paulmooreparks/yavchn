@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+{{ template "head" . }}
+</head>
+<body class="app-page">
+{{ template "topbar" . }}
+<main class="app-page-main">
+  <header class="story-page-head">
+    <h1 class="story-page-title">{{ .Win.Title }}</h1>
+  </header>
+  <div class="app-page-body">{{ template "appbody" .Win.App }}</div>
+</main>
+{{ template "dialogs" . }}
+{{ template "scripts" . }}
+</body>
+</html>
