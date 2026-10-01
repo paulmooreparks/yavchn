@@ -152,6 +152,8 @@ type HN struct {
 	threads *expirable.LRU[string, *StoryThread]
 	users   *expirable.LRU[string, *HNUser]
 
+	authorStories *expirable.LRU[string, []*SearchHit]
+
 	// threadRate caps outbound Algolia thread fetches per requester IP.
 	// Cache hits never reach this gate (checked inside the singleflight
 	// callback after a second cache peek).
@@ -169,7 +171,9 @@ func NewHN() *HN {
 		items:       expirable.NewLRU[string, *Item](itemCacheCap, nil, itemTTL),
 		threads:     expirable.NewLRU[string, *StoryThread](threadCacheCap, nil, threadTTL),
 		users:       expirable.NewLRU[string, *HNUser](userCacheCap, nil, itemTTL),
-		threadRate:  newRateLimiter(30, 60*time.Second),
+
+		authorStories: expirable.NewLRU[string, []*SearchHit](userCacheCap, nil, itemTTL),
+		threadRate:    newRateLimiter(30, 60*time.Second),
 	}
 }
 
@@ -469,21 +473,48 @@ func (h *HN) Search(ctx context.Context, query string, page int) ([]*SearchHit, 
 	apiPage := page - 1
 	u := fmt.Sprintf("%s/search?query=%s&tags=story&hitsPerPage=30&page=%d",
 		algoliaBase, urlQueryEscape(query), apiPage)
-	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	hits, nbPages, err := h.algoliaHits(ctx, u)
 	if err != nil {
 		return nil, false, err
+	}
+	return hits, apiPage+1 < nbPages, nil
+}
+
+// AuthorStories returns a user's most recent submissions, newest first,
+// from the Algolia search API, cached like items.
+func (h *HN) AuthorStories(ctx context.Context, name string) ([]*SearchHit, error) {
+	if hits, ok := h.authorStories.Get(name); ok {
+		return hits, nil
+	}
+	v, err, _ := h.sf.Do("author-stories:"+name, func() (interface{}, error) {
+		hits, _, err := h.algoliaHits(ctx, fmt.Sprintf("%s/search_by_date?tags=story,author_%s&hitsPerPage=20",
+			algoliaBase, urlQueryEscape(name)))
+		return hits, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	hits := v.([]*SearchHit)
+	h.authorStories.Add(name, hits)
+	return hits, nil
+}
+
+func (h *HN) algoliaHits(ctx context.Context, u string) ([]*SearchHit, int, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	if err != nil {
+		return nil, 0, err
 	}
 	resp, err := h.http.Do(req)
 	if err != nil {
-		return nil, false, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return nil, false, fmt.Errorf("algolia search: %s", resp.Status)
+		return nil, 0, fmt.Errorf("algolia search: %s", resp.Status)
 	}
 	var raw algoliaSearchResponse
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, false, err
+		return nil, 0, err
 	}
 	hits := make([]*SearchHit, 0, len(raw.Hits))
 	for _, r := range raw.Hits {
@@ -497,7 +528,7 @@ func (h *HN) Search(ctx context.Context, query string, page int) ([]*SearchHit, 
 			CreatedAt:   r.CreatedAtI,
 		})
 	}
-	return hits, apiPage+1 < raw.NbPages, nil
+	return hits, raw.NbPages, nil
 }
 
 func convertHNComment(a algoliaItem) *Comment {

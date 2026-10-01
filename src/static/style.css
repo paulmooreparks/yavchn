@@ -585,16 +585,35 @@ body.app-page {
   margin-top: 2px;
 }
 
-.user-lookup {
-  max-width: 420px;
+/* The lookup bar, above a profile and alone in the lookup: the site, then
+   the name with its button. */
+.lookup-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
-.app-actions {
-  margin-top: var(--space-3);
+.lookup-site {
+  flex: none;
+  width: auto;
 }
 
-.user-lookup .app-note {
-  margin-top: var(--space-4);
+.lookup-name {
+  flex: 1 1 200px;
+  max-width: 360px;
+}
+
+.lookup-name .md-filter {
+  width: 100%;
+}
+
+.app-page-body > .lookup-bar,
+.app-page-body > .lookup-note {
+  width: 100%;
+  max-width: 820px;
+  margin-inline: auto;
 }
 
 .replies-user {
@@ -929,6 +948,23 @@ a.comment-author {
 /* === Dialogs ============================================================== */
 .wide-dialog {
   max-width: 600px;
+}
+
+/* The help is long, so it takes most of the screen's width rather than a
+   fixed one, short of the margin PUDL leaves around a dialog. */
+#help-dialog {
+  width: 75vw;
+  max-width: calc(100vw - 2 * var(--space-5));
+}
+
+@media (max-width: 640px) {
+  #help-dialog {
+    width: 100%;
+  }
+}
+
+#help-dialog-title:focus {
+  outline: none;
 }
 
 .help-body section + section {

@@ -167,8 +167,10 @@
     });
   }
 
-  /* The lookup form in its window opens the profile in the window's place;
-     on its own page it is an ordinary form, which the server redirects. */
+  /* The lookup bar, alone in the lookup or above a profile, shows the
+     profile it names in its window's place, so one window looks up user
+     after user, and Back returns to the one before. On a page of its own
+     it is an ordinary form, which the server redirects. */
   document.addEventListener('submit', function (e) {
     var form = e.target.closest && e.target.closest('.user-lookup');
     var win = form && form.closest('.win[data-win]');

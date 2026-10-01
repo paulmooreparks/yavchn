@@ -17,7 +17,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-// The applets in the YAVCHN menu's Applets submenu, each a window like a
+// The applets in the menu bar's Applets menu, each a window like a
 // story's and each a page of its own:
 //
 //	replies               /applets/replies  replies to an HN user's recent comments and stories
@@ -38,10 +38,17 @@ const whoIsHiringUser = "whoishiring"
 
 // appVM is the body of an applet's window or page.
 type appVM struct {
-	Kind    string // "replies", "hiring", "lookup" or "profile"
+	Kind    string    // "replies", "hiring", "lookup" or "profile"
+	Lookup  *lookupVM // the lookup bar, above a profile and alone in the lookup
 	Profile *profileVM
 	Replies *repliesVM
 	Hiring  *hiringVM
+}
+
+// lookupVM is the lookup bar: a user name and a site. In a window,
+// submitting it shows the new profile in the window's place.
+type lookupVM struct {
+	Key, Name, Source string
 }
 
 type profileVM struct {
@@ -53,8 +60,10 @@ type profileVM struct {
 	About                     template.HTML
 	SiteURL                   string
 	SiteLabel                 string
-	Recent                    []activityVM
-	RecentNote                string
+	Submissions               []activityVM // the user's stories, newest first
+	SubmissionsNote           string       // why there are none, when the site could not say
+	Comments                  []activityVM // the user's recent comments
+	CommentsNote              string       // why there are none to show
 	Error                     string
 }
 
@@ -109,6 +118,10 @@ type jobVM struct {
 	Hidden               bool
 }
 
+// profilePlace floats a profile at the right, beside the story it was
+// opened from.
+var profilePlace = floatingAt(0.5, 0.05, 0.46, 0.86)
+
 func profileKey(source, name string) string { return "user-" + source + "-" + name }
 func profileURL(source, name string) string { return "/user/" + source + "/" + name }
 
@@ -136,16 +149,18 @@ func (s *Server) appletWindow(ctx context.Context, r *http.Request, key string) 
 		h := s.hiring(ctx, q.Get("t"), q.Get("q"))
 		w.App = &appVM{Kind: "hiring", Hiring: h}
 	case key == "user":
-		w.Title, w.PageURL, w.Def = "Look up a user", "/user", floatingAt(0.3, 0.08, 0.4, 0.55)
-		w.App = &appVM{Kind: "lookup"}
+		// The lookup opens where a profile does, since the profile it
+		// looks up takes its place.
+		w.Title, w.PageURL, w.Def = "Look up a user", "/user", profilePlace
+		w.App = &appVM{Kind: "lookup", Lookup: &lookupVM{Key: key, Source: "hn"}}
 	case strings.HasPrefix(key, "user-"):
 		source, name, ok := strings.Cut(strings.TrimPrefix(key, "user-"), "-")
 		if _, known := s.sources[source]; !ok || !known || !userNameRE.MatchString(name) {
 			return windowVM{}, false
 		}
 		p := s.profile(ctx, source, name)
-		w.Title, w.PageURL, w.Def = p.Name+" on "+p.SourceLabel, profileURL(source, name), floatingAt(0.5, 0.05, 0.46, 0.86)
-		w.App = &appVM{Kind: "profile", Profile: p}
+		w.Title, w.PageURL, w.Def = p.Name+" on "+p.SourceLabel, profileURL(source, name), profilePlace
+		w.App = &appVM{Kind: "profile", Profile: p, Lookup: &lookupVM{Key: key, Name: name, Source: source}}
 	default:
 		return windowVM{}, false
 	}
@@ -160,7 +175,15 @@ func (s *Server) profile(ctx context.Context, source, name string) *profileVM {
 	switch source {
 	case "hn":
 		p.SiteURL, p.SiteLabel = "https://news.ycombinator.com/user?id="+url.QueryEscape(name), "Open on HN"
+		// The submissions come from Algolia's search, which finds a user's
+		// stories however many comments they have posted since; the
+		// profile's own list of items is mostly comments for most users.
+		var stories []*SearchHit
+		var storiesErr error
+		done := make(chan struct{})
+		go func() { defer close(done); stories, storiesErr = s.hn.AuthorStories(ctx, name) }()
 		u, err := s.hn.User(ctx, name)
+		<-done
 		if err != nil {
 			p.Error = userError(err, name, p.SourceLabel)
 			return p
@@ -169,24 +192,27 @@ func (s *Server) profile(ctx context.Context, source, name string) *profileVM {
 		p.Since = time.Unix(u.Created, 0).UTC().Format("2 January 2006")
 		p.Karma, p.HasKarma = u.Karma, true
 		p.About = template.HTML(linkThreads(sanitizeHTML(u.About)))
-		ids := make([]string, 0, 20)
+		if storiesErr != nil {
+			slog.Warn("author stories unavailable", "user", name, "err", storiesErr)
+			p.SubmissionsNote = "The submissions couldn't be loaded right now."
+		}
+		for _, h := range stories {
+			p.Submissions = append(p.Submissions, activityVM{Key: "hn-" + h.ID, PageURL: storyPageURL("hn", h.ID),
+				Title: h.Title, Age: relTime(h.CreatedAt), Score: h.Points, Comments: h.NumComments})
+		}
+		ids := make([]string, 0, 30)
 		for i, id := range u.Submitted {
-			if i == 20 {
+			if i == 30 {
 				break
 			}
 			ids = append(ids, strconv.FormatInt(id, 10))
 		}
 		for _, it := range s.hn.ItemsParallel(ctx, ids) {
-			if it == nil || it.Dead || it.Deleted {
+			if it == nil || it.Dead || it.Deleted || it.Type != "comment" || len(p.Comments) == 15 {
 				continue
 			}
-			a := activityVM{Key: "hn-" + it.ID, PageURL: storyPageURL("hn", it.ID), Title: it.Title, Age: relTime(it.Time),
-				Score: it.Score, Comments: it.Descendants, Comment: it.Type == "comment"}
-			if a.Comment || a.Title == "" {
-				a.Comment = true
-				a.Excerpt = excerpt(it.Text, 200)
-			}
-			p.Recent = append(p.Recent, a)
+			p.Comments = append(p.Comments, activityVM{Key: "hn-" + it.ID, PageURL: storyPageURL("hn", it.ID),
+				Comment: true, Excerpt: excerpt(it.Text, 200), Age: relTime(it.Time)})
 		}
 	case "lobsters":
 		lob, _ := s.sources["lobsters"].(*Lobsters)
@@ -212,10 +238,10 @@ func (s *Server) profile(ctx context.Context, source, name string) *profileVM {
 		}
 		p.About = template.HTML(linkThreads(sanitizeHTML(u.About)))
 		for _, it := range u.Stories {
-			p.Recent = append(p.Recent, activityVM{Key: "lobsters-" + it.ID, PageURL: storyPageURL("lobsters", it.ID),
+			p.Submissions = append(p.Submissions, activityVM{Key: "lobsters-" + it.ID, PageURL: storyPageURL("lobsters", it.ID),
 				Title: it.Title, Age: relTime(it.Time), Score: it.Score, Comments: it.Descendants})
 		}
-		p.RecentNote = "Lobsters lists a user's stories, but not their comments."
+		p.CommentsNote = "Lobsters publishes a user's stories, but not their comments."
 	}
 	return p
 }

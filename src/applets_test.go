@@ -68,11 +68,11 @@ func TestRender_LookupWindow(t *testing.T) {
 	_, mux := testServer(t)
 	rec := get(t, mux, "/window/user")
 	body := rec.Body.String()
-	if rec.Code != 200 || !strings.Contains(body, `class="win app-win app-win-lookup"`) || !strings.Contains(body, `class="app user-lookup"`) {
+	if rec.Code != 200 || !strings.Contains(body, `class="win app-win app-win-lookup"`) || !strings.Contains(body, `class="user-lookup lookup-bar"`) {
 		t.Fatalf("lookup window %d: %.300s", rec.Code, body)
 	}
-	if !strings.Contains(body, `style="--win-x:0.3; --win-y:0.08; --win-w:0.4; --win-h:0.55"`) {
-		t.Error("the lookup window should carry its own floating place")
+	if !strings.Contains(body, `style="--win-x:0.5; --win-y:0.05; --win-w:0.46; --win-h:0.86"`) {
+		t.Error("the lookup window should open where a profile does")
 	}
 	if rec := get(t, mux, "/window/user-zz-pg"); rec.Code != 404 {
 		t.Errorf("a profile on an unknown site should 404, got %d", rec.Code)

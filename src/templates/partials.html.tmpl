@@ -57,15 +57,14 @@
             <li><a href="/pinned/">Pinned stories</a></li>
             <li><a href="/find">Find the discussions of a link</a></li>
             <li>-</li>
-            <li>Applets
-              <ul>
-                <li><a href="/applets/replies" data-win-open="replies">Replies to me</a></li>
-                <li><a href="/user" data-win-open="user">Look up a user&hellip;</a></li>
-                <li><a href="/applets/hiring" data-win-open="hiring">Who is hiring?</a></li>
-              </ul>
-            </li>
-            <li>-</li>
             <li><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN on GitHub</a></li>
+          </ul>
+        </li>
+        <li>Applets
+          <ul>
+            <li><a href="/applets/replies" data-win-open="replies">Replies to me</a></li>
+            <li><a href="/user" data-win-open="user">Look up a user&hellip;</a></li>
+            <li><a href="/applets/hiring" data-win-open="hiring">Who is hiring?</a></li>
           </ul>
         </li>
         <li>View
@@ -216,7 +215,9 @@
 </dialog>
 
 <dialog class="dialog wide-dialog" id="help-dialog" aria-labelledby="help-dialog-title">
-  <h3 class="dialog-title" id="help-dialog-title">Help</h3>
+  {{/* Focus starts on the title, so the help opens at its top rather than
+       scrolled to the Close button, and the arrow keys scroll it. */}}
+  <h3 class="dialog-title" id="help-dialog-title" tabindex="-1" autofocus>Help</h3>
   <div class="dialog-body help-body">
     <section>
       <h4>Keyboard</h4>
@@ -246,7 +247,7 @@
     </section>
     <section>
       <h4>Applets</h4>
-      <p>The Applets submenu of the YAVCHN menu holds three tools, each a window of its own. <strong>Replies to me</strong> takes your Hacker News user name and lists the replies to your last thirty comments and stories, checking again every three minutes while it is open, and marking what is new since you last marked them read. <strong>Look up a user</strong> opens a profile on Hacker News or Lobsters, as a commenter's name in any discussion does. <strong>Who is hiring?</strong> filters the posts of HN's monthly hiring threads by the words you type.</p>
+      <p>The Applets menu in the menu bar holds three tools, each a window of its own. <strong>Replies to me</strong> takes your Hacker News user name and lists the replies to your last thirty comments and stories, checking again every three minutes while it is open, and marking what is new since you last marked them read. <strong>Look up a user</strong> opens a profile on Hacker News or Lobsters, with their submissions and recent comments, as a commenter's name in any discussion does; the bar at the top of a profile looks up someone else in the same window, and Back returns to the one before. <strong>Who is hiring?</strong> filters the posts of HN's monthly hiring threads by the words you type.</p>
       <p>They read only what the sites publish to everyone, so none of them asks for a login, and your user name stays in this browser.</p>
     </section>
     <section>
@@ -260,7 +261,7 @@
     </section>
   </div>
   <form class="dialog-actions" method="dialog">
-    <button class="btn" value="close" autofocus>Close</button>
+    <button class="btn" value="close">Close</button>
   </form>
 </dialog>
 {{ end }}

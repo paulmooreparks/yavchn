@@ -21,10 +21,10 @@ YAVCHN lets me quickly browse an article in scaled-down reader mode with the dis
 
 The same treatment works on [Lobsters](https://lobste.rs) (a smaller, computing-focused link aggregator) thanks to a tiny `Source` abstraction in the Go backend; pick the source from the segmented control at the right of the top bar. Switching sources or lists only swaps the list, so open windows stay put.
 
-The YAVCHN menu also has an Applets submenu with three tools, each in a window of its own:
+The menu bar also has an Applets menu with three tools, each in a window of its own:
 
 - **Replies to me** watches the replies to your Hacker News comments and stories, which HN itself never tells you about. Give it your user name and it checks every three minutes while it's open, marking what's new.
-- **Look up a user** opens a Hacker News or Lobsters profile with the user's recent activity. Clicking a commenter's name in any discussion does the same.
+- **Look up a user** opens a Hacker News or Lobsters profile with the user's submissions and recent comments (Lobsters doesn't publish its users' comments, so only submissions there). Clicking a commenter's name in any discussion does the same, and the bar at the top of a profile looks up someone else in the same window.
 - **Who is hiring?** filters the posts of HN's monthly hiring threads as you type: `remote rust -crypto "new york"`.
 
 None of them needs a login. They read only what each site publishes for anyone to read.
@@ -49,11 +49,12 @@ Serves on `http://localhost:8080`.
 
 - Go 1.25, standard `net/http` + `html/template`.
 - `golang.org/x/sync/singleflight`: coalesce concurrent upstream fetches.
-- `github.com/hashicorp/golang-lru/v2/expirable`: bounded LRU + TTL for HN item and thread caches.
+- `github.com/hashicorp/golang-lru/v2/expirable`: bounded LRU + TTL for the item, thread, user and submission caches.
 - `github.com/go-shiori/go-readability`: server-side article extraction.
 - `github.com/microcosm-cc/bluemonday`: HTML sanitisation for extracted articles and comment bodies.
+- `golang.org/x/net/html`: rewriting links to other threads so they open as windows, and the text excerpts in profiles and the replies watcher.
 - `modernc.org/sqlite`: pure-Go SQLite for the article-extraction cache.
-- [PUDL](https://github.com/paulmooreparks/pudl) v0.38.0 for the stylesheet, floating windows, menu bar, regions and splitters, copied from its release into `src/static/pudl/`.
+- [PUDL](https://github.com/paulmooreparks/pudl) v0.38.0 for the stylesheet, floating windows, menu bar, applet runtime, regions and splitters, copied from its release into `src/static/pudl/`.
 - Vanilla JS for YAVCHN's own behaviour. No SPA framework.
 
 ## Design notes
@@ -64,13 +65,15 @@ Serves on `http://localhost:8080`.
 
 - **Multi-source by design.** YAVCHN is built around a small Go interface called `Source` (see `src/source.go`). HN and Lobsters each have their own implementation that knows how to talk to their respective JSON APIs. Adding a third site means writing one more implementation. The rest of YAVCHN doesn't care which site a story came from.
 
-- **Caching.** Story lists, individual items, and comment threads are cached in memory with a short time-to-live (a minute or two), so the front page doesn't hammer HN or Lobsters when many people are reading. Article extraction is much more expensive (fetch the source page, run readability, sanitize the HTML), so extracted articles are cached durably in SQLite and only re-fetched after 30 days.
+- **Caching.** Story lists, individual items, comment threads, user profiles and their submissions are cached in memory with a short time-to-live (a minute or two), so the front page doesn't hammer HN or Lobsters when many people are reading. Article extraction is much more expensive (fetch the source page, run readability, sanitize the HTML), so extracted articles are cached durably in SQLite and only re-fetched after 30 days.
 
 - **Progressive enhancement.** The page renders fully server-side, so it works without JavaScript, and the server renders the windows the URL names along with the list. A window that opens later is fetched from `GET /window/{key}`, which returns that one window's markup. The article reader-mode pane and the comment thread are fetched separately after a window appears, via `GET /api/article` and `GET /api/discussion`. That keeps the first paint fast, and it lets the heavier requests fail without breaking the page. Visitors with JavaScript disabled see plainly-labeled "Open original" and "Open on HN" / "Open on Lobsters" fallback links instead.
 
 - **Each story is a PUDL applet.** PUDL's applet runtime starts a story's script when its window opens and stops it when the window closes, so every window runs on its own. While a story's window is in front, the story puts a Story menu and a Discussion menu in the menu bar. It also reports its scroll positions and the comment you'd reached as its state, which YAVCHN keeps per story so a reload finds your place again. Closing a window forgets it, but a story that Next replaced keeps its place, for when Back returns to it.
 
-- **Browser-local state.** The list width, the article's share of a window, theme choice, the hidden-list mode, pinned stories, dismissed stories, visited stories, collapsed comment threads, the comment-sort preference, the domain block-list, and your place in each story (its scroll positions and the comment you'd reached) all live in your browser's `localStorage`. Nothing is sent to the server. Small inline scripts apply your theme, the list width, the article split, and the hidden-list mode before the first paint, so reloading doesn't flash the default layout for a moment.
+- **The applets are windows and pages both.** Each one in the Applets menu opens as a window like a story's, and has a page of its own that works without JavaScript: `/applets/replies?u=pg`, `/applets/hiring?q=remote+rust`, and `/user/hn/pg` for a profile. The server renders all of them from the sites' public APIs (HN's Firebase and Algolia APIs, and Lobsters' JSON). The replies watcher and the hiring filter are PUDL applets, which add the live checking and filtering; PUDL loads their scripts the first time one opens. Profiles are plain server-rendered windows, since there's nothing in them to run. The applets' state (the user you watch, the replies you've read, the hiring thread and words) is kept in your browser by `src/static/continuity.js`, the same host script that keeps each story's place.
+
+- **Browser-local state.** The list width, the article's share of a window, theme choice, the hidden-list mode, pinned stories, dismissed stories, visited stories, collapsed comment threads, the comment-sort preference, the domain block-list, your place in each story (its scroll positions and the comment you'd reached), and the applets' state all live in your browser's `localStorage`. Nothing is sent to the server. Small inline scripts apply your theme, the list width, the article split, and the hidden-list mode before the first paint, so reloading doesn't flash the default layout for a moment.
 
 - **Search.** Search runs against HN only, at `/hn/search`. Lobsters has a search page, but it returns HTML rather than JSON, so instead of scraping that HTML and watching it break every time Lobsters tweaks its markup, YAVCHN returns 404 for `/lobsters/search`.
 

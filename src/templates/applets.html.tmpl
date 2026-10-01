@@ -3,8 +3,9 @@
      for a fragment the view model it renders. */}}
 
 {{ define "appbody" }}
-{{ if eq .Kind "profile" }}{{ template "profile" .Profile }}
-{{ else if eq .Kind "lookup" }}{{ template "lookup" . }}
+{{ if eq .Kind "profile" }}{{ template "lookupbar" .Lookup }}{{ template "profile" .Profile }}
+{{ else if eq .Kind "lookup" }}{{ template "lookupbar" .Lookup }}
+<p class="app-note lookup-note">Enter a user name and choose the site. A commenter's name in any discussion opens their profile too.</p>
 {{ else if eq .Kind "replies" }}{{ template "repliesapp" .Replies }}
 {{ else if eq .Kind "hiring" }}{{ template "hiringapp" .Hiring }}{{ end }}
 {{ end }}
@@ -25,32 +26,36 @@
     <a class="app-site-link" href="{{ .SiteURL }}" target="_blank" rel="noopener">{{ .SiteLabel }}</a>
   </header>
   {{ if .About }}<div class="profile-about comment-text">{{ .About }}</div>{{ end }}
-  <div class="md-section-label">Recent activity</div>
-  {{ if .RecentNote }}<p class="app-note">{{ .RecentNote }}</p>{{ end }}
-  {{ range .Recent }}
-  <div class="md-row"><a class="md-item" href="{{ .PageURL }}" data-win-open="{{ .Key }}">{{ if .Comment }}Comment{{ else }}{{ .Title }}{{ end }}<span class="md-meta num">{{ .Age }}{{ if not .Comment }} &middot; {{ .Score }} points &middot; {{ .Comments }} comments{{ end }}</span>{{ if .Excerpt }}<span class="md-meta">{{ .Excerpt }}</span>{{ end }}</a></div>
+  <div class="md-section-label">Submissions</div>
+  {{ range .Submissions }}
+  <div class="md-row"><a class="md-item" href="{{ .PageURL }}" data-win-open="{{ .Key }}">{{ .Title }}<span class="md-meta num">{{ .Age }} &middot; {{ .Score }} points &middot; {{ .Comments }} comments</span></a></div>
   {{ else }}
-  <p class="app-note">Nothing recent to show.</p>
+  <p class="app-note">{{ if .SubmissionsNote }}{{ .SubmissionsNote }}{{ else }}{{ .Name }} hasn't submitted any stories.{{ end }}</p>
+  {{ end }}
+  <div class="md-section-label">Recent comments</div>
+  {{ range .Comments }}
+  <div class="md-row"><a class="md-item" href="{{ .PageURL }}" data-win-open="{{ .Key }}">{{ .Excerpt }}<span class="md-meta num">{{ .Age }}</span></a></div>
+  {{ else }}
+  <p class="app-note">{{ if .CommentsNote }}{{ .CommentsNote }}{{ else }}No recent comments.{{ end }}</p>
   {{ end }}
 {{ end }}
 </div>
 {{ end }}
 
-{{ define "lookup" }}
-<form class="app user-lookup" action="/user" method="get">
-  <div class="form-group">
-    <label class="form-label" for="lookup-name">User name</label>
-    <input class="form-input" id="lookup-name" name="name" required pattern="[A-Za-z0-9_\-]{1,32}" autocomplete="off" spellcheck="false" autofocus>
+{{/* The lookup bar. On a page it is an ordinary form, which /user
+     redirects to the profile; in a window desktop.js shows the new
+     profile in the window's place, so one window looks up user after
+     user. */}}
+{{ define "lookupbar" }}
+<form class="user-lookup lookup-bar" action="/user" method="get" role="search">
+  <select class="form-select lookup-site" name="source" aria-label="The site">
+    <option value="hn"{{ if eq .Source "hn" }} selected{{ end }}>Hacker News</option>
+    <option value="lobsters"{{ if eq .Source "lobsters" }} selected{{ end }}>Lobsters</option>
+  </select>
+  <div class="md-filter-group lookup-name">
+    <input class="md-filter" type="search" name="name" value="{{ .Name }}" placeholder="User name" aria-label="User name" required pattern="[A-Za-z0-9_\-]{1,32}" autocomplete="off" spellcheck="false"{{ if not .Name }} autofocus{{ end }}>
+    <button class="icon-btn md-filter-go" type="submit" aria-label="Look up this user"></button>
   </div>
-  <fieldset class="form-fieldset">
-    <legend>Site</legend>
-    <div class="form-options inline">
-      <label class="check"><input type="radio" name="source" value="hn" checked> Hacker News</label>
-      <label class="check"><input type="radio" name="source" value="lobsters"> Lobsters</label>
-    </div>
-  </fieldset>
-  <div class="app-actions"><button class="btn btn-primary" type="submit">Look up</button></div>
-  <p class="app-note">A commenter's name in any discussion opens their profile too.</p>
 </form>
 {{ end }}
 
