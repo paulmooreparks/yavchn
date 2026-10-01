@@ -156,7 +156,7 @@
     <section class="split-pane story-pane story-discussion" aria-label="Discussion">
       <div class="story-bar">
         <span class="story-bar-label">{{ if .IsComment }}Replies{{ else }}Discussion{{ end }}</span>
-        <span class="story-bar-meta num">{{ if not .IsComment }}{{ .Comments }} comments &middot; {{ .Score }} points{{ if .By }} &middot; {{ end }}{{ end }}{{ if .By }}{{ .By }}{{ end }}{{ if .Age }} &middot; {{ .Age }}{{ end }}</span>
+        <span class="story-bar-meta num">{{ if not .IsComment }}{{ .Comments }} comments &middot; {{ .Score }} points{{ if .By }} &middot; {{ end }}{{ end }}{{ if .ByKey }}<a class="story-poster" href="{{ .ByURL }}" data-win-open="{{ .ByKey }}">{{ .By }}</a>{{ else if .By }}{{ .By }}{{ end }}{{ if .Age }} &middot; {{ .Age }}{{ end }}</span>
         <span class="story-bar-spacer"></span>
         <div class="seg sm story-sort" role="group" aria-label="Sort the comments">
           <button type="button" data-sort="best" aria-pressed="true">Best</button>

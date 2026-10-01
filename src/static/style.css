@@ -413,6 +413,17 @@ html.focus-mode .md-resize {
   white-space: nowrap;
 }
 
+/* The poster's name opens their profile. It keeps the colour of the bar's
+   text around it and is marked as a link by its underline, as a
+   commenter's name is. */
+.story-poster {
+  color: inherit;
+}
+
+.story-poster:hover {
+  color: var(--text);
+}
+
 .story-bar .icon-btn {
   width: 26px;
   height: 26px;

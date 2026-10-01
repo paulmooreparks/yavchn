@@ -212,6 +212,7 @@ func TestRender_ListWithWindows(t *testing.T) {
 		`class="win story-win active" data-win="hn-1" data-win-mode="maximized"`,
 		`data-win="hn-404"`, // an unknown story still gets a window, saying so
 		`Story unavailable`,
+		`<a class="story-poster" href="/user/hn/ann" data-win-open="user-hn-ann">ann</a>`,
 		`Body </p>`,
 	} {
 		if !strings.Contains(body, want) {

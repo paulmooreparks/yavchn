@@ -389,6 +389,7 @@ type windowVM struct {
 	Key, Source, ID  string
 	Title, URL, Host string
 	By, Age          string
+	ByKey, ByURL     string // the poster's profile window and page
 	Score, Comments  int
 	SourceURL        string // the discussion on the source's own site
 	SourceLabel      string // "Open on HN" / "Open on Lobsters"
@@ -457,6 +458,7 @@ func (s *Server) storyWindow(ctx context.Context, key string) (windowVM, bool) {
 			w.Title = "Comment by " + item.By
 		}
 		w.By = item.By
+		w.ByKey, w.ByURL = authorLink(srcName, item.By)
 		w.Age = relTime(item.Time)
 		w.Score = item.Score
 		w.Comments = item.Descendants
