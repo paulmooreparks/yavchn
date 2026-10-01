@@ -234,12 +234,14 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 		Byline:  parsed.Byline,
 		Content: template.HTML(sanitized),
 	}
+	// The cache saves the next reader a fetch; failing to write it costs
+	// this reader nothing, so the article is served either way.
 	if _, err := e.db.ExecContext(ctx,
 		`INSERT OR REPLACE INTO articles
 		   (url_hash, url, fetched_at, title, byline, content)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		hash, rawURL, time.Now().Unix(), a.Title, a.Byline, sanitized); err != nil {
-		return nil, fmt.Errorf("cache store: %w", err)
+		slog.Warn("article cache store failed", "url", rawURL, "err", err)
 	}
 	return a, nil
 }

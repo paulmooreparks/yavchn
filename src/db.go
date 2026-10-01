@@ -24,6 +24,12 @@ func OpenDB(ctx context.Context, path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// SQLite takes one writer at a time, and a writer on one connection can
+	// get SQLITE_BUSY from another at once, busy_timeout or no, as a burst
+	// of article extractions showed. One connection queues every statement
+	// in Go instead; the cache's queries are single-row lookups by key, so
+	// readers lose nothing that matters.
+	db.SetMaxOpenConns(1)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
