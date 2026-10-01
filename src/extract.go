@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-shiori/dom"
 	readability "github.com/go-shiori/go-readability"
 	"golang.org/x/sync/singleflight"
 )
@@ -92,7 +93,7 @@ func (e *Extractor) Get(ctx context.Context, rawURL, requesterIP string) (*Artic
 	if !isAllowedURL(rawURL) {
 		return nil, errors.New("url scheme not allowed")
 	}
-	hash := urlHash(rawURL)
+	hash := articleKey(rawURL)
 
 	if a, fetchedAt, err := e.fromCacheWithAge(ctx, hash); err == nil {
 		if time.Since(time.Unix(fetchedAt, 0)) >= articleFreshnessTTL {
@@ -127,7 +128,7 @@ func (e *Extractor) ForceGet(ctx context.Context, rawURL, requesterIP string) (*
 	if !isAllowedURL(rawURL) {
 		return nil, errors.New("url scheme not allowed")
 	}
-	hash := urlHash(rawURL)
+	hash := articleKey(rawURL)
 	v, err, _ := e.sf.Do("force:"+hash, func() (interface{}, error) {
 		if !e.rate.Allow(requesterIP) {
 			return nil, errRateLimited
@@ -211,7 +212,15 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 		return nil, fmt.Errorf("not html: %s", ctype)
 	}
 
-	parsed, err := readability.FromReader(io.LimitReader(resp.Body, maxResponseBytes), parsedURL)
+	// Parsed here, with the charset detection readability's own parser uses,
+	// so the page's address for relative links and its lazily loaded images
+	// can be put right before readability reads it (extractfix.go).
+	doc, err := dom.Parse(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return nil, err
+	}
+	fixLazyImages(doc)
+	parsed, err := readability.FromDocument(doc, documentBase(doc, parsedURL))
 	if err != nil {
 		return nil, err
 	}
@@ -267,6 +276,16 @@ func (e *Extractor) runGC(ctx context.Context) {
 		slog.Info("article cache gc", "evicted", n, "ttl_days", 30)
 	}
 }
+
+// extractVersion names how articles are extracted. Changing it when the
+// extraction changes makes every cached article a miss, so readers get the
+// new extraction at once rather than the cached one for up to 30 days; the
+// old rows age out through runGC. v2 honours <base href> and lazily loaded
+// images (extractfix.go).
+const extractVersion = "v2"
+
+// articleKey is an article's row in the cache.
+func articleKey(rawURL string) string { return urlHash(extractVersion + "|" + rawURL) }
 
 func urlHash(s string) string {
 	sum := sha256.Sum256([]byte(s))

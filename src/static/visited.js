@@ -30,11 +30,27 @@
     save(arr);
   }
 
+  /* A read row is marked three ways (style.css): its title is muted and
+     lighter, a tick stands before it, and assistive technology hears
+     "read" after the row's words, so the state never rests on colour
+     alone. The words go last because other scripts read a row's title
+     from the link's first child. */
   function apply() {
     var set = {};
     load().forEach(function (id) { set[id] = true; });
     document.querySelectorAll('.story-list .story-row[data-id]').forEach(function (row) {
-      row.classList.toggle('visited', !!set[row.dataset.id]);
+      var read = !!set[row.dataset.id];
+      row.classList.toggle('visited', read);
+      var link = row.querySelector('.md-item');
+      var label = link && link.querySelector(':scope > .story-read-label');
+      if (read && link && !label) {
+        label = document.createElement('span');
+        label.className = 'visually-hidden story-read-label';
+        label.textContent = ', read';
+        link.appendChild(label);
+      } else if (!read && label) {
+        label.remove();
+      }
     });
   }
 

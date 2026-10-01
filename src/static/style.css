@@ -305,8 +305,41 @@ html.focus-mode .md-resize {
   box-shadow: inset 3px 0 0 var(--text-muted);
 }
 
+/* Read and unread differ three ways, so neither colour nor weight alone
+   carries it: an unread title is in the full text colour at weight 600; a
+   read one is muted at the normal weight, behind a tick. The row of the
+   window in front keeps PUDL's own bold and accent edge, tick and all. */
+.story-row .md-item {
+  font-weight: 600;
+}
+
+.story-row.visited .md-item {
+  font-weight: 400;
+}
+
 .story-row.visited:not(:has(> [aria-current]:not([aria-current="false"]))) .md-item {
   color: var(--text-muted);
+}
+
+.story-row.visited .md-item::before {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-inline-end: 5px;
+  vertical-align: -1px;
+  background: var(--text-muted);
+  -webkit-mask: var(--glyph-tick) center / contain no-repeat;
+  mask: var(--glyph-tick) center / contain no-repeat;
+}
+
+.story-row:has(> [aria-current]:not([aria-current="false"])) .md-item {
+  font-weight: 700;
+}
+
+/* The metadata keeps its own weight whatever the title's. */
+.story-row .md-item .md-meta {
+  font-weight: 500;
 }
 
 .story-row.dismissed,
