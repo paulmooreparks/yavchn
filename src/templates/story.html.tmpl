@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+{{ template "head" . }}
+</head>
+<body class="story-page">
+{{ template "topbar" . }}
+<main class="story-page-main">
+  <header class="story-page-head">
+    <h1 class="story-page-title">{{ .Story.Title }}</h1>
+    <a class="story-page-back" href="/{{ .Story.Source }}/?open={{ .Story.Key }}&amp;top={{ .Story.Key }}">Open in a window</a>
+  </header>
+  {{ template "storybody" .Story }}
+</main>
+{{ template "dialogs" . }}
+{{ template "scripts" . }}
+</body>
+</html>

@@ -1,86 +1,75 @@
+/* Infinite scroll: scrolling the story list near its end fetches the next
+   page of the same list and appends its rows. The pager stays below the
+   rows for a reader without script, and goes when the list ends. A new
+   list from a region swap starts again from its own page. */
 (function () {
-  var pane = document.querySelector('.pane-list');
-  if (!pane) return;
-  var ul = pane.querySelector('.stories');
-  if (!ul) return;
+  'use strict';
 
-  // Derive the base path for the current source-list. Strip a trailing
-  // /s/{id} so /hn/show/s/123 becomes /hn/show/. IDs are alphanumeric
-  // (HN: digits; Lobsters: base36) so the regex matches both.
-  var basePath = window.location.pathname.replace(/\/s\/[a-z0-9]+\/?$/i, '/');
-  if (!basePath.endsWith('/')) basePath = basePath + '/';
+  function setup() {
+    var list = document.querySelector('.story-list');
+    var box = list && list.querySelector('.stories');
+    if (!box || list.hasAttribute('data-infinite')) return;
+    list.setAttribute('data-infinite', '');
 
-  var params = new URLSearchParams(window.location.search);
-  var currentPage = parseInt(params.get('page') || '1', 10);
-  if (isNaN(currentPage) || currentPage < 1) currentPage = 1;
+    // The list's own address, without the windows or the page number.
+    var q = new URLSearchParams(location.search);
+    var page = parseInt(q.get('page') || '1', 10);
+    if (isNaN(page) || page < 1) page = 1;
+    Array.from(q.keys()).forEach(function (k) {
+      if (k === 'page' || k === 'open' || k === 'top' || k === 'min' || k.indexOf('p.') === 0) q.delete(k);
+    });
+    var hasNext = box.dataset.hasNext === 'true';
+    var inFlight = false;
 
-  var hasNext = ul.dataset.hasNext === 'true';
-  var inFlight = false;
-  var pager = pane.querySelector('.pager');
-
-  function nearBottom() {
-    return pane.scrollTop + pane.clientHeight >= pane.scrollHeight - 200;
-  }
-
-  function markEnd() {
-    if (pager) pager.style.display = 'none';
-    if (!pane.querySelector('.end-of-list')) {
-      var div = document.createElement('div');
-      div.className = 'end-of-list';
-      div.textContent = 'End of list';
-      ul.insertAdjacentElement('afterend', div);
+    function nearBottom() {
+      return list.scrollTop + list.clientHeight >= list.scrollHeight - 200;
     }
-  }
 
-  function loadMore() {
-    if (inFlight || !hasNext) return;
-    inFlight = true;
-    var nextPage = currentPage + 1;
-    var url = basePath + '?page=' + nextPage;
+    function markEnd() {
+      var pager = list.querySelector('.story-pager');
+      if (pager) pager.hidden = true;
+      if (!list.querySelector('.end-of-list')) {
+        var div = document.createElement('div');
+        div.className = 'end-of-list';
+        div.textContent = 'End of the list';
+        list.appendChild(div);
+      }
+    }
 
-    fetch(url, { credentials: 'omit', headers: { 'Accept': 'text/html' } })
-      .then(function (r) {
-        if (!r.ok) throw new Error('upstream ' + r.status);
-        return r.text();
-      })
-      .then(function (html) {
-        var doc = new DOMParser().parseFromString(html, 'text/html');
-        var newUL = doc.querySelector('.stories');
-        if (!newUL) {
-          hasNext = false;
-          markEnd();
-          return;
-        }
-        var newStories = newUL.querySelectorAll('.story');
-        if (!newStories.length) {
-          hasNext = false;
-          markEnd();
-          return;
-        }
-        Array.prototype.forEach.call(newStories, function (li) {
-          ul.appendChild(li);
+    function loadMore() {
+      if (inFlight || !hasNext || !list.isConnected) return;
+      inFlight = true;
+      q.set('page', String(page + 1));
+      fetch(location.pathname + '?' + q.toString(), { credentials: 'omit', headers: { Accept: 'text/html' } })
+        .then(function (r) {
+          if (!r.ok) throw new Error('upstream ' + r.status);
+          return r.text();
+        })
+        .then(function (html) {
+          var doc = new DOMParser().parseFromString(html, 'text/html');
+          var next = doc.querySelector('.story-list .stories');
+          var fresh = next ? next.querySelectorAll('.story-row') : [];
+          if (!fresh.length) { hasNext = false; markEnd(); return; }
+          fresh.forEach(function (row) {
+            // A story already in the list, which moved up a page while the
+            // reader scrolled, is not listed twice.
+            if (!document.getElementById(row.id)) box.appendChild(document.importNode(row, true));
+          });
+          box.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));
+          page += 1;
+          hasNext = next.dataset.hasNext === 'true';
+          if (!hasNext) markEnd();
+        })
+        .catch(function () { /* hasNext stays true, so scrolling tries again */ })
+        .finally(function () {
+          inFlight = false;
+          if (hasNext && nearBottom()) loadMore();
         });
-        // Tell stateful modules (pin / dismiss / visited) that fresh rows
-        // are in the DOM so they can re-apply their per-row classes.
-        ul.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));
-        currentPage = nextPage;
-        hasNext = newUL.dataset.hasNext === 'true';
-        if (!hasNext) markEnd();
-      })
-      .catch(function () {
-        // Leave hasNext true so the user can try again by scrolling.
-      })
-      .finally(function () {
-        inFlight = false;
-        // If the viewport still isn't full, keep loading.
-        if (hasNext && nearBottom()) loadMore();
-      });
+    }
+
+    list.addEventListener('scroll', function () { if (nearBottom()) loadMore(); }, { passive: true });
+    if (hasNext && nearBottom()) loadMore();
   }
 
-  pane.addEventListener('scroll', function () {
-    if (nearBottom()) loadMore();
-  }, { passive: true });
-
-  // Some viewports + short lists may not need scrolling to reach the bottom.
-  if (hasNext && nearBottom()) loadMore();
+  window.yavchn.onList(setup);
 })();

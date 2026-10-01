@@ -1,11 +1,14 @@
+/* Domain filters, kept in this browser under yavchn-blocked-domains. A
+   story whose host is a blocked domain, or a subdomain of one, is hidden
+   from every list. The list of domains is edited in the filters dialog,
+   which the View menu opens. */
 (function () {
+  'use strict';
   var KEY = 'yavchn-blocked-domains';
 
   function load() {
     try {
-      var raw = localStorage.getItem(KEY);
-      if (!raw) return [];
-      var arr = JSON.parse(raw);
+      var arr = JSON.parse(localStorage.getItem(KEY) || '[]');
       return Array.isArray(arr) ? arr.filter(function (s) { return typeof s === 'string' && s; }) : [];
     } catch (e) { return []; }
   }
@@ -36,111 +39,88 @@
 
   function apply() {
     var blocked = load();
-    var rows = document.querySelectorAll('.pane-list .story[data-id]');
-    if (!rows.length) return;
-    for (var i = 0; i < rows.length; i++) {
-      var host = hostOfRow(rows[i]);
-      var hide = false;
-      for (var j = 0; j < blocked.length; j++) {
-        if (hostMatches(host, blocked[j])) { hide = true; break; }
-      }
-      rows[i].classList.toggle('filtered', hide);
-    }
+    document.querySelectorAll('.story-list .story-row[data-id]').forEach(function (row) {
+      var host = row.dataset.host || '';
+      row.classList.toggle('filtered', blocked.some(function (b) { return hostMatches(host, b); }));
+    });
   }
 
-  function hostOfRow(row) {
-    var a = row.querySelector('.meta .host');
-    if (!a || !a.href) return '';
-    try { return new URL(a.href).hostname; } catch (e) { return ''; }
-  }
+  var dialog = document.getElementById('filters-dialog');
 
-  function renderList(dialog) {
+  function renderList() {
+    if (!dialog) return;
     var ul = dialog.querySelector('.filters-list');
     var empty = dialog.querySelector('.filters-empty');
-    if (!ul) return;
-    var arr = load();
-    ul.innerHTML = '';
-    if (!arr.length) {
-      if (empty) empty.hidden = false;
-      return;
-    }
-    if (empty) empty.hidden = true;
-    arr.sort();
-    for (var i = 0; i < arr.length; i++) {
+    var arr = load().sort();
+    ul.textContent = '';
+    if (empty) empty.hidden = arr.length > 0;
+    arr.forEach(function (d) {
       var li = document.createElement('li');
       li.className = 'filters-list-item';
       var name = document.createElement('span');
       name.className = 'filters-list-name';
-      name.textContent = arr[i];
+      name.textContent = d;
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'filters-list-remove';
-      btn.setAttribute('aria-label', 'Unblock ' + arr[i]);
-      btn.dataset.domain = arr[i];
-      btn.textContent = '×';
+      btn.className = 'icon-btn filters-list-remove';
+      btn.setAttribute('aria-label', 'Unblock ' + d);
+      btn.dataset.domain = d;
       li.appendChild(name);
       li.appendChild(btn);
       ul.appendChild(li);
-    }
+    });
   }
 
-  // Dialog wiring -- mirrors help.js pattern.
-  var dialog = document.getElementById('filters-dialog');
-  var openBtn = document.querySelector('.filters-button');
-  if (dialog && openBtn && typeof dialog.showModal === 'function') {
-    openBtn.addEventListener('click', function () {
-      renderList(dialog);
-      if (dialog.open) return;
-      // Close any other open <dialog> (e.g. help) so dialogs don't stack.
-      var others = document.querySelectorAll('dialog[open]');
-      for (var i = 0; i < others.length; i++) {
-        if (others[i] !== dialog) others[i].close();
-      }
-      dialog.showModal();
-    });
-    var closeBtn = dialog.querySelector('.help-dialog-close');
-    if (closeBtn) closeBtn.addEventListener('click', function () { dialog.close(); });
-    dialog.addEventListener('click', function (e) {
-      if (e.target === dialog) dialog.close();
-    });
-
-    // Add a domain via the inline form.
+  if (dialog) {
     var form = dialog.querySelector('.filters-add');
-    if (form) {
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var input = form.querySelector('.filters-add-input');
-        if (!input) return;
-        var d = normalize(input.value);
-        if (!d) {
-          input.setCustomValidity('Enter a domain like example.com');
-          input.reportValidity();
-          return;
-        }
-        input.setCustomValidity('');
-        var arr = load();
-        if (arr.indexOf(d) < 0) {
-          arr.push(d);
-          save(arr);
-        }
-        input.value = '';
-        renderList(dialog);
-        apply();
-      });
-    }
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var input = form.querySelector('input[name="domain"]');
+      var d = normalize(input.value);
+      if (!d) {
+        input.setCustomValidity('Enter a domain like example.com');
+        input.reportValidity();
+        return;
+      }
+      input.setCustomValidity('');
+      var arr = load();
+      if (arr.indexOf(d) < 0) { arr.push(d); save(arr); }
+      input.value = '';
+      renderList();
+      apply();
+    });
+    form.querySelector('input[name="domain"]').addEventListener('input', function (e) {
+      e.target.setCustomValidity('');
+    });
 
-    // Remove a domain via the × in each row.
     dialog.addEventListener('click', function (e) {
       var btn = e.target.closest('.filters-list-remove');
       if (!btn) return;
-      var d = btn.dataset.domain;
-      if (!d) return;
-      var arr = load().filter(function (x) { return x !== d; });
-      save(arr);
-      renderList(dialog);
+      save(load().filter(function (x) { return x !== btn.dataset.domain; }));
+      renderList();
       apply();
     });
+    renderList();
   }
 
-  apply();
+  // For the story applet's menu, which blocks the site of the story in front.
+  window.yavchn.hiding = window.yavchn.hiding || {};
+  window.yavchn.hiding.blockDomain = function (host) {
+    var d = normalize(host);
+    if (!d) return;
+    var arr = load();
+    if (arr.indexOf(d) < 0) { arr.push(d); save(arr); }
+    renderList();
+    apply();
+    document.dispatchEvent(new CustomEvent('yavchn:list-change'));
+  };
+
+  window.addEventListener('storage', function (e) {
+    if (e.key !== KEY) return;
+    renderList();
+    apply();
+  });
+
+  window.yavchn.onList(apply);
+  document.addEventListener('yavchn:rows-appended', apply);
 })();

@@ -1,352 +1,124 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<title>{{ if .Selected }}{{ .Selected.Title }} &middot; YAVCHN{{ else }}YAVCHN{{ end }}</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Three-pane Hacker News reader: story list, reader-mode article, threaded discussion side by side.">
-<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-<link rel="stylesheet" href="/static/style.css">
-<meta property="og:title" content="YAVCHN">
-<meta property="og:description" content="Three-pane Hacker News reader: story list, reader-mode article, threaded discussion side by side.">
-<meta property="og:image" content="https://yavchn.parkscomputing.com/static/logo.png">
-<meta property="og:url" content="https://yavchn.parkscomputing.com/">
-<meta property="og:type" content="website">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="YAVCHN">
-<meta name="twitter:description" content="Three-pane Hacker News reader: story list, reader-mode article, threaded discussion side by side.">
-<meta name="twitter:image" content="https://yavchn.parkscomputing.com/static/logo.png">
-<script>
-(function () {
-  try {
-    var pref = localStorage.getItem('yavchn-theme');
-    var theme;
-    if (pref === 'dark' || pref === 'light') {
-      theme = pref;
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      theme = 'dark';
-    } else {
-      theme = 'light';
-    }
-    document.documentElement.dataset.theme = theme;
-  } catch (e) { /* no storage / matchMedia */ }
-})();
-(function () {
-  // Splitter positions are stored as percentages so the layout adapts to
-  // any viewport (different monitor, window resize). Legacy px values from
-  // older sessions are migrated to % against the current viewport on first
-  // read and re-persisted, so the next reload starts clean.
-  try {
-    var w = localStorage.getItem('yavchn-list-w');
-    var h = localStorage.getItem('yavchn-article-h');
-    if (!w && !h) return;
-    var headerH = 38;
-    function toPercent(raw, totalPx, key) {
-      if (!raw) return null;
-      raw = raw.trim();
-      if (raw.endsWith('%')) {
-        var p = parseFloat(raw);
-        if (isNaN(p)) return null;
-        // Clamp to sane bounds to defang any corrupt value.
-        p = Math.max(10, Math.min(90, p));
-        return p.toFixed(2) + '%';
-      }
-      if (raw.endsWith('px') && totalPx > 0) {
-        var n = parseFloat(raw);
-        if (isNaN(n)) return null;
-        var pct = (n / totalPx) * 100;
-        pct = Math.max(10, Math.min(90, pct));
-        var out = pct.toFixed(2) + '%';
-        try { localStorage.setItem(key, out); } catch (e) {}
-        return out;
-      }
-      return null;
-    }
-    var listW = toPercent(w, window.innerWidth, 'yavchn-list-w');
-    var artH  = toPercent(h, window.innerHeight - headerH, 'yavchn-article-h');
-    if (!listW && !artH) return;
-    var css = '.layout {';
-    if (listW) css += ' --list-w: ' + listW + ';';
-    if (artH)  css += ' --article-h: ' + artH + ';';
-    css += ' }';
-    var s = document.createElement('style');
-    s.textContent = css;
-    document.head.appendChild(s);
-  } catch (e) { /* no storage */ }
-})();
-(function () {
-  // Apply persisted focus-mode before first paint so the list pane doesn't
-  // flash visible on reload of a focus-mode session.
-  try {
-    if (localStorage.getItem('yavchn-focus') === '1') {
-      document.documentElement.classList.add('focus-mode');
-    }
-  } catch (e) { /* no storage */ }
-})();
-</script>
+{{ template "head" . }}
 </head>
-<body>
-<header>
-  <h1><a href="/"><img src="/static/logo-24x24.png" alt="" class="logo"> YAVCHN</a></h1>
-  <nav class="source-picker" aria-label="News source">
-    {{ range .AllSources }}
-    <a href="{{ .URL }}" class="source-pick{{ if .Active }} active{{ end }}" data-source="{{ .Name }}">{{ .Label }}</a>
-    {{ end }}
-  </nav>
-  <button type="button" class="hamburger-btn" aria-label="Header menu" aria-expanded="false" aria-controls="header-actions">
-    <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-      <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" fill="none"/>
-    </svg>
-  </button>
-  <div class="header-actions" id="header-actions">
-    <a class="source-link hn-link" href="https://news.ycombinator.com/" target="_blank" rel="noopener" title="Hacker News (source)" aria-label="Hacker News (source)">
-      <img src="https://news.ycombinator.com/y18.svg" alt="" width="18" height="18">
-    </a>
-    <a class="source-link lobsters-link" href="https://lobste.rs/" target="_blank" rel="noopener" title="Lobsters (source)" aria-label="Lobsters (source)">
-      <img src="/static/lobsters.svg" alt="" width="18" height="18">
-    </a>
-    <a class="source-link github-link" href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener" title="Source on GitHub" aria-label="Source on GitHub">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.4 3-.405 1.02.005 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-    </a>
-    <button type="button" class="theme-toggle" title="Toggle light/dark theme" aria-label="Toggle theme">
-      <span class="icon-dark" aria-hidden="true">&#9790;</span><span class="icon-light" aria-hidden="true">&#9728;</span>
-    </button>
-    <button type="button" class="focus-button help-button" title="Focus mode (f)" aria-label="Toggle focus mode" aria-pressed="false">&#9716;</button>
-    <button type="button" class="filters-button help-button" title="Domain filters" aria-label="Domain filters" aria-haspopup="dialog">&#9881;</button>
-    <button type="button" class="help-trigger help-button" title="Help (?)" aria-label="Help" aria-haspopup="dialog">?</button>
-  </div>
-</header>
+<body class="desktop">
+{{ template "topbar" . }}
 
-<dialog id="filters-dialog" class="help-dialog" aria-labelledby="filters-dialog-title">
-  <div class="help-dialog-frame">
-    <header class="help-dialog-header">
-      <h2 id="filters-dialog-title">Domain filters</h2>
-      <button type="button" class="help-dialog-close" aria-label="Close domain filters">&times;</button>
-    </header>
-    <div class="help-dialog-body filters-body">
-      <p class="filters-intro">Stories from these domains are hidden from the list. Subdomains match too (blocking <code>substack.com</code> also hides <code>danluu.substack.com</code>).</p>
-      <ul class="filters-list" aria-label="Blocked domains"></ul>
-      <p class="filters-empty" hidden>No domains blocked yet.</p>
-      <form class="filters-add">
-        <input type="text" name="domain" class="filters-add-input" placeholder="example.com" autocomplete="off" spellcheck="false" aria-label="Add domain to block">
-        <button type="submit" class="filters-add-btn">Block</button>
-      </form>
-    </div>
-  </div>
-</dialog>
+<div class="md-layout" data-md-pane="{{ if .Win.Shown }}detail{{ else }}list{{ end }}">
+  <script>
+    /* The list's width is the reader's, applied as the layout is parsed so
+       the page never draws at the default first, and saved whenever
+       pudl-md.js reports a change. */
+    (function (layout) {
+      try {
+        var w = localStorage.getItem('yavchn-sidebar-w');
+        if (w) layout.style.setProperty('--md-sidebar-w', w);
+        layout.addEventListener('pudl:md-resize', function (e) {
+          if (e.detail.reset) localStorage.removeItem('yavchn-sidebar-w');
+          else localStorage.setItem('yavchn-sidebar-w', e.detail.width + 'px');
+        });
+      } catch (e) { /* storage blocked: the default width serves */ }
+    })(document.currentScript.parentElement);
+  </script>
 
-<dialog id="help-dialog" class="help-dialog" aria-labelledby="help-dialog-title">
-  <div class="help-dialog-frame">
-    <header class="help-dialog-header">
-      <h2 id="help-dialog-title">Help</h2>
-      <button type="button" class="help-dialog-close" aria-label="Close help">&times;</button>
-    </header>
-    <div class="help-dialog-body">
-
-      <section>
-        <h3>Keyboard</h3>
-        <dl>
-          <dt><kbd>j</kbd> / <kbd>k</kbd></dt>
-          <dd>Move focus down / up the story list (arrow keys scroll the focused pane)</dd>
-          <dt><kbd>Enter</kbd></dt>
-          <dd>Open the focused story (loads its article and discussion in the right panes)</dd>
-          <dt><kbd>n</kbd> / <kbd>N</kbd></dt>
-          <dd>Jump to the next / previous top-level comment in the discussion (the focused comment is highlighted)</dd>
-          <dt><kbd>c</kbd></dt>
-          <dd>Collapse / expand the focused top-level comment</dd>
-          <dt><kbd>f</kbd></dt>
-          <dd>Toggle focus mode (hide the story list to give the article + discussion the full width)</dd>
-          <dt><kbd>p</kbd></dt>
-          <dd>Pin / unpin the focused story (saves it to the Pinned tab)</dd>
-          <dt><kbd>s</kbd></dt>
-          <dd>Cycle focus through the splitter bars (then use arrow keys to resize; <kbd>Esc</kbd> exits)</dd>
-          <dt><kbd>?</kbd></dt>
-          <dd>Toggle this help</dd>
-          <dt><kbd>Esc</kbd></dt>
-          <dd>Close this help</dd>
-        </dl>
-      </section>
-
-      <section>
-        <h3>Mouse and touch</h3>
-        <ul>
-          <li>Click a story title to load its article and discussion in the right panes; the list stays where you left it (your scroll position and any infinite-scrolled extra rows are preserved).</li>
-          <li>Scroll the story list down past the visible rows to load more stories.</li>
-          <li>Drag the splitter bars between panes to resize them; the layout you chose persists across reloads.</li>
-          <li>Click <strong>Open original &uarr;</strong> in the article pane to read the full source page in a new tab.</li>
-          <li>Click <strong>Open on HN &uarr;</strong> in the discussion pane (or the small &uarr; next to any comment) to vote, reply, save, or hide on news.ycombinator.com.</li>
-        </ul>
-      </section>
-
-      <section>
-        <h3>Source tabs</h3>
-        <p>The tabs above the story list switch the feed: <strong>Pinned</strong>, <strong>Top</strong>, <strong>Show HN</strong>, <strong>Ask HN</strong>, <strong>New</strong>, <strong>Best</strong>, <strong>Jobs</strong>.</p>
-      </section>
-
-      <section>
-        <h3>Pinned</h3>
-        <p>Each story row carries a small outline pin at the far left. Click it to save that story for later; the glyph fills in to show it's pinned. The <strong>Pinned</strong> tab at the start of the source-tabs row collects everything you've saved, even after it falls off the HN front page. Pinned state is stored in your browser only &mdash; nothing is sent to the server.</p>
-      </section>
-
-      <section>
-        <h3>Theme</h3>
-        <p>The sun/moon button in the header toggles between light and dark themes. The first visit follows your operating system's preference.</p>
-      </section>
-
-      <section>
-        <h3>About</h3>
-        <p>YAVCHN never sees your HN credentials. The discussion is fetched server-side and rendered into the pane; logged-in actions hand off to news.ycombinator.com in a new tab where your existing session does the work.</p>
-        <p>Open source: <a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">github.com/paulmooreparks/yavchn</a>.</p>
-      </section>
-
-    </div>
-  </div>
-</dialog>
-<div class="layout">
-
-  <aside class="pane pane-list" data-source="{{ .Source }}">
-    {{ if .ShowSearch }}
-    <form class="search-bar" action="/hn/search" method="get" role="search">
-      <div class="search-bar-frame">
-        <input type="search" name="q" placeholder="Search HN&hellip;" value="{{ .Query }}" aria-label="Search Hacker News" autocomplete="off">
-        <button type="submit" class="search-submit" aria-label="Search">
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-            <circle cx="7" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
-            <line x1="10" y1="10" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </div>
+  <div class="md-toolbar site-listbar" data-region="listbar">
+    {{ if .Finder }}
+    <form class="md-filter-group find-form" action="/find" method="get" role="search">
+      <input class="md-filter" type="search" name="url" value="{{ .FindURL }}" placeholder="Paste a link to find its discussions&hellip;" aria-label="The link to find discussions of" autocomplete="off" spellcheck="false">
+      <button class="icon-btn md-filter-go" type="submit" aria-label="Find its discussions"></button>
     </form>
-    {{ end }}
-    <nav class="source-tabs">
-    {{ range .Tabs }}
-      <a href="{{ .URL }}"{{ if .Active }} class="active"{{ end }}>{{ .Label }}</a>
-    {{ end }}
-    </nav>
-    {{ if .ListError }}
-    <div class="list-error">
-      <h2>Front page unavailable</h2>
-      <p>{{ .ListError }}</p>
-      <p><a class="cta" href="{{ .RetryURL }}">Retry</a></p>
-    </div>
     {{ else }}
-    <ul class="stories" data-has-next="{{ if .HasNext }}true{{ else }}false{{ end }}">
-    {{ range .Stories }}
-    <li class="story{{ if .Selected }} selected{{ end }}" data-id="{{ .ID }}" data-source="{{ .Source }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}">
-      <button type="button" class="pin-btn" title="Pin this story" aria-label="Pin this story" aria-pressed="false">
-        <svg class="pin-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-          <path d="M5 2h6v3l2 3H9v6l-1 1-1-1V8H3l2-3V2z"/>
-        </svg>
-      </button>
-      <span class="rank">{{ .Rank }}.</span>
-      <div class="body">
-        <div class="title"><a href="{{ .SelectURL }}">{{ .Title }}</a></div>
-        <div class="meta">
-          <a class="host" href="{{ .URL }}" target="_blank" rel="noopener">{{ .Host }} &uarr;</a>
-          &middot; {{ .Score }} pts
-          &middot; {{ .By }}
-          &middot; {{ .Age }}
-          &middot; {{ .Comments }} comments
+      {{ if .ShowSearch }}
+      <form class="md-filter-group" action="/hn/search" method="get" role="search">
+        <input class="md-filter" type="search" name="q" value="{{ .Query }}" placeholder="Search Hacker News&hellip;" aria-label="Search Hacker News" autocomplete="off">
+        <button class="icon-btn md-filter-go" type="submit" aria-label="Search"></button>
+      </form>
+      {{ end }}
+      {{ if .Tabs }}
+      <nav class="seg sm list-tabs" data-seg-menu aria-label="{{ .SourceLabel }} lists">
+        {{ range .Tabs }}<a href="{{ .URL }}"{{ if .Active }} aria-current="page"{{ end }}>{{ .Label }}</a>{{ end }}
+      </nav>
+      {{ end }}
+      {{ if eq .Source "pinned" }}<span class="list-name">Pinned stories</span>{{ end }}
+    {{ end }}
+  </div>
+
+  <div class="md-body">
+    <nav class="md-sidebar story-list" data-region="list" data-source="{{ .Source }}"{{ if and .Finder .Stories }} data-auto-open{{ end }} aria-label="Stories">
+      {{ if .ListError }}
+      <div class="notice danger list-notice" role="alert">
+        <div class="notice-content">
+          <p class="notice-title">This list is unavailable</p>
+          <p class="notice-body">{{ .ListError }}</p>
+          <div class="notice-actions"><a class="btn btn-sm" href="{{ .RetryURL }}">Try again</a></div>
         </div>
       </div>
-      <button type="button" class="dismiss-btn" title="Hide this story" aria-label="Hide this story">&times;</button>
-    </li>
-    {{ end }}
-    </ul>
-    <div class="hidden-banner" hidden><button type="button" class="hidden-banner-show">&nbsp;</button></div>
-    <nav class="pager">
-      {{ if .HasPrev }}<a href="{{ .PrevURL }}">&larr; prev</a>{{ else }}<span class="disabled">&larr; prev</span>{{ end }}
-      <span class="page-num">page {{ .Page }}</span>
-      {{ if .HasNext }}<a href="{{ .NextURL }}">next &rarr;</a>{{ else }}<span class="disabled">next &rarr;</span>{{ end }}
-    </nav>
-    {{ end }}
-  </aside>
-
-  <div class="splitter splitter-v" role="separator" aria-orientation="vertical"></div>
-
-  <section class="pane pane-article"{{ if and .Selected .Selected.HasArticle }} data-reader-url="{{ .Selected.URL }}"{{ end }}>
-    {{ if .SelectError }}
-      <div class="pane-header"><span class="pane-label">article</span></div>
-      <div class="pane-body">
-        <div class="article-stub">
-          <h2>Story unavailable</h2>
-          <p class="note">{{ .SelectError }}</p>
+      {{ else }}
+        {{ if .FindNote }}
+        <div class="empty-state list-empty">
+          <p class="empty-state-title">Nothing found</p>
+          <p class="empty-state-body">{{ .FindNote }}</p>
         </div>
-      </div>
-    {{ else if .Selected }}
-      <div class="pane-header">
-        <span class="pane-label">article</span>
-        {{ if .Selected.HasArticle }}<button type="button" class="article-refresh" title="Re-fetch the article from its source" aria-label="Refresh article">&#x21bb;</button>{{ end }}
-        {{ if .Selected.HasArticle }}<a href="{{ .Selected.URL }}" target="_blank" rel="noopener">Open original &uarr;</a>{{ end }}
-      </div>
-      <div class="pane-body">
-        {{ if .Selected.HasArticle }}
-          <div class="article-stub">
-            <h2>{{ .Selected.Title }}</h2>
-            <p class="article-host">{{ .Selected.Host }}</p>
-            <a class="cta" href="{{ .Selected.URL }}" target="_blank" rel="noopener">Open article &uarr;</a>
-            <p class="note js-reader-status">Loading reader-mode&hellip;</p>
-            <noscript><p class="note">Reader-mode requires JavaScript. The "Open article" link above works without it.</p></noscript>
-          </div>
-        {{ else }}
-          <div class="article-stub">
-            <h2>{{ .Selected.Title }}</h2>
-            <p class="note">This is a self-post &mdash; see the discussion below.</p>
+        {{ end }}
+        <div class="stories" data-has-next="{{ if .HasNext }}true{{ else }}false{{ end }}">
+        {{ range .Stories }}
+          {{ if .Section }}<div class="md-section-label">{{ .Section }}</div>{{ end }}
+          <div class="md-row story-row" id="row-{{ .Key }}" data-key="{{ .Key }}" data-id="{{ .ID }}" data-source="{{ .Source }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}">
+            <button type="button" class="icon-btn story-pin" aria-pressed="false" aria-label="Pin this story"></button>
+            <a class="md-item" href="{{ .PageURL }}" data-win-open="{{ .Key }}">{{ .Title }}<span class="md-meta num">{{ if $.Finder }}{{ if .Where }}{{ .Where }} &middot; {{ end }}{{ else }}{{ .Rank }}. {{ .Host }} &middot; {{ end }}{{ .Score }} points{{ if .By }} &middot; {{ .By }}{{ end }} &middot; {{ .Age }} &middot; {{ .Comments }} comments</span></a>
+            <button type="button" class="icon-btn story-hide" aria-label="Hide this story"></button>
           </div>
         {{ end }}
+        </div>
+        <div class="story-hidden" hidden><button type="button" class="btn btn-sm story-show-hidden">Show the hidden stories</button></div>
+        {{ if or .HasPrev .HasNext }}
+        <nav class="pagination story-pager" aria-label="Pages of stories">
+          {{ if .HasPrev }}<a class="page-link" href="{{ .PrevURL }}" rel="prev">Previous</a>{{ else }}<a class="page-link" rel="prev" aria-disabled="true">Previous</a>{{ end }}
+          <span class="pagination-summary">Page {{ .Page }}</span>
+          {{ if .HasNext }}<a class="page-link" href="{{ .NextURL }}" rel="next">Next</a>{{ else }}<a class="page-link" rel="next" aria-disabled="true">Next</a>{{ end }}
+        </nav>
+        {{ end }}
+      {{ end }}
+    </nav>
+    <div class="md-resize" role="separator" aria-orientation="vertical" aria-label="Resize the story list"></div>
+    <div class="md-detail reader-stage" tabindex="0">
+      <div class="reader-col">
+        <a class="md-back" href="{{ .Win.MinAllHref }}" data-win-back>Stories</a>
+        <main class="win-host">
+          <div class="reader-empty" data-region="intro">
+            {{ if .Finder }}
+            <div class="card welcome-card">
+              <h1>Find the conversation behind a link</h1>
+              <p>Paste a link into the box above. YAVCHN looks it up on Hacker News and Lobsters and lists every submission of it, including the times the same article was posted years apart.</p>
+              <p>Each submission opens in a window holding the article and that submission's discussion, so you can read one thread beside another.</p>
+            </div>
+            {{ else }}
+            <div class="card welcome-card">
+              <h1>Pick a story from the list</h1>
+              <p>Each story opens in a window that holds the article, in a reader view, above its discussion. Drag the bar between them to share the room differently.</p>
+              <p>Open several and switch between them from the bar at the foot of this area, or drag them side by side. The arrangement lives in the address, so a bookmark brings it back, and changing lists or sources leaves the windows where they are.</p>
+              <p>Press <kbd>?</kbd> for the keyboard, or open the Help menu.</p>
+            </div>
+            {{ end }}
+          </div>
+          <div class="win-layer" data-win-layer data-win-src="/window/{key}" data-win-menu{{ if .Win.LayerStyle }} style="{{ .Win.LayerStyle }}"{{ end }}>
+            {{ range .Win.List }}{{ template "window" . }}{{ end }}
+          </div>
+        </main>
+        <div class="win-bar">
+          <nav class="win-dock win-bar-dock" data-win-dock aria-label="Open stories"></nav>
+          <a class="icon-btn min-all" data-win-back href="{{ .Win.MinAllHref }}"{{ if not .Win.Shown }} aria-disabled="true"{{ end }} aria-label="Minimize all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="13" height="9" rx="1.5"/><line x1="4.5" y1="14" x2="11.5" y2="14"/><path d="M6 5.5l2 2 2-2"/></svg></a>
+          <a class="icon-btn restore-all" data-win-restore href="{{ .Win.RestoreAllHref }}"{{ if not .Win.AnyMin }} aria-disabled="true"{{ end }} aria-label="Restore all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="13" height="9" rx="1.5"/><line x1="4.5" y1="14" x2="11.5" y2="14"/><path d="M6 7.5l2-2 2 2"/></svg></a>
+          <a class="icon-btn close-all" data-close-all href="{{ .Win.CloseAllHref }}"{{ if not .Win.Open }} aria-disabled="true" tabindex="-1"{{ end }} aria-label="Close all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="4.5" width="9" height="9" rx="1.5"/><path d="M5.5 4V3a1.5 1.5 0 0 1 1.5-1.5h6A1.5 1.5 0 0 1 14.5 3v6A1.5 1.5 0 0 1 13 10.5h-1"/><line x1="4" y1="7" x2="8" y2="11"/><line x1="8" y1="7" x2="4" y2="11"/></svg></a>
+        </div>
       </div>
-    {{ else }}
-      <div class="article-stub empty"><p>Click a story to view its article.</p></div>
-    {{ end }}
-  </section>
-
-  <div class="splitter splitter-h" role="separator" aria-orientation="horizontal"></div>
-
-  <section class="pane pane-discussion"{{ if .Selected }} data-discussion-id="{{ .Selected.ID }}" data-discussion-source="{{ .Selected.Source }}"{{ end }}>
-    {{ if .SelectError }}
-      <div class="pane-header"><span class="pane-label">discussion</span></div>
-      <div class="pane-body">
-        <p class="empty-note">{{ .SelectError }}</p>
-      </div>
-    {{ else if .Selected }}
-      <div class="pane-header">
-        <span class="pane-label">discussion</span>
-        <label class="comment-sort-wrap"><span class="visually-hidden">Sort comments</span>
-          <select class="comment-sort" aria-label="Sort comments">
-            <option value="best">Best</option>
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-          </select>
-        </label>
-        <a href="{{ .Selected.HNURL }}" target="_blank" rel="noopener">{{ .Selected.ExternalLabel }} &uarr;</a>
-      </div>
-      <div class="pane-body">
-        <p class="empty-note js-discussion-status">Loading discussion&hellip;</p>
-        <noscript><p class="empty-note">Discussion requires JavaScript. Use "Open on HN" above.</p></noscript>
-      </div>
-    {{ else }}
-      <div class="article-stub empty"><p>Click a story to view the discussion.</p></div>
-    {{ end }}
-  </section>
-
+    </div>
+  </div>
 </div>
-<script src="/static/reader.js" defer></script>
-<script src="/static/splitters.js" defer></script>
-<script src="/static/theme.js" defer></script>
-<script src="/static/keys.js" defer></script>
-<script src="/static/infinite.js" defer></script>
-<script src="/static/swap.js" defer></script>
-<script src="/static/help.js" defer></script>
-<script src="/static/discussion.js" defer></script>
-<script src="/static/search.js" defer></script>
-<script src="/static/visited.js" defer></script>
-<script src="/static/prefetch.js" defer></script>
-<script src="/static/dismissed.js" defer></script>
-<script src="/static/sort.js" defer></script>
-<script src="/static/focus.js" defer></script>
-<script src="/static/filters.js" defer></script>
-<script src="/static/pinned.js" defer></script>
-<script src="/static/menu.js" defer></script>
-<script src="/static/panescroll.js" defer></script>
+
+{{ template "dialogs" . }}
+{{ template "scripts" . }}
 </body>
 </html>

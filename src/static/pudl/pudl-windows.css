@@ -1,0 +1,487 @@
+/* ==========================================================================
+   PUDL floating windows. Load after pudl.css, and only on pages that use
+   them. pudl-windows.js adds dragging, resizing and snapping; without it the
+   windows the server rendered still show where the URL put them.
+
+   A window's placement is four fractions of the layer, --win-x, --win-y,
+   --win-w and --win-h, which the server writes into a style attribute and
+   the script updates. data-win-mode selects maximised or a snapped half, and
+   the fractions are then the floating geometry to restore to. A minimised
+   window carries the hidden attribute.
+
+   The window's frame is a band of the raised tint between two hairlines, and
+   the whole band is the resize border.
+   ========================================================================== */
+
+/* The four fractions are registered as numbers that do not inherit. An
+   ordinary custom property is inherited by everything inside the window,
+   so changing it restyles the window's whole content, which grows with the
+   content and made moving and resizing a full window slow, in WebKit and
+   Firefox above all. Registered, a change restyles the window alone. */
+@property --win-x { syntax: "<number>"; inherits: false; initial-value: 0.06; }
+@property --win-y { syntax: "<number>"; inherits: false; initial-value: 0.05; }
+@property --win-w { syntax: "<number>"; inherits: false; initial-value: 0.55; }
+@property --win-h { syntax: "<number>"; inherits: false; initial-value: 0.75; }
+
+:root {
+  --win-band: 5px;            /* width of the frame between the two hairlines */
+  --win-hit: 10px;            /* resize hit area, wider than the band */
+  --win-min-w: 320px;
+  --win-min-h: 200px;
+  --win-head-docked: 30px;   /* a docked window's thin title bar */
+  --win-shadow:
+      0 2px 6px color-mix(in srgb, var(--shade) calc(var(--depth) * 0.8), transparent),
+      0 10px 28px color-mix(in srgb, var(--shade) calc(var(--depth) * 0.9), transparent);
+  --win-shadow-active:
+      0 3px 8px color-mix(in srgb, var(--shade) calc(var(--depth) * 1.1), transparent),
+      0 18px 48px color-mix(in srgb, var(--shade) calc(var(--depth) * 1.4), transparent);
+
+  /* The active window's title bar. A theme may set these four to tune it.
+     On the light theme the bar is filled with the accent, the classic
+     active window, since a light theme's accent is dark enough to carry
+     light text. */
+  --win-active-bg: linear-gradient(color-mix(in srgb, #fff 10%, var(--accent)), var(--accent));
+  --win-active-fg: var(--on-accent);
+  --win-active-border: var(--accent-hover);
+  --win-active-shadow: inset 0 1px color-mix(in srgb, #fff 18%, transparent);
+}
+
+/* A dark theme needs a bright accent for its links to read, and a bar
+   filled with it glares, so the dark theme's bar is the raised gradient
+   tinted toward the accent, in the normal text colour. With the tinted
+   frame and the stronger shadow, that is enough to mark the active window
+   without a rule under the bar, which read as a divider. */
+[data-theme="dark"] {
+  --win-active-bg: linear-gradient(
+      color-mix(in srgb, var(--accent) 32%, var(--raise-top)),
+      color-mix(in srgb, var(--accent) 20%, var(--surface-alt)));
+  --win-active-fg: var(--text);
+  --win-active-border: color-mix(in srgb, var(--accent) 55%, var(--raise-border));
+  --win-active-shadow: inset 0 1px color-mix(in srgb, var(--light) var(--lit), transparent);
+}
+
+/* The host is the region the windows float over, usually the main area
+   below the topbar. It does not scroll; the content inside it does. */
+.win-host { position: relative; isolation: isolate; }
+/* isolation keeps the windows' stacking inside the host, so a window never
+   rises over what surrounds the host, such as a master-detail divider that
+   straddles the host's edge. */
+
+.win-layer {
+  position: absolute; inset: 0; z-index: 50;
+  overflow: hidden;
+  pointer-events: none;       /* the content beneath stays usable */
+}
+
+/* === The window ==========================================================
+   A window's fractions are of the inner area, the layer less the strips
+   that docked windows take, which the script sets on the layer as
+   --dock-top, --dock-bottom, --dock-left and --dock-right, and a server
+   renders the same. With nothing docked the inner area is the layer. */
+.win {
+  position: absolute;
+  left: calc(var(--dock-left, 0px) + var(--win-x, 0.06) * (100% - var(--dock-left, 0px) - var(--dock-right, 0px)));
+  top: calc(var(--dock-top, 0px) + var(--win-y, 0.05) * (100% - var(--dock-top, 0px) - var(--dock-bottom, 0px)));
+  width: calc(var(--win-w, 0.55) * (100% - var(--dock-left, 0px) - var(--dock-right, 0px)));
+  height: calc(var(--win-h, 0.75) * (100% - var(--dock-top, 0px) - var(--dock-bottom, 0px)));
+  min-width: min(var(--win-min-w), 100%);
+  min-height: min(var(--win-min-h), 100%);
+  display: flex; flex-direction: column;
+  padding: var(--win-band);
+  background: var(--surface-alt);
+  border: 1px solid var(--raise-border);
+  border-radius: var(--radius);
+  box-shadow: var(--win-shadow);
+  pointer-events: auto;
+}
+.win.active {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--raise-border));
+  box-shadow: var(--win-shadow-active);
+}
+/* A floating window's largest size, from its data-win-max, which the
+   script sets as --win-max-w and --win-max-h. */
+.win[data-win-mode="floating"] { max-width: var(--win-max-w, none); max-height: var(--win-max-h, none); }
+
+/* A window sized by its content, data-win-size="content", takes its
+   content's width and height, and follows them as they change, larger and
+   smaller, from a top-left corner that stays where it is. It stops at the
+   right and bottom of the area, and its body scrolls. It cannot be
+   resized, maximised, snapped or docked, so those handles and buttons go. */
+.win[data-win-size="content"] {
+  width: fit-content; height: auto;
+  min-width: 0; min-height: 0;
+  max-width: min(var(--win-max-w, 100000px), calc((100% - var(--dock-left, 0px) - var(--dock-right, 0px)) * (1 - var(--win-x, 0.06))));
+  max-height: min(var(--win-max-h, 100000px), calc((100% - var(--dock-top, 0px) - var(--dock-bottom, 0px)) * (1 - var(--win-y, 0.05))));
+}
+/* Its frame is a single hairline, with no band, since the band is the
+   border the reader drags to resize and this window has none. The title
+   bar and body sit flush inside the hairline. */
+.win[data-win-size="content"] { padding: 0; }
+.win[data-win-size="content"] .win-head {
+  border-width: 0 0 1px;
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+}
+.win[data-win-size="content"] .win-body {
+  border: 0;
+  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
+}
+.win[data-win-size="content"] > .win-rh,
+.win[data-win-size="content"] .win-head [data-win-action="maximize"],
+.win[data-win-size="content"] .win-head [data-win-action="dock"] { display: none; }
+/* While its title bar is dragged, a window moves by transform on a layer of
+   its own, so each step is composited rather than laid out and repainted
+   with its shadow. The script sets the transform and clears it on release. */
+.win.win-moving { will-change: transform; }
+
+/* Maximised and snapped windows fill their slot and lose the frame, since
+   they cannot be resized from it. */
+.win[data-win-mode="maximized"],
+.win[data-win-mode="left"],
+.win[data-win-mode="right"] {
+  top: var(--dock-top, 0px); height: calc(100% - var(--dock-top, 0px) - var(--dock-bottom, 0px));
+  padding: 0; border-width: 0; border-radius: 0;
+  min-width: 0; min-height: 0;
+}
+.win[data-win-mode="maximized"] { left: var(--dock-left, 0px); width: calc(100% - var(--dock-left, 0px) - var(--dock-right, 0px)); }
+.win[data-win-mode="left"] { left: var(--dock-left, 0px); width: calc((100% - var(--dock-left, 0px) - var(--dock-right, 0px)) / 2); }
+.win[data-win-mode="right"] { left: calc(var(--dock-left, 0px) + (100% - var(--dock-left, 0px) - var(--dock-right, 0px)) / 2); width: calc((100% - var(--dock-left, 0px) - var(--dock-right, 0px)) / 2); }
+.win[data-win-mode="left"] { border-right-width: 1px; }
+.win[data-win-mode="right"] { border-left-width: 1px; }
+
+/* A zone is a rectangle of the inner area, --zone-x, --zone-y, --zone-w
+   and --zone-h as fractions of it, which the script sets from the address
+   and a server may render. It is drawn flush like a half, with a hairline
+   on each side that meets another zone, which the script sets as
+   --zone-rule-e and --zone-rule-s. */
+.win[data-win-mode="zone"] {
+  left: calc(var(--dock-left, 0px) + var(--zone-x, 0) * (100% - var(--dock-left, 0px) - var(--dock-right, 0px)));
+  top: calc(var(--dock-top, 0px) + var(--zone-y, 0) * (100% - var(--dock-top, 0px) - var(--dock-bottom, 0px)));
+  width: calc(var(--zone-w, 0.5) * (100% - var(--dock-left, 0px) - var(--dock-right, 0px)));
+  height: calc(var(--zone-h, 0.5) * (100% - var(--dock-top, 0px) - var(--dock-bottom, 0px)));
+  padding: 0; border-radius: 0;
+  border-width: 0 var(--zone-rule-e, 0px) var(--zone-rule-s, 0px) 0;
+  min-width: 0; min-height: 0;
+}
+
+/* === Docked windows ======================================================
+   A docked window holds an edge of the layer, and is part of its frame:
+   flush, without shadow, rounded corners or frame band, with a hairline on
+   the side facing the workspace. Top and bottom docks span the layer's
+   width; side docks span the height between them. data-win-edge names the
+   edge it shows on, which a narrow layer moves from a side to the bottom.
+   Its title bar is thin, a comfortable margin around the title, and a
+   collapsed dock is its title bar alone. */
+.win[data-win-edge] {
+  padding: 0; border: 0 solid var(--border); border-radius: 0; box-shadow: none;
+  min-width: 0; min-height: 0;
+}
+.win[data-win-edge].active { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); box-shadow: none; }
+.win[data-win-edge="bottom"] { top: auto; bottom: 0; left: 0; width: 100%; height: var(--dock-bottom, 25%); border-top-width: 1px; }
+.win[data-win-edge="top"] { top: 0; left: 0; width: 100%; height: var(--dock-top, 25%); border-bottom-width: 1px; }
+.win[data-win-edge="left"] {
+  top: var(--dock-top, 0px); left: 0; width: var(--dock-left, 25%);
+  height: calc(100% - var(--dock-top, 0px) - var(--dock-bottom, 0px)); border-right-width: 1px;
+}
+.win[data-win-edge="right"] {
+  top: var(--dock-top, 0px); left: auto; right: 0; width: var(--dock-right, 25%);
+  height: calc(100% - var(--dock-top, 0px) - var(--dock-bottom, 0px)); border-left-width: 1px;
+}
+.win[data-win-edge] .win-head {
+  min-height: 0; height: var(--win-head-docked); gap: 8px;
+  padding: 0 4px 0 10px;
+  border-width: 0 0 1px; border-radius: 0;
+}
+.win[data-win-edge] .win-title { font-size: var(--text-sm); }
+.win[data-win-edge] .win-btn { width: 20px; height: 20px; }
+.win[data-win-edge] .win-btn::before { width: 10px; height: 10px; }
+.win[data-win-edge] .win-body { border: 0; border-radius: 0; }
+.win[data-win-edge] [data-win-action="maximize"] { display: none; }
+.win-collapsed .win-body { display: none; }
+.win-collapsed .win-head { border-bottom-width: 0; }
+.win-collapsed:is([data-win-edge="left"], [data-win-edge="right"]) .win-head {
+  writing-mode: vertical-rl; height: 100%; width: var(--win-head-docked);
+  padding: 10px 0 4px;
+}
+/* The layer's inner area, laid out for the script to measure. */
+.win-inner {
+  position: absolute; visibility: hidden; pointer-events: none;
+  top: var(--dock-top, 0px); bottom: var(--dock-bottom, 0px);
+  left: var(--dock-left, 0px); right: var(--dock-right, 0px);
+}
+
+/* === Title bar ============================================================
+   The title bar is what you drag, so it is raised. The active window's
+   title bar takes the accent. */
+.win-head {
+  flex: none;
+  display: flex; align-items: center; gap: 10px;
+  min-height: 38px; padding: 5px 7px 5px 12px;
+  background: var(--raise-grad);
+  border: 1px solid var(--raise-border);
+  border-radius: calc(var(--radius) - var(--win-band)) calc(var(--radius) - var(--win-band)) 0 0;
+  box-shadow: inset 0 1px color-mix(in srgb, var(--light) var(--lit), transparent);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+.win-head:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.win.active .win-head {
+  background: var(--win-active-bg);
+  border-color: var(--win-active-border);
+  box-shadow: var(--win-active-shadow);
+  color: var(--win-active-fg);
+}
+.win.active .win-head:focus-visible { box-shadow: var(--win-active-shadow), 0 0 0 3px var(--focus-ring); }
+/* The title is usually a heading, so it resets what a page's own heading
+   styles might give it. */
+.win-title {
+  flex: 1; min-width: 0; margin: 0; padding: 0; border: 0;
+  font: 700 var(--text-md)/1.3 var(--font);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.win-chrome { flex: none; display: inline-flex; gap: 5px; align-items: center; }
+
+/* Window buttons are small raised circles, so they stay legible on the
+   accent title bar. */
+.win-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--raise-border);
+  background: var(--raise-grad);
+  box-shadow: var(--raise-shadow);
+  color: var(--text-muted);
+  font: 600 var(--text-sm)/1 var(--font);
+  text-decoration: none;
+  cursor: pointer;
+}
+.win-btn:hover { color: var(--text); background: var(--raise-grad-hover); border-color: var(--raise-border-hover); }
+.win-btn:active { background: var(--raise-active-bg); box-shadow: var(--raise-active-shadow); }
+.win-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.win-btn[data-win-action="close"]:hover { color: var(--danger); }
+
+/* The glyphs come from here, drawn from pudl.css's glyph masks, so the
+   server renders each button empty with an aria-label, and the maximise
+   button's glyph follows the window's mode. */
+.win-btn[data-win-action]::before {
+  content: ""; width: 12px; height: 12px;
+  background: currentColor;
+  -webkit-mask: var(--glyph) center / contain no-repeat;
+  mask: var(--glyph) center / contain no-repeat;
+}
+.win-btn[data-win-action="menu"]::before { --glyph: var(--glyph-caret); }
+.win-btn[data-win-action="menu"] { margin-inline-end: var(--space-1); }
+/* The layout picker, in the window menu and on the maximise button: a
+   thumbnail of each layout, whose zones are small raised buttons. The zone
+   the window fills is pressed in, as where the reader is always is, and
+   filled with the accent as well. */
+.win-snap { display: flex; gap: 6px; padding: 6px 14px; }
+.win-snap-layout { position: relative; width: 48px; height: 32px; flex: none; }
+.win-snap .win-snap-zone {
+  position: absolute; padding: 0;
+  left: calc(var(--zl) / 6 * 100% + 1px); top: calc(var(--zt) / 6 * 100% + 1px);
+  width: calc((var(--zr) - var(--zl)) / 6 * 100% - 2px); height: calc((var(--zb) - var(--zt)) / 6 * 100% - 2px);
+  border: 1px solid var(--raise-border); border-radius: var(--radius-xs);
+  background: var(--raise-grad); box-shadow: var(--raise-shadow);
+}
+.win-snap .win-snap-zone:hover { background: var(--raise-grad-hover); border-color: var(--raise-border-hover); }
+.win-snap .win-snap-zone:focus-visible { background: var(--raise-grad-hover); box-shadow: var(--raise-shadow), 0 0 0 3px var(--focus-ring); }
+.win-snap .win-snap-zone:active { background: var(--raise-active-bg); box-shadow: var(--raise-active-shadow); }
+.win-snap .win-snap-zone[aria-current="true"] {
+  background: var(--accent); border-color: var(--accent-hover);
+  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--shade) calc(var(--depth) * 2), transparent);
+}
+.win-snap .win-snap-zone[aria-current="true"]:focus-visible {
+  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--shade) calc(var(--depth) * 2), transparent), 0 0 0 3px var(--focus-ring);
+}
+@media (forced-colors: active) {
+  .win-snap .win-snap-zone { border-color: ButtonText; }
+  .win-snap .win-snap-zone:hover, .win-snap .win-snap-zone[aria-current="true"] { forced-color-adjust: none; background: Highlight; }
+}
+
+.win:has(> .win-menu:popover-open) .win-btn[data-win-action="menu"] {
+  background: var(--raise-active-bg); box-shadow: var(--raise-active-shadow);
+}
+.win-btn[data-win-action="page"]::before { --glyph: var(--glyph-open); }
+.win-btn[data-win-action="minimize"]::before { --glyph: var(--glyph-minimize); }
+.win-btn[data-win-action="maximize"]::before { --glyph: var(--glyph-maximize); }
+.win-btn[data-win-action="close"]::before { --glyph: var(--glyph-close); }
+.win-btn[data-win-action="dock"]::before { --glyph: var(--glyph-dock); }
+.win[data-win-edge] .win-btn[data-win-action="dock"]::before { --glyph: var(--glyph-undock); }
+.win:not([data-win-mode="floating"]) .win-btn[data-win-action="maximize"]::before { --glyph: var(--glyph-restore); }
+
+.win[data-win-mode="maximized"] .win-head,
+.win[data-win-mode="left"] .win-head,
+.win[data-win-mode="right"] .win-head,
+.win[data-win-mode="zone"] .win-head { border-radius: 0; border-width: 0 0 1px; }
+
+/* === Body ================================================================ */
+.win-body {
+  flex: 1; min-height: 0; overflow: auto;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border); border-top: 0;
+  border-radius: 0 0 calc(var(--radius) - var(--win-band)) calc(var(--radius) - var(--win-band));
+}
+/* The script makes the body a tab stop, so it can be scrolled from the
+   keyboard. It is a large area, so its focus ring is drawn inside it. */
+.win-body:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--focus-ring); }
+.win[data-win-mode="maximized"] .win-body,
+.win[data-win-mode="left"] .win-body,
+.win[data-win-mode="right"] .win-body,
+.win[data-win-mode="zone"] .win-body { border: 0; border-radius: 0; }
+
+/* === Resize handles ======================================================
+   Invisible strips the script adds along each edge and at each corner. They
+   straddle the frame so the band and a hair beyond it can be grabbed. */
+.win-rh { position: absolute; z-index: 2; }
+.win-rh[data-edge="n"], .win-rh[data-edge="s"] { left: var(--win-hit); right: var(--win-hit); height: var(--win-hit); cursor: ns-resize; }
+.win-rh[data-edge="e"], .win-rh[data-edge="w"] { top: var(--win-hit); bottom: var(--win-hit); width: var(--win-hit); cursor: ew-resize; }
+.win-rh[data-edge="n"] { top: calc(var(--win-hit) / -2); }
+.win-rh[data-edge="s"] { bottom: calc(var(--win-hit) / -2); }
+.win-rh[data-edge="w"] { left: calc(var(--win-hit) / -2); }
+.win-rh[data-edge="e"] { right: calc(var(--win-hit) / -2); }
+.win-rh[data-edge="nw"], .win-rh[data-edge="ne"],
+.win-rh[data-edge="sw"], .win-rh[data-edge="se"] { width: calc(var(--win-hit) * 1.5); height: calc(var(--win-hit) * 1.5); }
+.win-rh[data-edge="nw"] { top: calc(var(--win-hit) / -2); left: calc(var(--win-hit) / -2); cursor: nwse-resize; }
+.win-rh[data-edge="se"] { bottom: calc(var(--win-hit) / -2); right: calc(var(--win-hit) / -2); cursor: nwse-resize; }
+.win-rh[data-edge="ne"] { top: calc(var(--win-hit) / -2); right: calc(var(--win-hit) / -2); cursor: nesw-resize; }
+.win-rh[data-edge="sw"] { bottom: calc(var(--win-hit) / -2); left: calc(var(--win-hit) / -2); cursor: nesw-resize; }
+.win[data-win-mode="maximized"] .win-rh,
+.win[data-win-mode="left"] .win-rh,
+.win[data-win-mode="right"] .win-rh,
+.win[data-win-mode="zone"] .win-rh { display: none; }
+/* A docked window resizes only along its free edge, the one facing the
+   workspace, and a collapsed one not at all. */
+.win[data-win-edge] .win-rh { display: none; }
+.win[data-win-edge="bottom"] .win-rh[data-edge="n"] { left: 0; right: 0; }
+.win[data-win-edge="bottom"]:not(.win-collapsed) .win-rh[data-edge="n"],
+.win[data-win-edge="top"]:not(.win-collapsed) .win-rh[data-edge="s"],
+.win[data-win-edge="left"]:not(.win-collapsed) .win-rh[data-edge="e"],
+.win[data-win-edge="right"]:not(.win-collapsed) .win-rh[data-edge="w"] { display: block; }
+.win[data-win-edge="top"] .win-rh[data-edge="s"] { left: 0; right: 0; }
+.win[data-win-edge="left"] .win-rh[data-edge="e"],
+.win[data-win-edge="right"] .win-rh[data-edge="w"] { top: 0; bottom: 0; }
+/* A docked window's free edge is a handle, so it carries the grip at rest,
+   at the middle of the edge and just outside it, on the workspace, where
+   it reads whatever colour the title bar is, and takes the accent under
+   the pointer. */
+.win[data-win-edge] .win-rh::after {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  background: var(--text-muted); pointer-events: none;
+  -webkit-mask: var(--glyph-grip) center / 16px 16px no-repeat;
+  mask: var(--glyph-grip) center / 16px 16px no-repeat;
+}
+.win[data-win-edge="bottom"] .win-rh::after { transform: translateY(-5px) rotate(90deg); }
+.win[data-win-edge="top"] .win-rh::after { transform: translateY(5px) rotate(90deg); }
+.win[data-win-edge="left"] .win-rh::after { transform: translateX(5px); }
+.win[data-win-edge="right"] .win-rh::after { transform: translateX(-5px); }
+.win[data-win-edge] .win-rh:hover::after { background: var(--accent); }
+
+/* A dashed outline shows where a window will land while it is dragged
+   towards an edge. */
+.win-ghost {
+  position: absolute; z-index: 1000; pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 2px dashed color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: var(--radius);
+}
+
+/* Dragging over an iframe or a text selection would lose the pointer, so
+   the layer takes every event while a drag is in progress. */
+.win-layer.dragging { pointer-events: auto; cursor: move; }
+.win-layer.dragging * { user-select: none; }
+
+/* === Child rows ==========================================================
+   A list row whose link opens a window gains a row beneath it for each of
+   that window's open children. The branch glyph marks the row as a child,
+   so the relation does not rest on the indent alone. */
+.md-row-child .md-item {
+  position: relative;
+  padding-inline-start: 32px;
+  font-size: var(--text-xs);
+}
+.md-row-child .md-item::before {
+  content: "";
+  position: absolute; inset-inline-start: 14px; top: 50%;
+  width: 12px; height: 12px; margin-top: -8px;
+  background: var(--text-muted);
+  -webkit-mask: var(--glyph-branch) center / contain no-repeat;
+  mask: var(--glyph-branch) center / contain no-repeat;
+}
+.md-row-child .md-item:dir(rtl)::before { transform: scaleX(-1); }
+
+/* === Dock ================================================================
+   One tab per open window, in the order they were opened. A tab raises its
+   window, and the active window's tab reads as pressed in. The glyph shows
+   whether the window is visible (filled) or minimised (hollow). */
+/* An empty dock draws nothing and takes no height, but it stays in the
+   layout, so a toolbar that uses it as its elastic middle keeps its shape
+   when the last window closes. */
+.win-dock { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.win-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: 220px; padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--raise-border);
+  background: var(--raise-grad);
+  box-shadow: var(--raise-shadow);
+  font-size: var(--text-xs); font-weight: 600;
+  color: var(--text); text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.win-tab::before {
+  content: ""; flex: none; width: 9px; height: 9px;
+  background: var(--accent);
+  -webkit-mask: var(--glyph-circle) center / contain no-repeat;
+  mask: var(--glyph-circle) center / contain no-repeat;
+}
+.win-tab:hover { background: var(--raise-grad-hover); border-color: var(--raise-border-hover); }
+.win-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.win-tab[aria-current="true"] { background: var(--raise-active-bg); box-shadow: var(--raise-active-shadow); }
+.win-tab.minimized { color: var(--text-muted); }
+.win-tab.minimized::before {
+  background: var(--text-muted);
+  -webkit-mask-image: var(--glyph-ring);
+  mask-image: var(--glyph-ring);
+}
+
+/* === Forced colours ======================================================
+   The frame and buttons keep visible borders, and the active window's
+   title bar and the dock's current tab take the system's highlight, since
+   the shadows and tints that mark them otherwise are removed. */
+@media (forced-colors: active) {
+  .win, .win-head, .win-body, .win-btn, .win-tab { border: 1px solid CanvasText; }
+  .win.active { border: 2px solid Highlight; }
+  .win.active .win-head, .win-tab[aria-current="true"] {
+    forced-color-adjust: none;
+    background: Highlight; color: HighlightText; border-color: Highlight;
+  }
+  .win.active .win-head .win-btn { forced-color-adjust: none; background: Canvas; color: CanvasText; }
+  .win-ghost { border-color: Highlight; }
+  /* The glyphs are masks, painted in the colour the system has set. */
+  .win-btn[data-win-action]::before { forced-color-adjust: none; background: ButtonText; }
+  .win-tab::before, .md-row-child .md-item::before { forced-color-adjust: none; background: CanvasText; }
+  .win-tab[aria-current="true"]::before { background: HighlightText; }
+}
+
+/* === Print ===============================================================
+   The window in front prints as the page's content, title and body,
+   without its frame, buttons or the dock; the others do not print. */
+@media print {
+  .win-host { height: auto !important; }
+  .win-layer { position: static; overflow: visible; }
+  .win-dock, .win-ghost, .win-rh, .win-chrome,
+  .win:not(.active), .win[hidden] { display: none !important; }
+  .win.active {
+    position: static; width: auto; height: auto;
+    padding: 0; border: 0; box-shadow: none; background: none;
+  }
+  /* What lies under the windows on screen is covered by them, so it does
+     not print while a window does. */
+  .win-host:has(.win.active) > :not(.win-layer) { display: none !important; }
+  .win.active .win-head { background: none; border: 0; box-shadow: none; padding: 0 0 8px; color: #000000; }
+  .win.active .win-title { font-size: var(--text-lg); white-space: normal; }
+  .win.active .win-body { overflow: visible; border: 0; padding: 0; }
+}

@@ -16,15 +16,13 @@
   }
 
   function articleURLOf(row) {
-    var a = row.querySelector('.meta .host');
-    if (!a || !a.href) return '';
     var u;
-    try { u = new URL(a.href); } catch (e) { return ''; }
-    // Self-posts (Ask HN / Show HN text posts) link the host to HN itself;
-    // there's no off-site article to prefetch.
-    if (u.hostname === 'news.ycombinator.com') return '';
+    try { u = new URL(row.dataset.url || ''); } catch (e) { return ''; }
+    // Text posts link to the source's own site; there's no off-site
+    // article to prefetch.
+    if (u.hostname === 'news.ycombinator.com' || u.hostname === 'lobste.rs') return '';
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
-    return a.href;
+    return u.href;
   }
 
   function prefetch(url) {
@@ -34,17 +32,10 @@
     count++;
     // Fire-and-forget: the server's singleflight + SQLite cache do the real
     // work; the browser HTTP cache keeps the response warm for the click.
-    try {
-      fetch('/api/article?url=' + encodeURIComponent(url), {
-        credentials: 'omit',
-        // Low-priority hint so prefetches don't crowd out the active
-        // pageview's requests on slow connections (Chromium / Safari).
-        priority: 'low'
-      }).catch(function () { /* swallow; click path retries */ });
-    } catch (e) { /* old browser without priority */
-      fetch('/api/article?url=' + encodeURIComponent(url), { credentials: 'omit' })
-        .catch(function () {});
-    }
+    // The low priority keeps prefetches from crowding out the reader's own
+    // requests on a slow connection.
+    fetch('/api/article?url=' + encodeURIComponent(url), { credentials: 'omit', priority: 'low' })
+      .catch(function () { /* swallow; the window's own request retries */ });
   }
 
   var pending = null;
@@ -56,13 +47,11 @@
   }
 
   function onEnter(e) {
-    var row = e.target.closest('.pane-list .story');
-    if (!row) return;
-    if (row === pendingRow) return;
+    var row = e.target.closest && e.target.closest('.story-list .story-row');
+    if (!row || row === pendingRow) return;
     clearPending();
     var url = articleURLOf(row);
-    if (!url) return;
-    if (prefetched[url]) return;
+    if (!url || prefetched[url]) return;
     pendingRow = row;
     pending = setTimeout(function () {
       pending = null;
@@ -72,11 +61,10 @@
   }
 
   function onLeave(e) {
-    if (!e.target.closest) return;
     if (!pendingRow) return;
     // Only clear if leaving the row we armed; mousemove inside the row
     // dispatches mouseout for children too.
-    if (e.target === pendingRow || (pendingRow.contains && pendingRow.contains(e.target))) {
+    if (e.target === pendingRow || pendingRow.contains(e.target)) {
       var to = e.relatedTarget;
       if (to && pendingRow.contains(to)) return;
       clearPending();

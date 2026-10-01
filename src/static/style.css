@@ -1,1123 +1,584 @@
-:root,
-:root[data-theme="light"] {
-  --header-h: 38px;
-  --pane-border: #e0e0e0;
-  --pane-bg: #fff;
-  --pane-header-bg: #f7f7f7;
-  --text: #1a1a1a;
-  --text-mute: #666;
-  --text-dim: #999;
-  --hover: #f5f5f5;
-  --selected: #eaf1fb;
-  --accent: #1a1a1a;
-  --link: #1a73e8;
-  --thread-rule: #ececec;
-  --row-border: #f0f0f0;
-  --comment-border: #f5f5f5;
-  --code-bg: #f7f7f7;
-  --article-text: #222;
-  --cta-bg: #1a1a1a;
-  --cta-fg: #fff;
-  --cta-hover-bg: #333;
-  --disabled: #ccc;
-  --splitter-hover: #b8c4d4;
+/* ==========================================================================
+   YAVCHN's theme and its own styles, loaded after pudl.css and
+   pudl-windows.css. PUDL draws every component; this file sets the palette
+   tokens PUDL invites a theme to set, lays out the desktop shell after
+   parkscomputing.com's window view, and styles what PUDL has no component
+   for: the story rows' controls, a story window's article and discussion,
+   reader-mode prose and the comment thread.
+   ========================================================================== */
+
+/* === Theme ================================================================
+   An orange accent after Hacker News's own, darkened in the light theme so
+   links reach 4.5:1 on every surface they sit on. The warning colour moves
+   from PUDL's orange to a mustard, so the status colours stay apart from
+   the accent. Everything else is PUDL's neutral graphite. */
+:root {
+  --accent: #a84600;
+  --accent-hover: #8c3b00;
+  --warn: #76620a;
 }
 
-:root[data-theme="dark"] {
-  --pane-border: #2a2a2a;
-  --pane-bg: #161616;
-  --pane-header-bg: #1f1f1f;
-  --text: #e8e8e8;
-  --text-mute: #a0a0a0;
-  --text-dim: #707070;
-  --hover: #1f1f1f;
-  --selected: #1e2b3d;
-  --accent: #e8e8e8;
-  --link: #6ba3ff;
-  --thread-rule: #2a2a2a;
-  --row-border: #222;
-  --comment-border: #222;
-  --code-bg: #242424;
-  --article-text: #d8d8d8;
-  --cta-bg: #e8e8e8;
-  --cta-fg: #161616;
-  --cta-hover-bg: #fff;
-  --disabled: #3a3a3a;
-  --splitter-hover: #3a4a5e;
+[data-theme="dark"] {
+  --accent: #ff8a3d;
+  --accent-hover: #ffa766;
+  --on-accent: #121417;
+  --warn: #d4b84a;
 }
 
-* { box-sizing: border-box; }
-
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  overflow: hidden;
+/* YAVCHN's own glyphs, drawn as SVG masks as PUDL draws its own, so they
+   follow the theme and never turn into emoji. */
+:root {
+  --yv-glyph-pin: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 2h6v3l2 3H9v6l-1 1-1-1V8H3l2-3V2z' fill='none' stroke='black' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --yv-glyph-pinned: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 2h6v3l2 3H9v6l-1 1-1-1V8H3l2-3V2z' stroke='black' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --yv-glyph-refresh: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 8a5 5 0 1 1-1.6-3.7'/%3E%3Cpath d='M12.2 1.8v3h-3'/%3E%3C/svg%3E");
 }
 
-body {
-  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  color: var(--text);
-  background: var(--pane-bg);
+/* === The top bar ==========================================================
+   The menu bar at the left, then a rule and the source switcher at the far
+   right, as parkscomputing.com puts its view switcher. */
+.topbar {
+  position: relative;
+  justify-content: flex-start;
+  padding-block: 6px;
+  --tb-pad-y: 6px;
 }
 
-header {
-  height: var(--header-h);
-  padding: 0 1rem;
-  background: var(--pane-header-bg);
-  border-bottom: 1px solid var(--pane-border);
-  display: flex;
-  align-items: center;
-}
-header h1 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  display: flex;
-  align-items: center;
-}
-header h1 a {
-  color: inherit;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-header .logo {
-  width: 24px;
-  height: 24px;
-}
-
-.header-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-/* Source picker styled as a TDL-flavored segmented control: a single
-   rounded frame with internal dividers and a --link underline on the
-   active segment. Centered in the viewport via absolute positioning so
-   it sits independent of the wordmark and action-button widths on either
-   side. On narrow viewports (< 800px) it falls back to inline flex
-   layout next to the wordmark. */
-header { position: relative; }
-.source-picker {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  display: inline-flex;
-  background: var(--pane-bg);
-  border: 1px solid var(--pane-border);
-  border-radius: 5px;
-  overflow: hidden;
-  font-size: 0.85em;
-}
-.source-pick {
-  color: var(--text-mute);
-  text-decoration: none;
-  padding: 0.28rem 0.8rem 0.18rem;
-  letter-spacing: 0.02em;
-  font-weight: 500;
-  white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  transition: color 0.1s, background 0.1s, border-color 0.1s;
-}
-.source-pick + .source-pick { border-left: 1px solid var(--pane-border); }
-.source-pick:hover { color: var(--text); background: var(--hover); }
-.source-pick.active {
-  color: var(--text);
-  background: var(--pane-header-bg);
-  border-bottom-color: var(--link);
-}
-.source-pick:focus { outline: 1px solid var(--link); outline-offset: -1px; }
-/* Hamburger button. Hidden at wide -- the full action row shows in the
-   header normally. Shown at narrow, where it toggles the action row's
-   popup-panel display. */
-.hamburger-btn {
-  display: none;
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  border: 0;
-  color: var(--text-mute);
-  cursor: pointer;
-  padding: 0.2rem 0.35rem;
-  margin-left: auto;
-  border-radius: 4px;
-  line-height: 0;
-}
-.hamburger-btn:hover { color: var(--text); background: var(--hover); }
-.hamburger-btn:focus { outline: 1px solid var(--link); outline-offset: 1px; }
-
-@media (max-width: 800px) {
-  .source-picker {
-    position: static;
-    transform: none;
-    margin-left: 0.5rem;
-    font-size: 0.75em;
-  }
-  .source-pick { padding: 0.2rem 0.5rem 0.12rem; }
-  .hamburger-btn { display: inline-flex; align-items: center; justify-content: center; }
-  /* Collapse the action row into a popup panel anchored under the
-     hamburger. Hidden until html.menu-open is set by menu.js. */
-  .header-actions {
-    display: none;
-    position: absolute;
-    top: 100%;
-    right: 0.4rem;
-    margin-top: 0.25rem;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.15rem;
-    background: var(--pane-header-bg);
-    border: 1px solid var(--pane-border);
-    border-radius: 6px;
-    padding: 0.35rem;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-    z-index: 20;
-  }
-  html.menu-open .header-actions { display: flex; align-items: center; }
-  /* In the popup all header buttons share a uniform 28px bounding box so
-     they stack with consistent vertical rhythm. Inner content (svg, img,
-     glyph) stays centered; per-element decoration (circle border, colored
-     fill, transparent) is preserved. */
-  .header-actions > * {
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    margin: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    box-sizing: border-box;
-  }
-}
-
-.source-link {
-  color: var(--text-mute);
-  display: flex;
-  align-items: center;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  text-decoration: none;
-}
-.source-link:hover {
-  color: var(--text);
-  background: var(--hover);
-}
-.source-link svg {
-  width: 20px;
-  height: 20px;
+.brand img {
   display: block;
-}
-.hn-link img,
-.lobsters-link img {
-  width: 18px;
-  height: 18px;
-  display: block;
-  border-radius: 2px;
-}
-/* Lobsters site renders its glyph on a red square -- our vendored SVG is
-   transparent so we add the background here to match the source's brand. */
-.lobsters-link img { background: #ac130d; }
-
-/* Theme toggle matches the same circled-icon style as the help / mail /
-   focus / filters buttons so the header chrome reads as a unified row. */
-.theme-toggle {
-  background: none;
-  border: 1.5px solid var(--text-mute);
-  color: var(--text-mute);
-  cursor: pointer;
-  font-size: 0.85rem;
   width: 22px;
   height: 22px;
-  border-radius: 50%;
-  padding: 0;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 0.1rem;
-}
-.theme-toggle:hover {
-  color: var(--text);
-  border-color: var(--text);
 }
 
-.help-button {
-  background: none;
-  border: 1.5px solid var(--text-mute);
-  color: var(--text-mute);
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 700;
-  width: 22px;
+.topbar-rule {
+  flex: none;
+  width: 1px;
   height: 22px;
-  border-radius: 50%;
-  padding: 0;
-  line-height: 1;
+  margin: 0 var(--space-3) 0 auto;
+  background: var(--tb-border, var(--border));
+}
+
+.source-switch {
+  flex: none;
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-left: 0.1rem;
-  text-decoration: none;
-}
-.help-button:hover {
-  color: var(--text);
-  border-color: var(--text);
-}
-.help-button:focus,
-.source-link:focus,
-.theme-toggle:focus { outline: 1px solid var(--link); outline-offset: 2px; }
-
-/* When focus mode is active, the focus button shows a filled state so
-   the visitor can see the mode is on (and click to leave it). */
-.focus-button[aria-pressed="true"] {
-  background: var(--text);
-  color: var(--pane-bg);
-  border-color: var(--text);
 }
 
-.help-dialog {
-  border: 1px solid var(--pane-border);
-  border-radius: 8px;
-  padding: 0;
-  background: var(--pane-bg);
-  color: var(--text);
-  max-width: 600px;
-  width: 90vw;
-  max-height: 85vh;
-  overflow: hidden; /* defer scrolling to .help-dialog-body so we don't stack scrollbars */
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
-}
-.help-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.5);
-}
-.help-dialog-frame {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  max-height: 85vh;
-}
-.help-dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.6rem 0.75rem 0.6rem 1rem;
-  background: var(--pane-header-bg);
-  border-bottom: 1px solid var(--pane-border);
-  flex-shrink: 0;
-}
-.help-dialog-header h2 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-.help-dialog-close {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  color: var(--text-mute);
-  cursor: pointer;
-  font-size: 1.05rem;
-  line-height: 1;
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: color 0.1s, background 0.1s;
-}
-.help-dialog-close:hover { color: var(--text); background: var(--hover); }
-.help-dialog-close:focus { outline: 1px solid var(--link); outline-offset: 1px; }
-.help-dialog-body {
-  overflow-y: auto;
-  padding: 1rem 1.25rem 1.5rem;
-}
-.help-dialog-body section { margin-bottom: 1.5rem; }
-.help-dialog-body section:last-child { margin-bottom: 0; }
-.help-dialog-body h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-mute);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.help-dialog-body dl {
-  margin: 0;
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.35rem 1rem;
-  font-size: 0.9em;
-  line-height: 1.5;
-  align-items: baseline;
-}
-.help-dialog-body dt { font-weight: 500; }
-.help-dialog-body dd { margin: 0; }
-.help-dialog-body kbd {
-  font: 0.85em "SF Mono", Consolas, Menlo, monospace;
-  background: var(--code-bg);
-  padding: 0.1em 0.4em;
-  border-radius: 3px;
-  border: 1px solid var(--pane-border);
-}
-.help-dialog-body ul {
-  margin: 0;
-  padding-left: 1.25rem;
-  font-size: 0.9em;
-  line-height: 1.55;
-}
-.help-dialog-body li { margin-bottom: 0.5rem; }
-.help-dialog-body li:last-child { margin-bottom: 0; }
-.help-dialog-body p {
-  margin: 0 0 0.6em;
-  font-size: 0.9em;
-  line-height: 1.55;
-}
-.help-dialog-body p:last-child { margin-bottom: 0; }
-.help-dialog-body a { color: var(--link); }
-
-/* Filters dialog -- shares the help-dialog frame, adds list + form widgets. */
-.filters-body .filters-intro {
-  color: var(--text-mute);
-  margin: 0 0 0.75rem;
-  font-size: 0.9em;
-}
-.filters-body code {
-  background: var(--code-bg);
-  padding: 0.05rem 0.25rem;
-  border-radius: 3px;
-  font-size: 0.9em;
-}
-.filters-list {
-  list-style: none;
-  margin: 0 0 0.75rem;
-  padding: 0;
-  border: 1px solid var(--pane-border);
-  border-radius: 4px;
-  max-height: 40vh;
-  overflow-y: auto;
-}
-.filters-list-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.35rem 0.6rem;
-  border-bottom: 1px solid var(--row-border);
-}
-.filters-list-item:last-child { border-bottom: 0; }
-.filters-list-name {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.9em;
-}
-.filters-list-remove {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 1.1rem;
-  line-height: 1;
-  padding: 0 0.25rem;
-}
-.filters-list-remove:hover { color: var(--text); }
-.filters-empty {
-  color: var(--text-dim);
-  font-size: 0.9em;
-  margin: 0 0 0.75rem;
-  font-style: italic;
-}
-.filters-add {
-  display: flex;
-  gap: 0.4rem;
-}
-.filters-add-input {
-  flex: 1;
-  padding: 0.3rem 0.5rem;
-  background: var(--pane-bg);
-  color: var(--text);
-  border: 1px solid var(--pane-border);
-  border-radius: 4px;
-  font: inherit;
-  font-size: 0.9em;
-}
-.filters-add-input:focus { outline: none; border-color: var(--link); }
-.filters-add-btn {
-  appearance: none;
-  background: var(--cta-bg);
-  color: var(--cta-fg);
-  border: 0;
-  border-radius: 4px;
-  padding: 0.3rem 0.85rem;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.9em;
-}
-.filters-add-btn:hover { background: var(--cta-hover-bg); }
-:root[data-theme="dark"] .theme-toggle .icon-dark { display: none; }
-:root[data-theme="dark"] .theme-toggle .icon-light { display: inline; }
-.theme-toggle .icon-dark { display: inline; }
-.theme-toggle .icon-light { display: none; }
-
-.layout {
-  display: grid;
-  grid-template-columns: var(--list-w, 380px) 4px 1fr;
-  grid-template-rows: var(--article-h, 1fr) 4px 1fr;
-  grid-template-areas:
-    "list vsplit article"
-    "list vsplit hsplit"
-    "list vsplit discussion";
-  height: calc(100vh - var(--header-h));
+/* On the top bar the switcher's track is the bar's chip. Its segments keep
+   PUDL's own colours. */
+.topbar .source-seg {
+  background: var(--tb-chip);
+  border-color: var(--tb-border);
+  box-shadow: var(--tb-chip-shadow);
 }
 
-/* Focus mode collapses the list + vertical splitter out of the layout so
-   the article and discussion panes take the full viewport width. Triggered
-   by the 'f' key (focus.js) and persisted across reloads -- the body class
-   is applied pre-paint in index.html.tmpl's inline head script. */
-html.focus-mode .layout {
-  grid-template-columns: 1fr;
-  grid-template-areas:
-    "article"
-    "hsplit"
-    "discussion";
-}
-html.focus-mode .pane-list,
-html.focus-mode .splitter-v { display: none; }
-
-.pane { overflow: hidden; background: var(--pane-bg); }
-
-.pane-list {
-  grid-area: list;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+/* The choices not taken sit on the bar's dark chip in both themes, so
+   they take the bar's foreground; the chosen one is raised in PUDL's own
+   colours. */
+.topbar .source-seg a:not([aria-current]) {
+  color: var(--tb-chrome-fg);
 }
 
-.search-bar {
-  padding: 0.4rem 0.5rem;
-  background: var(--pane-header-bg);
-  border-bottom: 1px solid var(--pane-border);
-  flex-shrink: 0;
+.topbar .source-seg a:not([aria-current]):hover {
+  color: var(--tb-fg);
+  background: color-mix(in srgb, var(--tb-fg) 12%, transparent);
 }
-.search-bar-frame {
-  display: flex;
-  align-items: stretch;
-  background: var(--pane-bg);
-  border: 1px solid var(--pane-border);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.search-bar-frame:focus-within { border-color: var(--link); }
-.search-bar input {
-  flex: 1;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 0.3rem 0.5rem;
-  background: transparent;
-  color: var(--text);
-  border: 0;
-  font: inherit;
-  font-size: 0.85em;
-}
-.search-bar input:focus {
-  outline: none;
-}
-.search-submit {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  border: 0;
-  border-left: 1px solid var(--pane-border);
-  color: var(--text-mute);
-  cursor: pointer;
-  padding: 0 0.55rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.search-submit:hover { color: var(--text); background: var(--hover); }
-.search-submit:focus { outline: 1px solid var(--link); outline-offset: -1px; }
 
-.source-tabs {
-  display: flex;
+@media (max-width: 560px) {
+  .topbar {
+    padding-inline: 10px;
+  }
+
+  .topbar-rule {
+    margin-right: 8px;
+  }
+}
+
+/* === The desktop ==========================================================
+   PUDL's master-detail layout with the windows as its detail pane, after
+   PUDL's article reader and parkscomputing.com. pudl.css makes the layout
+   fill the viewport (body:has(> .md-layout)). */
+body.desktop .md-layout {
+  --md-sidebar-w: 380px;
+}
+
+/* The list's bar: search or the finder's link box, the list's tabs, and
+   the list's name, wrapping on a narrow screen. */
+.site-listbar {
   flex-wrap: wrap;
-  background: var(--pane-header-bg);
-  border-bottom: 1px solid var(--pane-border);
-  flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-.source-tabs a {
-  padding: 0.4rem 0.75rem;
-  color: var(--text-mute);
-  text-decoration: none;
-  border-bottom: 2px solid transparent;
-  font-size: 0.8em;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.source-tabs a:hover { color: var(--text); }
-.source-tabs a:focus { outline: 1px solid var(--link); outline-offset: -2px; }
-.source-tabs a.active {
-  color: var(--text);
-  border-bottom-color: var(--link);
+  row-gap: var(--space-2);
 }
 
-.pane-article {
-  grid-area: article;
-  display: flex;
-  flex-direction: column;
+.site-listbar .md-filter-group .md-filter {
+  width: 220px;
 }
 
-.pane-discussion {
-  grid-area: discussion;
-  display: flex;
-  flex-direction: column;
+.site-listbar .find-form {
+  flex: 1 1 auto;
+  max-width: 720px;
 }
 
-.splitter {
-  background: var(--pane-border);
-  touch-action: none;
-  transition: background 0.1s;
-}
-.splitter:hover,
-.splitter.active,
-.splitter:focus { background: var(--splitter-hover); }
-.splitter:focus {
-  outline: 1px solid var(--link);
-  outline-offset: -1px;
-}
-.splitter-v {
-  grid-area: vsplit;
-  cursor: col-resize;
-}
-.splitter-h {
-  grid-area: hsplit;
-  cursor: row-resize;
+.site-listbar .find-form .md-filter {
+  width: 100%;
 }
 
-.pane-article .pane-body,
-.pane-discussion .pane-body {
-  flex: 1;
-  overflow-y: auto;
+.list-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
-.pane-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.4rem 0.75rem;
-  background: var(--pane-header-bg);
-  border-bottom: 1px solid var(--pane-border);
-  font-size: 0.8em;
-  flex-shrink: 0;
-}
-.pane-label {
-  color: var(--text-mute);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 500;
-}
-.pane-header a {
-  color: var(--text);
-  text-decoration: underline;
-  text-decoration-color: var(--text-dim);
-  text-underline-offset: 2px;
-}
-.pane-header a:hover { text-decoration-color: var(--text); }
-
-/* "Refresh" button in the article-pane header. Bypasses the cache and
-   forces a re-extract via /api/article?refresh=1. Sits to the left of
-   the "Open original" link. */
-.article-refresh {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  border: 0;
-  color: var(--text-mute);
-  cursor: pointer;
-  font-size: 0.95rem;
-  line-height: 1;
-  padding: 0 0.3rem;
-  margin-right: 0.3rem;
-  border-radius: 3px;
-}
-.article-refresh:hover { color: var(--text); background: var(--hover); }
-.article-refresh:focus { outline: 1px solid var(--link); outline-offset: 1px; }
-.article-refresh.spinning { animation: yavchn-spin 0.8s linear infinite; }
-@keyframes yavchn-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* ---- discussion-finder (/find) ---- */
-.finder-page { display: flex; flex-direction: column; }
-.finder-bar {
-  flex-shrink: 0;
-  padding: 0.5rem 0.9rem;
-  background: var(--pane-bg);
-  border-bottom: 1px solid var(--pane-border);
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-.finder-bar label { color: var(--text-mute); font-size: 0.85em; white-space: nowrap; }
-.finder-frame {
-  flex: 1;
-  display: flex;
-  align-items: stretch;
-  background: var(--pane-bg);
-  border: 1px solid var(--pane-border);
-  border-radius: 5px;
+.reader-stage {
+  padding: 0;
   overflow: hidden;
-  max-width: 760px;
 }
-.finder-frame:focus-within { border-color: var(--link); }
-.finder-frame input {
-  flex: 1; min-width: 0;
-  border: 0; background: transparent; color: var(--text);
-  font: inherit; font-size: 0.9em; padding: 0.4rem 0.6rem;
-}
-.finder-frame input:focus { outline: none; }
-.finder-frame button {
-  border: 0; border-left: 1px solid var(--pane-border);
-  background: transparent; color: var(--text-mute);
-  cursor: pointer; padding: 0 0.8rem; font: inherit; font-size: 0.9em;
-}
-.finder-frame button:hover { color: var(--text); background: var(--hover); }
 
-.finder-empty {
-  flex: 1;
+.reader-col {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 2rem;
-  color: var(--text-mute);
+  height: 100%;
 }
-.finder-empty h2 { color: var(--text); font-weight: 600; margin: 0 0 0.6rem; }
-.finder-empty p { max-width: 48ch; line-height: 1.6; }
 
-.finder-layout {
+.reader-col .md-back {
+  margin: 12px 16px 4px;
+  align-self: flex-start;
+}
+
+.reader-col .win-host {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: var(--article-h, 1fr) 4px 1fr;
-  grid-template-areas: "article" "hsplit" "discussion";
+  position: relative;
 }
 
-/* source tabs within the finder discussion pane */
-.finder-tabs {
+.reader-empty {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+.reader-empty .card {
+  max-width: 560px;
+  margin: 10vh auto 0;
+}
+
+.welcome-card h1 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.welcome-card p {
+  margin: 0 0 14px;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.welcome-card p:last-child {
+  margin-bottom: 0;
+}
+
+/* Hiding the story list gives the windows the whole width. The f key and
+   the View menu toggle it, and the choice is applied before the first
+   paint. */
+html.focus-mode .md-sidebar,
+html.focus-mode .md-resize {
+  display: none;
+}
+
+/* === The window bar =======================================================
+   At the foot of the window area, on its own surface below the windows, so
+   a window never covers it: PUDL's dock of open windows, then
+   minimise-all or restore-all and close-all. */
+.win-bar {
   display: flex;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-  background: var(--pane-header-bg);
-  border-bottom: 1px solid var(--pane-border);
-}
-.finder-tab {
-  appearance: none; background: transparent; border: 0; cursor: pointer;
-  color: var(--text-mute); font: inherit; font-size: 0.8em; font-weight: 500;
-  padding: 0.4rem 0.9rem;
-  border-bottom: 2px solid transparent;
-  white-space: nowrap;
-}
-.finder-tab:hover { color: var(--text); background: var(--hover); }
-.finder-tab.active { color: var(--text); border-bottom-color: var(--link); }
-.finder-tab .count { color: var(--text-dim); font-weight: 400; }
-.finder-tab.active .count { color: var(--link); }
-
-/* submission picker */
-.finder-subs { flex-shrink: 0; max-height: 30%; overflow-y: auto; border-bottom: 1px dashed var(--thread-rule); }
-.finder-sub {
-  display: flex; align-items: center; gap: 0.55rem;
-  padding: 0.35rem 0.9rem; cursor: pointer;
-  font-size: 0.85em; color: var(--text-mute);
-}
-.finder-sub:hover { background: var(--hover); }
-.finder-sub.active { background: var(--selected); color: var(--text); }
-.finder-sub-dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text-dim); flex-shrink: 0; }
-.finder-sub.active .finder-sub-dot { border-color: var(--link); background: var(--link); }
-.finder-sub-meta { flex: 1; min-width: 0; }
-.finder-sub-open { margin-left: auto; color: var(--link); text-decoration: none; font-size: 0.92em; white-space: nowrap; }
-.finder-sub-open:hover { text-decoration: underline; }
-
-.finder-thread { flex: 1; min-height: 0; }
-
-/* Sort selector sits on the right edge of the discussion pane-header,
-   abutting the "Open on HN" link. */
-.pane-header .comment-sort-wrap {
-  margin-left: auto;
-  margin-right: 0.75rem;
-  display: inline-flex;
+  flex: none;
   align-items: center;
-}
-.comment-sort {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  border: 1px solid var(--pane-border);
-  border-radius: 3px;
-  color: var(--text-mute);
-  cursor: pointer;
-  font: inherit;
-  padding: 0.1rem 1.25rem 0.1rem 0.4rem;
-  background-image: linear-gradient(45deg, transparent 50%, var(--text-mute) 50%),
-                    linear-gradient(135deg, var(--text-mute) 50%, transparent 50%);
-  background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
-  background-size: 5px 5px;
-  background-repeat: no-repeat;
-}
-.comment-sort:hover { color: var(--text); }
-.comment-sort:focus { outline: 1px solid var(--link); outline-offset: 1px; }
-/* Native dropdown panel inherits the select's transparent background,
-   which collapses to low-contrast text in dark mode. Force a solid
-   background + full-contrast text on the option list itself. */
-.comment-sort option {
-  background: var(--pane-bg);
-  color: var(--text);
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 12px;
+  background: var(--surface-alt);
+  border-top: 1px solid var(--border);
+  --ctl-h: 30px;
 }
 
-/* Screen-reader-only label for the sort select (visual cue is the select
-   itself; assistive tech needs a name). */
-.visually-hidden {
-  position: absolute;
-  width: 1px; height: 1px;
-  padding: 0; margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+.win-bar-dock {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  flex-wrap: nowrap;
 }
 
-.stories { list-style: none; padding: 0; margin: 0; flex: 1; }
-.story {
-  display: flex;
-  gap: 0.35rem;
-  padding: 0.55rem 0.75rem;
-  border-bottom: 1px solid var(--row-border);
+.win-bar .icon-btn {
+  flex: none;
 }
-.story:hover { background: var(--hover); }
-.story.selected { background: var(--selected); }
-.story.focused {
-  box-shadow: inset 4px 0 0 var(--link);
-  background: var(--hover);
+
+.win-bar .icon-btn svg {
+  width: 15px;
+  height: 15px;
 }
-.story.selected.focused { background: var(--selected); }
 
-/* Visited stories fade their title + meta so the eye flows past them on
-   subsequent scans. Selection / focus win -- those rows aren't faded. */
-.story.visited:not(.selected):not(.focused) .title a { color: var(--text-mute); }
-.story.visited:not(.selected):not(.focused) .meta { color: var(--text-dim); }
+.win-bar .icon-btn[aria-disabled="true"] {
+  opacity: .45;
+  cursor: not-allowed;
+}
 
-/* Per-row dismiss control. Muted by default, full-contrast on row hover or
-   keyboard focus so it's discoverable but not noisy. */
-.dismiss-btn {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 1.1rem;
-  line-height: 1;
-  padding: 0 0.25rem;
+/* Minimise-all and restore-all share one place: restore shows only when
+   it is the useful one, every window minimised; otherwise minimise-all
+   shows, disabled when nothing is open. PUDL keeps both links'
+   aria-disabled current. */
+.win-bar .restore-all[aria-disabled="true"],
+.win-bar:has(.min-all:not([aria-disabled="true"])) .restore-all {
+  display: none;
+}
+
+.win-bar:has(.min-all[aria-disabled="true"]):has(.restore-all:not([aria-disabled="true"])) .min-all {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .win-bar {
+    padding: 6px 8px;
+  }
+}
+
+/* === The story list =======================================================
+   PUDL's list rows, with a pin before the link and a hide button after
+   it. A story's title wraps rather than ending in an ellipsis, because a
+   headline cut short is no use for choosing what to read. */
+.story-row .md-item {
+  white-space: normal;
+  padding-inline: 6px;
+  line-height: 1.35;
+  padding-block: 6px;
+}
+
+.story-row .md-item .md-meta {
+  margin-top: 2px;
+}
+
+.story-pin,
+.story-hide {
+  flex: none;
   align-self: flex-start;
-  margin-top: 0.1rem;
-  opacity: 0;
-  transition: opacity 0.1s, color 0.1s;
-}
-.story:hover .dismiss-btn,
-.story.focused .dismiss-btn,
-.dismiss-btn:focus { opacity: 1; }
-.dismiss-btn:hover { color: var(--text); }
-
-/* Hidden rows are removed from the layout; the hidden-banner below the list
-   carries the recovery affordance ("show all"). */
-.story.dismissed { display: none; }
-
-/* Domain-filtered rows are also hidden. The filters dialog is the recovery
-   affordance (remove the domain from the block list to unhide). */
-.story.filtered { display: none; }
-
-.hidden-banner {
-  padding: 0.5rem 0.75rem;
-  border-top: 1px solid var(--row-border);
-  font-size: 0.85em;
-  color: var(--text-mute);
-  text-align: center;
-}
-.hidden-banner-show {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  color: var(--link);
-  cursor: pointer;
-  font: inherit;
+  width: 24px;
+  height: 24px;
+  margin: 5px 6px 0;
   padding: 0;
 }
-.hidden-banner-show {
-  text-decoration: underline;
-  text-decoration-color: var(--text-dim);
-  text-underline-offset: 2px;
-}
-.hidden-banner-show:hover { text-decoration-color: var(--link); }
 
-.rank {
-  color: var(--text-dim);
-  min-width: 1.4rem;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 0.85em;
-  padding-top: 0.1em;
-}
-
-/* Pin button at the far left of every row. Always visible as a hollow
-   outline pin in --text-dim (subtle but discoverable). Brightens on
-   row hover. When the row is actually pinned, the glyph fills in with
-   --link so pinned rows are clearly distinguished at a glance. */
-.pin-btn {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  border: 0;
-  outline: none;
-  padding: 0;
-  margin: 0;
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-dim);
-  line-height: 0;
-  opacity: 0.55;
-  transition: opacity 0.1s, color 0.1s;
-}
-.story:hover .pin-btn,
-.story.focused .pin-btn,
-.pin-btn:focus { opacity: 1; }
-.pin-btn:hover { color: var(--text); }
-.pin-btn .pin-icon {
-  display: block;
+.story-pin::before,
+.story-hide::before {
+  content: "";
   width: 12px;
   height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1;
-  stroke-linejoin: round;
+  background: currentColor;
+  -webkit-mask: var(--yv-glyph) center / contain no-repeat;
+  mask: var(--yv-glyph) center / contain no-repeat;
 }
-.story.pinned .pin-btn { color: var(--link); opacity: 1; }
-.story.pinned .pin-btn .pin-icon { fill: currentColor; }
 
-.body { flex: 1; min-width: 0; }
-.title a {
-  color: var(--text);
-  text-decoration: underline;
-  text-decoration-color: var(--text-dim);
-  text-underline-offset: 2px;
-  display: block;
-  line-height: 1.35;
+.story-pin { --yv-glyph: var(--yv-glyph-pin); }
+/* A pinned story's pin latches, pressed in, and its glyph fills. */
+.story-pin[aria-pressed="true"] {
+  --yv-glyph: var(--yv-glyph-pinned);
+  color: var(--accent);
+  background: var(--raise-active-bg);
+  box-shadow: var(--raise-active-shadow);
 }
-.title a:hover { text-decoration-color: var(--text); }
-.story.selected .title a { font-weight: 600; }
+.story-hide { --yv-glyph: var(--glyph-close); margin-inline-start: 0; }
 
-.meta {
-  color: var(--text-mute);
-  font-size: 0.8em;
-  margin-top: 0.2rem;
+/* The row's controls show in full on the row the pointer or the keyboard
+   is on, and stay faint elsewhere so thirty rows of buttons do not crowd
+   the headlines. A pinned story's pin always shows, since it states the
+   pin. On a touch screen, with nothing to hover, they always show. */
+@media (hover: hover) {
+  .story-row:not(:hover):not(:focus-within):not(.focused) .story-hide,
+  .story-row:not(:hover):not(:focus-within):not(.focused) .story-pin[aria-pressed="false"] {
+    opacity: .35;
+  }
 }
-.meta a {
-  color: var(--text-mute);
-  text-decoration: underline;
-  text-decoration-color: var(--text-dim);
-  text-underline-offset: 2px;
-}
-.meta a:hover { color: var(--text); text-decoration-color: var(--text); }
 
-.pager {
-  padding: 1rem;
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  justify-content: center;
-  border-top: 1px solid var(--pane-border);
-  flex-shrink: 0;
+/* The keyboard's place in the list (j and k), marked at the row's start
+   so it stays distinct from PUDL's accent edge at the end, which marks the
+   story whose window is in front. */
+.story-row.focused {
+  box-shadow: inset 3px 0 0 var(--text-muted);
 }
-.pager a {
-  color: var(--text);
-  text-decoration: underline;
-  text-decoration-color: var(--text-dim);
-  text-underline-offset: 2px;
-}
-.pager a:hover { text-decoration-color: var(--text); }
-.pager .disabled { color: var(--disabled); }
-.page-num { color: var(--text-dim); }
 
-.article-stub {
-  padding: 2rem;
+.story-row.visited:not(:has(> [aria-current]:not([aria-current="false"]))) .md-item {
+  color: var(--text-muted);
+}
+
+.story-row.dismissed,
+.story-row.filtered {
+  display: none;
+}
+
+.story-hidden {
+  padding: var(--space-3);
   text-align: center;
 }
-.article-stub.empty {
-  color: var(--text-dim);
-  display: flex;
-  align-items: center;
+
+.story-pager {
   justify-content: center;
-  height: 100%;
-}
-.article-stub h2 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-.article-host {
-  color: var(--text-mute);
-  margin: 0 0 1.5rem 0;
-  font-size: 0.9em;
-}
-.article-stub .cta {
-  display: inline-block;
-  padding: 0.5rem 1.25rem;
-  background: var(--cta-bg);
-  color: var(--cta-fg);
-  text-decoration: none;
-  border-radius: 4px;
-  font-weight: 500;
-}
-.article-stub .cta:hover { background: var(--cta-hover-bg); }
-.article-stub .note {
-  color: var(--text-dim);
-  font-size: 0.85em;
-  font-style: italic;
-  margin-top: 1.5rem;
+  padding: var(--space-3);
 }
 
-.empty-note {
-  padding: 1.5rem;
-  color: var(--text-dim);
-  font-size: 0.9em;
-  text-align: center;
+.list-notice {
+  margin: var(--space-3);
+}
+
+.list-empty {
+  padding-block: var(--space-5);
 }
 
 .end-of-list {
-  padding: 1.25rem 1rem;
+  padding: var(--space-4);
   text-align: center;
-  color: var(--text-dim);
-  font-size: 0.8em;
-  border-top: 1px solid var(--pane-border);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: .06em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  color: var(--text-muted);
 }
 
-.list-error {
-  padding: 1.5rem 1rem;
-  text-align: center;
-  color: var(--text-mute);
+/* === A story ==============================================================
+   The article above the discussion, each with a bar of its own, and PUDL's
+   splitter between them. The window's body gives the story its whole box,
+   and each pane scrolls inside it. */
+.story-win-body {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
-.list-error h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
-}
-.list-error p {
-  margin: 0 0 1rem;
-  font-size: 0.9em;
-}
-.list-error .cta {
-  display: inline-block;
-  padding: 0.4rem 1rem;
-  background: var(--cta-bg);
-  color: var(--cta-fg);
-  text-decoration: none;
-  border-radius: 4px;
-  font-weight: 500;
-}
-.list-error .cta:hover { background: var(--cta-hover-bg); }
 
+.story {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.story-split {
+  flex: 1;
+  min-height: 0;
+}
+
+.story-split > .story-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.story-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  padding: 3px var(--space-3);
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+}
+
+.story-discussion > .story-bar {
+  border-top: 1px solid var(--border);
+}
+
+.story-bar-label {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.story-bar-meta {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+
+.story-bar-spacer {
+  flex: 1;
+}
+
+.story-bar a {
+  flex: none;
+  white-space: nowrap;
+}
+
+.story-bar .icon-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+
+.story-refresh::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  -webkit-mask: var(--yv-glyph-refresh) center / contain no-repeat;
+  mask: var(--yv-glyph-refresh) center / contain no-repeat;
+}
+
+.story-refresh[aria-busy="true"]::before {
+  animation: pudl-spin .8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-refresh[aria-busy="true"]::before {
+    animation: none;
+  }
+}
+
+.story-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.story-scroll:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 3px var(--focus-ring);
+}
+
+.story-note {
+  --glyph-size: 28px;
+  padding: var(--space-5) var(--space-4);
+}
+
+.story > .story-note {
+  margin: auto;
+}
+
+/* A story's own page: the top bar, the story's title, and the story
+   filling the rest of the viewport. */
+body.story-page {
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.story-page-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.story-page-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.story-page-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.story-page-back {
+  flex: none;
+  font-size: var(--text-sm);
+}
+
+/* === Reader-mode prose ==================================================== */
 .article-content {
   max-width: 720px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 3rem;
-  font: 16px/1.6 Georgia, "Times New Roman", serif;
-  color: var(--article-text);
+  padding: var(--space-5) var(--space-5) var(--space-6);
+  font-size: var(--text-base);
+  line-height: 1.65;
+  color: var(--text);
+  overflow-wrap: break-word;
 }
+
 .article-content h1 {
-  font-size: 1.6rem;
-  font-weight: 700;
-  line-height: 1.25;
-  margin: 0 0 0.5rem;
+  font-size: var(--text-2xl);
+  margin: 0 0 var(--space-2);
 }
-.article-content h2 { font-size: 1.25rem; margin: 1.75rem 0 0.5rem; }
-.article-content h3 { font-size: 1.1rem; margin: 1.5rem 0 0.4rem; }
-.article-content p { margin: 0 0 1rem; }
-.article-content a { color: var(--link); }
+
+.article-content h2 { font-size: var(--text-xl); margin: var(--space-5) 0 var(--space-2); }
+.article-content h3 { font-size: var(--text-lg); margin: var(--space-4) 0 var(--space-2); }
+.article-content p { margin: 0 0 var(--space-4); }
+
 .article-content img,
 .article-content video,
 .article-content iframe {
   max-width: 100%;
   height: auto;
   display: block;
-  margin: 1rem auto;
-}
-.article-content figure { margin: 1.5rem 0; }
-.article-content figcaption {
-  font-size: 0.85em;
-  color: var(--text-mute);
-  text-align: center;
-  margin-top: 0.5rem;
-}
-.article-content blockquote {
-  margin: 1rem 0;
-  padding: 0.25rem 1rem;
-  border-left: 3px solid var(--pane-border);
-  color: var(--text-mute);
-  font-style: italic;
-}
-.article-content pre {
-  background: var(--code-bg);
-  padding: 0.75rem 1rem;
-  border-radius: 4px;
-  overflow-x: auto;
-  font: 13px/1.45 "SF Mono", Consolas, Menlo, monospace;
-}
-.article-content code {
-  font: 0.9em "SF Mono", Consolas, Menlo, monospace;
-  background: var(--code-bg);
-  padding: 0.05em 0.3em;
-  border-radius: 3px;
-}
-.article-content pre code {
-  background: none;
-  padding: 0;
-}
-.article-content ul,
-.article-content ol { padding-left: 1.5rem; margin: 0 0 1rem; }
-.article-content li { margin-bottom: 0.4rem; }
-.article-content hr {
-  border: 0;
-  border-top: 1px solid var(--pane-border);
-  margin: 2rem 0;
-}
-.article-content .byline {
-  color: var(--text-mute);
-  font: 0.95em/1.5 -apple-system, BlinkMacSystemFont, sans-serif;
-  margin-bottom: 1.5rem;
+  margin: var(--space-4) auto;
 }
 
+.article-content figure { margin: var(--space-5) 0; }
+
+.article-content figcaption {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: var(--space-2);
+}
+
+.article-content blockquote {
+  margin: var(--space-4) 0;
+  padding: var(--space-1) var(--space-4);
+  border-inline-start: 3px solid var(--border);
+  color: var(--text-muted);
+}
+
+.article-content pre,
+.comment-text pre {
+  background: var(--surface-alt);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-xs);
+  overflow-x: auto;
+  font: var(--text-sm)/1.45 var(--mono);
+}
+
+.article-content code,
+.comment-text code {
+  font-family: var(--mono);
+  font-size: .9em;
+}
+
+.article-content :not(pre) > code {
+  background: var(--surface-alt);
+  padding: .05em .3em;
+  border-radius: var(--radius-xs);
+}
+
+.article-content ul,
+.article-content ol { padding-inline-start: var(--space-5); margin: 0 0 var(--space-4); }
+.article-content li { margin-bottom: var(--space-1); }
+
+.article-content hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: var(--space-6) 0;
+}
+
+.article-content .byline {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-5);
+}
+
+/* === The discussion ======================================================= */
 .discussion-content {
-  padding: 0.5rem 0.75rem 1rem;
+  padding: var(--space-2) var(--space-3) var(--space-4);
 }
 
 .thread {
@@ -1127,154 +588,207 @@ html.focus-mode .splitter-v { display: none; }
 }
 
 .comment {
-  padding: 0.55rem 0;
-  border-bottom: 1px solid var(--comment-border);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--surface-alt);
 }
+
 .comment:last-child { border-bottom: 0; }
 
 .comment-header {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   align-items: baseline;
-  font-size: 0.8em;
-  color: var(--text-mute);
-  margin-bottom: 0.25rem;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
   cursor: pointer;
-  -webkit-user-select: none;
   user-select: none;
 }
+
 .comment-toggle {
-  color: var(--text-dim);
-  font-size: 0.7em;
-  line-height: 1;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  align-self: center;
+  background: var(--text-muted);
+  -webkit-mask: var(--glyph-sort-down) center / contain no-repeat;
+  mask: var(--glyph-sort-down) center / contain no-repeat;
 }
-.comment-toggle::before { content: '\25bc'; } /* ▼ */
-.comment.collapsed > .comment-header > .comment-toggle::before { content: '\25b6'; } /* ▶ */
+
+.comment.collapsed > .comment-header > .comment-toggle {
+  transform: rotate(-90deg);
+}
+
+.comment-toggle:dir(rtl) { scale: -1 1; }
+
 .comment-collapsed-count {
   display: none;
-  color: var(--text-mute);
   font-style: italic;
 }
+
 .comment.collapsed > .comment-header > .comment-collapsed-count { display: inline; }
+
 .comment.collapsed > .comment-text,
 .comment.collapsed > .thread { display: none; }
+
+/* A comment newer than the reader's last visit to the story carries the
+   word "new" as well as the accent edge, so the colour is never the only
+   sign. */
 .comment-new {
-  box-shadow: inset 4px 0 0 var(--link);
-  background: rgba(26, 115, 232, 0.07);
-  padding-left: 0.5rem;
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  padding-inline-start: var(--space-2);
 }
-/* Keyboard-focused top-level comment (n / N navigation, c collapse target).
-   Distinct from .comment-new (which uses --link); .comment.focused uses
-   --text so the two cues co-exist legibly even when both apply. */
-.comment.focused {
-  box-shadow: inset 4px 0 0 var(--text);
-  background: var(--hover);
-  padding-left: 0.5rem;
-}
-:root[data-theme="dark"] .comment-new {
-  background: rgba(107, 163, 255, 0.10);
-}
+
 .comment-new-badge {
   display: none;
-  color: var(--link);
-  font-size: 0.7em;
+  color: var(--accent);
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: .06em;
 }
+
 .comment-new > .comment-header > .comment-new-badge { display: inline; }
-.comment-author { font-weight: 500; color: var(--text); }
-.comment-age { color: var(--text-dim); }
-.comment-link {
-  color: var(--text-dim);
-  text-decoration: none;
-  margin-left: auto;
+
+/* The comment n and N move to, which c collapses. */
+.comment.focused {
+  box-shadow: inset 3px 0 0 var(--text);
+  background: var(--surface-alt);
+  padding-inline-start: var(--space-2);
 }
-.comment-link:hover { color: var(--text); }
+
+.comment-author { font-weight: 600; color: var(--text); }
+
+.comment-link {
+  margin-inline-start: auto;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.comment-link:hover { color: var(--accent); }
 
 .comment-text {
-  font-size: 0.9em;
-  line-height: 1.5;
-  color: var(--text);
-  word-wrap: break-word;
+  font-size: var(--text-sm);
+  line-height: 1.55;
   overflow-wrap: break-word;
 }
-.comment-text p { margin: 0 0 0.6em; }
+
+.comment-text p { margin: 0 0 .6em; }
 .comment-text p:last-child { margin-bottom: 0; }
-.comment-text a { color: var(--link); }
-.comment-text pre {
-  background: var(--code-bg);
-  padding: 0.5em 0.75em;
-  border-radius: 3px;
-  overflow-x: auto;
-  font: 12.5px/1.4 "SF Mono", Consolas, Menlo, monospace;
-}
-.comment-text code {
-  font: 0.9em "SF Mono", Consolas, Menlo, monospace;
-}
 
 .comment .thread {
-  padding-left: 1rem;
-  margin-top: 0.4rem;
-  border-left: 2px solid var(--thread-rule);
+  padding-inline-start: var(--space-4);
+  margin-top: var(--space-2);
+  border-inline-start: 2px solid var(--surface-alt);
 }
 
-/* Narrow viewports: tighten padding, inline the list rank, clamp list pane. */
-@media (max-width: 800px) {
-  header { padding: 0 0.5rem; }
+/* === Dialogs ============================================================== */
+.wide-dialog {
+  max-width: 600px;
+}
 
-  .layout {
-    /* Don't let a desktop-saved splitter width squeeze the right pane. */
-    grid-template-columns: min(var(--list-w, 250px), 50vw) 4px 1fr;
-  }
+.help-body section + section {
+  margin-top: var(--space-4);
+}
 
-  .source-tabs a {
-    padding: 0.35rem 0.5rem;
-    font-size: 0.75em;
-  }
+.help-body h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
 
-  .pane-header {
-    padding: 0.3rem 0.6rem;
-  }
+.help-body p {
+  margin: 0 0 var(--space-2);
+  color: var(--text);
+}
 
-  .story {
-    display: block;
-    padding: 0.45rem 0.6rem;
-  }
-  .story::after {
-    content: '';
-    display: block;
-    clear: both;
-  }
-  .rank {
-    float: left;
-    min-width: 0;
-    padding: 0 0.3rem 0 0;
-    text-align: left;
-    color: var(--text-mute);
-    font-size: inherit;
-  }
-  .meta {
-    font-size: 0.78em;
-    margin-top: 0.15rem;
-  }
+.keys {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  color: var(--text);
+  align-items: baseline;
+}
 
-  .pager { padding: 0.75rem; }
+.keys dt { font-weight: 600; }
+.keys dd { margin: 0; }
 
-  .article-content {
-    padding: 1rem 0.85rem 1.5rem;
-    font-size: 15px;
-  }
-  .article-content h1 { font-size: 1.25rem; }
-  .article-content h2 { font-size: 1.05rem; margin-top: 1.25rem; }
-  .article-content h3 { font-size: 0.95rem; margin-top: 1rem; }
+kbd {
+  font: var(--text-xs) var(--mono);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-alt);
+  color: var(--text);
+}
 
-  .discussion-content {
-    padding: 0.5rem 0.6rem 1rem;
-  }
-  .comment { padding: 0.45rem 0; }
-  .comment .thread {
-    padding-left: 0.75rem;
-    margin-top: 0.3rem;
-  }
+.dialog-body code {
+  font-family: var(--mono);
+  font-size: .9em;
+}
+
+.filters-list {
+  list-style: none;
+  margin: var(--space-3) 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.filters-list:empty {
+  display: none;
+}
+
+.filters-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--surface-alt);
+  color: var(--text);
+}
+
+.filters-list-item:last-child { border-bottom: 0; }
+
+.filters-list-name {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+}
+
+.filters-list-remove {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+
+.filters-list-remove::before {
+  content: "";
+  width: 11px;
+  height: 11px;
+  background: currentColor;
+  -webkit-mask: var(--glyph-close) center / contain no-repeat;
+  mask: var(--glyph-close) center / contain no-repeat;
+}
+
+.filters-empty {
+  font-style: italic;
+}
+
+.filters-add-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.filters-add-row .form-input {
+  flex: 1;
+  min-width: 0;
 }

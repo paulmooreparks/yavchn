@@ -1,15 +1,15 @@
+/* A story's discussion: collapsing threads, which is remembered per story,
+   marking the comments that arrived since the reader's last visit, and the
+   n, N and c keys, which act on the story in the window in front. */
 (function () {
-  function storyIDOfComment(comment) {
-    var pane = comment.closest('.pane-discussion');
-    return pane ? pane.dataset.discussionId : '';
-  }
+  'use strict';
+
+  function storyOf(el) { return el.closest('.story'); }
 
   function loadCollapsed(storyID) {
     if (!storyID) return [];
     try {
-      var raw = localStorage.getItem('yavchn-collapsed:' + storyID);
-      if (!raw) return [];
-      var arr = JSON.parse(raw);
+      var arr = JSON.parse(localStorage.getItem('yavchn-collapsed:' + storyID) || '[]');
       return Array.isArray(arr) ? arr : [];
     } catch (err) { return []; }
   }
@@ -21,16 +21,15 @@
     try { localStorage.setItem('yavchn-collapsed:' + storyID, JSON.stringify(ids)); } catch (err) {}
   }
 
-  // Toggle a comment's collapsed state + persist the change. Shared between
-  // the click handler (clicking the comment header) and the keyboard handler
-  // (pressing `c` while a comment is focused), so the two paths can't drift.
+  // Shared by the click on a comment's header and the c key, so the two
+  // can't drift.
   function toggleCollapse(comment) {
     if (!comment) return;
     var nowCollapsed = comment.classList.toggle('collapsed');
+    var story = storyOf(comment);
+    var storyID = story && story.dataset.storyId;
     var id = comment.dataset.id;
-    if (!id) return;
-    var storyID = storyIDOfComment(comment);
-    if (!storyID) return;
+    if (!storyID || !id) return;
     var ids = loadCollapsed(storyID);
     var idx = ids.indexOf(id);
     if (nowCollapsed && idx < 0) ids.push(id);
@@ -38,116 +37,111 @@
     saveCollapsed(storyID, ids);
   }
 
-  // Delegated click handler: click anywhere on a comment header (but not
-  // on a link / button) toggles the comment's collapsed state. Listens on
-  // document so it survives pane-swap (yavchn-12) and lazy-load.
   document.addEventListener('click', function (e) {
     if (e.target.closest('a, button')) return;
-    var header = e.target.closest('.pane-discussion .comment-header');
-    if (!header) return;
-    toggleCollapse(header.closest('.comment'));
+    var header = e.target.closest('.story .comment-header');
+    if (header) toggleCollapse(header.closest('.comment'));
   });
 
-  // Highlight comments newer than the visitor's last-visit timestamp for
-  // this story. Fires on yavchn:loaded (dispatched by reader.js after the
-  // discussion fragment is injected) -- runs whether the discussion was
-  // lazy-loaded on initial pageview or replaced via pane-swap.
-  // Jump-to-next / -previous top-level comment via n / N (shift). Index is
-  // reset on every yavchn:loaded so each new story starts at the first
-  // top-level comment.
-  var topIdx = -1;
-
-  function topLevelComments() {
-    return Array.prototype.slice.call(
-      document.querySelectorAll('.pane-discussion .discussion-content > .thread > .comment')
-    );
+  function topLevel(story) {
+    return Array.prototype.slice.call(story.querySelectorAll('.discussion-content > .thread > .comment'));
   }
 
-  function inEditable(t) {
-    if (!t) return false;
-    var tag = (t.tagName || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-    return !!t.isContentEditable;
+  // The keyboard's place among a story's top-level comments is kept on the
+  // story, so each window remembers its own. The story applet keeps it in
+  // its state, and hears of each move through yavchn:comment-focus.
+  function setFocus(story, idx, scroll) {
+    var comments = topLevel(story);
+    comments.forEach(function (c, i) { c.classList.toggle('focused', i === idx); });
+    story.dataset.commentIdx = String(idx);
+    var c = comments[idx];
+    if (c && scroll) c.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    story.dispatchEvent(new CustomEvent('yavchn:comment-focus', { bubbles: true }));
+    return c;
   }
 
-  // Mark a single top-level comment as keyboard-focused (stripping the
-  // class from any other focused comment). Lets the visitor see which
-  // comment `c` will act on.
-  function setFocus(comments, idx) {
-    for (var i = 0; i < comments.length; i++) {
-      comments[i].classList.toggle('focused', i === idx);
-    }
+  function currentIdx(story) { return parseInt(story.dataset.commentIdx || '-1', 10); }
+
+  function step(story, dir) {
+    var n = topLevel(story).length;
+    if (!n) return false;
+    var idx = currentIdx(story);
+    setFocus(story, dir > 0 ? Math.min(idx + 1, n - 1) : Math.max(idx - 1, 0), true);
+    return true;
   }
+
+  function focusId(story, id, scroll) {
+    var idx = topLevel(story).findIndex(function (c) { return c.dataset.id === id; });
+    if (idx >= 0) setFocus(story, idx, scroll);
+  }
+
+  // The first top-level comment holding a comment new since the last visit.
+  function firstNew(story) {
+    var idx = topLevel(story).findIndex(function (c) {
+      return c.classList.contains('comment-new') || !!c.querySelector('.comment-new');
+    });
+    if (idx < 0) return;
+    var c = setFocus(story, idx, false);
+    var target = c.classList.contains('comment-new') ? c : c.querySelector('.comment-new');
+    if (c.classList.contains('collapsed')) toggleCollapse(c);
+    target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
+  function collapseAll(story, on) {
+    var storyID = story.dataset.storyId;
+    var ids = loadCollapsed(storyID);
+    topLevel(story).forEach(function (c) {
+      c.classList.toggle('collapsed', on);
+      var i = ids.indexOf(c.dataset.id);
+      if (on && i < 0 && c.dataset.id) ids.push(c.dataset.id);
+      else if (!on && i >= 0) ids.splice(i, 1);
+    });
+    saveCollapsed(storyID, ids);
+  }
+
+  window.yavchn.discussion = { step: step, focusId: focusId, firstNew: firstNew, collapseAll: collapseAll };
 
   document.addEventListener('keydown', function (e) {
-    if (e.ctrlKey || e.altKey || e.metaKey) return;
-    if (inEditable(e.target)) return;
-
-    // n / N: navigate top-level comments + mark focus.
-    if (e.key === 'n' || e.key === 'N') {
-      var comments = topLevelComments();
-      if (!comments.length) return;
-      if (e.key === 'n') {
-        topIdx = topIdx < comments.length - 1 ? topIdx + 1 : comments.length - 1;
-      } else {
-        topIdx = topIdx > 0 ? topIdx - 1 : 0;
-      }
-      setFocus(comments, topIdx);
-      var c = comments[topIdx];
-      if (c && typeof c.scrollIntoView === 'function') {
-        c.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      }
+    if (!window.yavchn.plainKey(e)) return;
+    if (e.key !== 'n' && e.key !== 'N' && e.key !== 'c') return;
+    var story = window.yavchn.currentStory();
+    if (!story) return;
+    if (e.key === 'c') {
+      var comments = topLevel(story), idx = currentIdx(story);
+      if (idx < 0 || idx >= comments.length) return;
       e.preventDefault();
+      toggleCollapse(comments[idx]);
       return;
     }
-
-    // c: toggle collapse on the focused top-level comment.
-    if (e.key === 'c' && !e.shiftKey) {
-      var topComments = topLevelComments();
-      if (!topComments.length || topIdx < 0 || topIdx >= topComments.length) return;
-      toggleCollapse(topComments[topIdx]);
-      e.preventDefault();
-    }
-  });
-
-  document.addEventListener('yavchn:loaded', function (e) {
-    topIdx = -1;
+    if (step(story, e.key === 'n' ? 1 : -1)) e.preventDefault();
   });
 
   document.addEventListener('yavchn:loaded', function (e) {
     var body = e.target;
-    var pane = body.closest('.pane-discussion');
-    if (!pane) return;
-    var storyID = pane.dataset.discussionId;
+    if (!body.classList.contains('story-discussion-body')) return;
+    var story = storyOf(body);
+    var storyID = story && story.dataset.storyId;
     if (!storyID) return;
+    delete story.dataset.commentIdx;
 
-    // Restore persisted collapse state.
     var collapsed = loadCollapsed(storyID);
     if (collapsed.length) {
       var set = {};
-      for (var ci = 0; ci < collapsed.length; ci++) set[collapsed[ci]] = true;
-      var coms = body.querySelectorAll('.comment[data-id]');
-      for (var k = 0; k < coms.length; k++) {
-        if (set[coms[k].dataset.id]) coms[k].classList.add('collapsed');
-      }
+      collapsed.forEach(function (id) { set[id] = true; });
+      body.querySelectorAll('.comment[data-id]').forEach(function (c) {
+        if (set[c.dataset.id]) c.classList.add('collapsed');
+      });
     }
 
-    // Highlight comments newer than last visit.
+    // Mark comments newer than the last visit, then remember this one.
     var key = 'yavchn-last-visit:' + storyID;
     var prev = 0;
-    try {
-      prev = parseInt(localStorage.getItem(key) || '0', 10) || 0;
-    } catch (err) {}
-
+    try { prev = parseInt(localStorage.getItem(key) || '0', 10) || 0; } catch (err) {}
     if (prev > 0) {
-      var comments = body.querySelectorAll('.comment[data-ts]');
-      for (var i = 0; i < comments.length; i++) {
-        var ts = parseInt(comments[i].dataset.ts || '0', 10);
-        if (ts > prev) comments[i].classList.add('comment-new');
-      }
+      body.querySelectorAll('.comment[data-ts]').forEach(function (c) {
+        if (parseInt(c.dataset.ts || '0', 10) > prev) c.classList.add('comment-new');
+      });
     }
-
-    // Save now() so the next visit highlights only what arrived after this one.
     try { localStorage.setItem(key, String(Math.floor(Date.now() / 1000))); } catch (err) {}
   });
 })();

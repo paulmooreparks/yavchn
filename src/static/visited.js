@@ -1,12 +1,15 @@
+/* Stories the reader has opened, kept in this browser under
+   yavchn-visited, fade in the list so the eye passes over them on the next
+   scan. A story counts as visited once its window opens, however it was
+   opened: a row, the keyboard, the dock or an address. */
 (function () {
+  'use strict';
   var KEY = 'yavchn-visited';
   var CAP = 500;
 
   function load() {
     try {
-      var raw = localStorage.getItem(KEY);
-      if (!raw) return [];
-      var arr = JSON.parse(raw);
+      var arr = JSON.parse(localStorage.getItem(KEY) || '[]');
       return Array.isArray(arr) ? arr : [];
     } catch (e) { return []; }
   }
@@ -16,8 +19,8 @@
     try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch (e) {}
   }
 
-  // LIFO: if id is already present, move it to the end so eviction prefers
-  // genuinely-cold stories on overflow.
+  // An id already present moves to the end, so eviction prefers
+  // genuinely cold stories.
   function add(id) {
     if (!id) return;
     var arr = load();
@@ -28,41 +31,23 @@
   }
 
   function apply() {
-    var arr = load();
-    if (!arr.length) return;
     var set = {};
-    for (var i = 0; i < arr.length; i++) set[arr[i]] = true;
-    var rows = document.querySelectorAll('.pane-list .story[data-id]');
-    for (var j = 0; j < rows.length; j++) {
-      if (set[rows[j].dataset.id]) rows[j].classList.add('visited');
-    }
-  }
-
-  function currentURLStoryID() {
-    var m = window.location.pathname.match(/\/s\/([a-z0-9]+)/i);
-    return m ? m[1] : null;
-  }
-
-  // Mark the URL's story (if any) visited on load, then apply classes.
-  add(currentURLStoryID());
-  apply();
-
-  // Re-apply when infinite-scroll appends fresh rows from page 2/3/etc.
-  document.addEventListener('yavchn:rows-appended', function () { apply(); });
-
-  // Mark clicks immediately so the fade appears right away (before pane-swap
-  // navigates away). swap.js handles the navigation; this just tracks state.
-  var list = document.querySelector('.pane-list');
-  if (list) {
-    list.addEventListener('click', function (e) {
-      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-      if (e.button !== 0) return;
-      var a = e.target.closest('.story .title a');
-      if (!a) return;
-      var row = a.closest('.story');
-      if (!row || !row.dataset.id) return;
-      add(row.dataset.id);
-      row.classList.add('visited');
+    load().forEach(function (id) { set[id] = true; });
+    document.querySelectorAll('.story-list .story-row[data-id]').forEach(function (row) {
+      row.classList.toggle('visited', !!set[row.dataset.id]);
     });
   }
+
+  function visit(story) {
+    if (story && story.dataset.storyId) add(story.dataset.storyId);
+  }
+
+  document.querySelectorAll('.story').forEach(visit);
+  document.addEventListener('pudl:window-open', function (e) {
+    e.target.querySelectorAll('.story').forEach(visit);
+    apply();
+  });
+
+  window.yavchn.onList(apply);
+  document.addEventListener('yavchn:rows-appended', apply);
 })();

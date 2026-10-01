@@ -1,4 +1,9 @@
+/* The order of a discussion's top-level comments: the source's own
+   ("Best"), newest first or oldest first. The choice is the reader's, kept
+   under yavchn-comment-sort, and every story follows it. Replies stay in
+   the order the source gave them, as HN's own sort does. */
 (function () {
+  'use strict';
   var KEY = 'yavchn-comment-sort';
 
   function getPref() {
@@ -13,63 +18,47 @@
     try { localStorage.setItem(KEY, p); } catch (e) {}
   }
 
-  // Reorder top-level comments only. Children stay chronologically nested
-  // inside their thread (matches HN's own UX: changing the sort changes
-  // which discussions surface first, not how replies within a discussion
-  // are laid out).
-  function applySort(pane) {
-    var sel = pane.querySelector('.comment-sort');
-    if (sel && sel.value !== getPref()) sel.value = getPref();
-    var root = pane.querySelector('.discussion-content > .thread');
+  function syncButtons(scope) {
+    var mode = getPref();
+    scope.querySelectorAll('.story-sort [data-sort]').forEach(function (b) {
+      b.setAttribute('aria-pressed', b.dataset.sort === mode ? 'true' : 'false');
+    });
+  }
+
+  function applySort(story) {
+    var root = story.querySelector('.discussion-content > .thread');
     if (!root) return;
     var items = Array.prototype.slice.call(root.children);
     if (items.length < 2) return;
-
-    // Stamp the server-given order once so "Best" can restore it after the
-    // visitor flips to Newest / Oldest and back.
-    for (var i = 0; i < items.length; i++) {
-      if (!items[i].dataset.serverOrder) items[i].dataset.serverOrder = String(i);
-    }
-
+    // Stamp the server's order once, so "Best" can restore it.
+    items.forEach(function (it, i) { if (!it.dataset.serverOrder) it.dataset.serverOrder = String(i); });
     var mode = getPref();
     items.sort(function (a, b) {
-      if (mode === 'best') {
-        return Number(a.dataset.serverOrder) - Number(b.dataset.serverOrder);
-      }
-      var ta = Number(a.dataset.ts || 0);
-      var tb = Number(b.dataset.ts || 0);
-      if (mode === 'newest') return tb - ta;
-      return ta - tb;
+      if (mode === 'best') return Number(a.dataset.serverOrder) - Number(b.dataset.serverOrder);
+      var ta = Number(a.dataset.ts || 0), tb = Number(b.dataset.ts || 0);
+      return mode === 'newest' ? tb - ta : ta - tb;
     });
-    for (var j = 0; j < items.length; j++) root.appendChild(items[j]);
+    items.forEach(function (it) { root.appendChild(it); });
   }
 
-  // Sync the dropdown's value to the persisted pref even when there's no
-  // discussion content yet (e.g. the loading-state placeholder).
-  function syncSelect(pane) {
-    var sel = pane.querySelector('.comment-sort');
-    if (sel) sel.value = getPref();
-  }
-
-  // Fires after reader.js injects the discussion fragment into .pane-body.
   document.addEventListener('yavchn:loaded', function (e) {
-    var pane = e.target.closest('.pane-discussion');
-    if (!pane) return;
-    applySort(pane);
+    if (!e.target.classList.contains('story-discussion-body')) return;
+    applySort(e.target.closest('.story'));
   });
 
-  // Initial page-load: pane is server-rendered with the discussion fetch
-  // still pending. Sync select value now so it shows the right option
-  // before discussion content arrives.
-  var initialPane = document.querySelector('.pane-discussion');
-  if (initialPane) syncSelect(initialPane);
+  function choose(mode) {
+    setPref(mode);
+    syncButtons(document);
+    document.querySelectorAll('.story').forEach(applySort);
+  }
 
-  // Document-level so it survives swap.js replacing the discussion section.
-  document.addEventListener('change', function (e) {
-    var sel = e.target.closest('.pane-discussion .comment-sort');
-    if (!sel) return;
-    setPref(sel.value);
-    var pane = sel.closest('.pane-discussion');
-    if (pane) applySort(pane);
+  window.yavchn.sort = { get: getPref, set: choose };
+
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('.story-sort [data-sort]');
+    if (b) choose(b.dataset.sort);
   });
+
+  document.addEventListener('pudl:window-open', function (e) { syncButtons(e.target); });
+  syncButtons(document);
 })();

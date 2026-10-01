@@ -86,6 +86,11 @@ func main() {
 	// Discussion-finder: /find (empty) and /find?url=<encoded> (results).
 	mux.HandleFunc("GET /find", srv.Finder)
 
+	// A story window's markup, fetched by pudl-windows.js, and a story's
+	// own page, where its link goes without script.
+	mux.HandleFunc("GET /window/{key}", srv.Window)
+	mux.HandleFunc("GET /story/{source}/{id}", srv.StoryPage)
+
 	// Root → redirect to the default source. The client-side dropdown can
 	// override this on subsequent visits by navigating to /{stored-source}/
 	// directly; we just need a sensible landing page for first-touch.
@@ -103,20 +108,26 @@ func main() {
 	// falling into the catch-all source-tab route which would 404 anyway,
 	// but with a less helpful message).
 	mux.HandleFunc("GET /hn/search", srv.Search)
-	mux.HandleFunc("GET /hn/search/s/{id}", srv.Search)
+	mux.HandleFunc("GET /hn/search/s/{id}", windowRedirect("/hn/search", "hn"))
 	mux.HandleFunc("GET /lobsters/search", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Search isn't available for Lobsters (no JSON search API). Use /hn/search instead.", http.StatusNotFound)
 	})
 
-	// Pinned: global, cross-source. Two URL shapes for the selected story:
-	//   /pinned/s/{id}             — legacy, defaults to HN source
-	//   /pinned/s/{source}/{id}    — explicit source for new pin entries
+	// Pinned: global, cross-source. The two older shapes that named a
+	// selected story, /pinned/s/{id} (HN) and /pinned/s/{source}/{id},
+	// redirect to the story's window.
 	mux.HandleFunc("GET /pinned", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/pinned/", http.StatusFound)
 	})
 	mux.HandleFunc("GET /pinned/{$}", srv.Pinned)
-	mux.HandleFunc("GET /pinned/s/{id}", srv.Pinned)
-	mux.HandleFunc("GET /pinned/s/{source}/{id}", srv.Pinned)
+	mux.HandleFunc("GET /pinned/s/{id}", windowRedirect("/pinned/", "hn"))
+	mux.HandleFunc("GET /pinned/s/{source}/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := sources[r.PathValue("source")]; !ok {
+			http.NotFound(w, r)
+			return
+		}
+		windowRedirect("/pinned/", r.PathValue("source"))(w, r)
+	})
 
 	// Backwards-compat 301 redirects from the pre-multi-source flat URLs.
 	registerLegacyRedirects(mux)
@@ -141,17 +152,34 @@ func main() {
 	_ = httpSrv.Shutdown(shutCtx)
 }
 
-// registerSourceRoutes wires the four URL shapes a source needs:
-//   GET /{source}/                      — default tab, no selection
-//   GET /{source}/{tab}/                — explicit tab, no selection
-//   GET /{source}/s/{id}                — default tab, story selected
-//   GET /{source}/{tab}/s/{id}          — explicit tab, story selected
+// windowRedirect sends an address from before story windows, which named
+// one selected story as .../s/{id}, to the list it was on with that story's
+// window open, keeping its other parameters (a page, a search).
+func windowRedirect(listPath, source string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !storyIDRE.MatchString(id) {
+			http.NotFound(w, r)
+			return
+		}
+		key := source + "-" + id
+		st := winState{named: true, open: []string{key}, top: key}
+		http.Redirect(w, r, winURL(listPath, restParams(r.URL.Query()), st), http.StatusMovedPermanently)
+	}
+}
+
+// registerSourceRoutes wires the URL shapes a source needs:
+//
+//	GET /{source}/                      default tab
+//	GET /{source}/{tab}/                explicit tab
+//	GET /{source}/s/{id}                older address of a selected story, redirected to its window
+//	GET /{source}/{tab}/s/{id}          the same, on a tab
 func registerSourceRoutes(mux *http.ServeMux, name string, src Source, srv *Server) {
 	def := src.DefaultTab()
 
-	// Default tab — bare /{source}/ and /{source}/s/{id}.
+	// Default tab: bare /{source}/, and the older /{source}/s/{id}.
 	mux.HandleFunc("GET /"+name+"/{$}", srv.SourceIndex(src, def))
-	mux.HandleFunc("GET /"+name+"/s/{id}", srv.SourceIndex(src, def))
+	mux.HandleFunc("GET /"+name+"/s/{id}", windowRedirect("/"+name+"/", name))
 	// Tolerate the trailing-slash-less variant by redirecting (matches the
 	// browser's natural URL shape from typed addresses).
 	mux.HandleFunc("GET /"+name, func(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +195,7 @@ func registerSourceRoutes(mux *http.ServeMux, name string, src Source, srv *Serv
 			continue
 		}
 		mux.HandleFunc("GET /"+name+"/"+t.Slug+"/{$}", srv.SourceIndex(src, t.Slug))
-		mux.HandleFunc("GET /"+name+"/"+t.Slug+"/s/{id}", srv.SourceIndex(src, t.Slug))
+		mux.HandleFunc("GET /"+name+"/"+t.Slug+"/s/{id}", windowRedirect("/"+name+"/"+t.Slug+"/", name))
 		mux.HandleFunc("GET /"+name+"/"+t.Slug, func(slug string) http.HandlerFunc {
 			return func(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, "/"+name+"/"+slug+"/", http.StatusFound)
@@ -179,18 +207,14 @@ func registerSourceRoutes(mux *http.ServeMux, name string, src Source, srv *Serv
 // registerLegacyRedirects 301-redirects the pre-multi-source flat URLs to
 // their /hn/* equivalents so bookmarks and external links still work.
 func registerLegacyRedirects(mux *http.ServeMux) {
-	// Legacy /s/{id} → /hn/s/{id}
-	mux.HandleFunc("GET /s/{id}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/hn/s/"+r.PathValue("id")+queryString(r), http.StatusMovedPermanently)
-	})
+	// Legacy /s/{id} → the HN front page with the story's window open.
+	mux.HandleFunc("GET /s/{id}", windowRedirect("/hn/", "hn"))
 
 	// Legacy /search and /search/s/{id} → /hn/search…
 	mux.HandleFunc("GET /search", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/hn/search"+queryString(r), http.StatusMovedPermanently)
 	})
-	mux.HandleFunc("GET /search/s/{id}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/hn/search/s/"+r.PathValue("id")+queryString(r), http.StatusMovedPermanently)
-	})
+	mux.HandleFunc("GET /search/s/{id}", windowRedirect("/hn/search", "hn"))
 
 	// Legacy HN tab roots → /hn/{tab}/ (top has no flat variant; the legacy
 	// /show, /ask, /new, /best, /jobs all map to their HN tab equivalents).
@@ -202,9 +226,7 @@ func registerLegacyRedirects(mux *http.ServeMux) {
 		mux.HandleFunc("GET /"+tab+"/{$}", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/hn/"+tab+"/"+queryString(r), http.StatusMovedPermanently)
 		})
-		mux.HandleFunc("GET /"+tab+"/s/{id}", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/hn/"+tab+"/s/"+r.PathValue("id")+queryString(r), http.StatusMovedPermanently)
-		})
+		mux.HandleFunc("GET /"+tab+"/s/{id}", windowRedirect("/hn/"+tab+"/", "hn"))
 	}
 }
 

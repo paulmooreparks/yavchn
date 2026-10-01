@@ -1,12 +1,14 @@
+/* Hidden stories, kept in this browser under yavchn-dismissed. A row's
+   cross hides its story from every list, and the button below the list
+   brings them all back. */
 (function () {
+  'use strict';
   var KEY = 'yavchn-dismissed';
   var CAP = 1000;
 
   function load() {
     try {
-      var raw = localStorage.getItem(KEY);
-      if (!raw) return [];
-      var arr = JSON.parse(raw);
+      var arr = JSON.parse(localStorage.getItem(KEY) || '[]');
       return Array.isArray(arr) ? arr : [];
     } catch (e) { return []; }
   }
@@ -16,7 +18,7 @@
     try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch (e) {}
   }
 
-  // LIFO: refresh recency on re-dismiss so eviction prefers genuinely cold IDs.
+  // Refresh recency on re-dismiss so eviction prefers genuinely cold IDs.
   function add(id) {
     if (!id) return;
     var arr = load();
@@ -26,66 +28,57 @@
     save(arr);
   }
 
-  function clear() {
-    try { localStorage.removeItem(KEY); } catch (e) {}
-  }
-
-  function applyAndBanner() {
-    var arr = load();
-    var rows = document.querySelectorAll('.pane-list .story[data-id]');
-    if (arr.length) {
-      var set = {};
-      for (var i = 0; i < arr.length; i++) set[arr[i]] = true;
-      for (var j = 0; j < rows.length; j++) {
-        rows[j].classList.toggle('dismissed', !!set[rows[j].dataset.id]);
-      }
-    } else {
-      for (var k = 0; k < rows.length; k++) rows[k].classList.remove('dismissed');
-    }
+  function apply() {
+    var set = {};
+    load().forEach(function (id) { set[id] = true; });
+    document.querySelectorAll('.story-list .story-row[data-id]').forEach(function (row) {
+      row.classList.toggle('dismissed', !!set[row.dataset.id]);
+    });
     updateBanner();
   }
 
   function updateBanner() {
-    var banner = document.querySelector('.pane-list .hidden-banner');
+    var banner = document.querySelector('.story-list .story-hidden');
     if (!banner) return;
-    var hiddenRows = document.querySelectorAll('.pane-list .story.dismissed').length;
-    if (hiddenRows === 0) {
-      banner.hidden = true;
-      return;
-    }
-    var btn = banner.querySelector('.hidden-banner-show');
-    if (btn) {
-      var noun = hiddenRows === 1 ? 'story' : 'stories';
-      btn.textContent = hiddenRows + ' hidden ' + noun + ' — show all';
-    }
-    banner.hidden = false;
+    var n = document.querySelectorAll('.story-list .story-row.dismissed').length;
+    banner.hidden = n === 0;
+    var btn = banner.querySelector('.story-show-hidden');
+    if (btn && n) btn.textContent = 'Show ' + n + ' hidden ' + (n === 1 ? 'story' : 'stories');
   }
 
-  applyAndBanner();
-
-  // Re-apply when infinite-scroll appends fresh rows from page 2/3/etc.
-  document.addEventListener('yavchn:rows-appended', function () { applyAndBanner(); });
-
-  // Delegated click handler -- survives pane-swap and lazy-loaded list rows.
   document.addEventListener('click', function (e) {
-    var dismissBtn = e.target.closest('.pane-list .dismiss-btn');
-    if (dismissBtn) {
+    var hide = e.target.closest && e.target.closest('.story-row .story-hide');
+    if (hide) {
       e.preventDefault();
-      e.stopPropagation();
-      var row = dismissBtn.closest('.story');
+      var row = hide.closest('.story-row');
       if (!row || !row.dataset.id) return;
+      // The keyboard's mark moves on to the next row before this one goes.
+      if (row.classList.contains('focused')) {
+        var next = row.nextElementSibling;
+        while (next && (!next.classList.contains('story-row') || next.offsetParent === null)) next = next.nextElementSibling;
+        row.classList.remove('focused');
+        if (next) next.classList.add('focused');
+      }
       add(row.dataset.id);
       row.classList.add('dismissed');
       updateBanner();
       return;
     }
-    var showAll = e.target.closest('.pane-list .hidden-banner-show');
-    if (showAll) {
+    if (e.target.closest && e.target.closest('.story-list .story-show-hidden')) {
       e.preventDefault();
-      clear();
-      var rows = document.querySelectorAll('.pane-list .story.dismissed');
-      for (var i = 0; i < rows.length; i++) rows[i].classList.remove('dismissed');
-      updateBanner();
+      try { localStorage.removeItem(KEY); } catch (err) {}
+      apply();
     }
   });
+
+  // For the story applet's menu, which hides the story in front.
+  window.yavchn.hiding = window.yavchn.hiding || {};
+  window.yavchn.hiding.hide = function (id) {
+    add(id);
+    apply();
+    document.dispatchEvent(new CustomEvent('yavchn:list-change'));
+  };
+
+  window.yavchn.onList(apply);
+  document.addEventListener('yavchn:rows-appended', apply);
 })();

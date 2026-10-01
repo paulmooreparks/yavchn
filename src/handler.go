@@ -47,24 +47,32 @@ func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
 
+// listVM is the desktop page: a list of stories in the sidebar and the
+// story windows the address opens over the detail pane. Every list view
+// (a source's tab, search, Pinned and Find) renders it, so moving between
+// them swaps only the list and leaves the windows alone.
 type listVM struct {
-	Source       string  // active source name: "hn" / "lobsters" / "pinned"
-	SourceLabel  string  // active source label: "Hacker News" / "Lobsters"
-	Tab          string  // active tab slug within the source
-	AllSources   []sourceOptVM // for the header source-selector dropdown
-	Query        string
-	Tabs         []tabVM
-	Stories      []storyVM
-	Page         int
-	HasPrev      bool
-	HasNext      bool
-	PrevURL      string
-	NextURL      string
-	Selected     *selectedVM
-	ListError    string
-	SelectError  string
-	RetryURL     string
-	ShowSearch   bool // false on Lobsters (no JSON search API) and Pinned views
+	Title       string        // the page's <title>
+	Source      string        // active view: "hn" / "lobsters" / "pinned" / "find"
+	SourceLabel string        // active source label: "Hacker News" / "Lobsters"
+	Tab         string        // active tab slug within the source
+	AllSources  []sourceOptVM // the topbar's source switcher
+	Query       string
+	Tabs        []tabVM
+	Stories     []storyVM
+	Page        int
+	HasPrev     bool
+	HasNext     bool
+	PrevURL     string
+	NextURL     string
+	ListError   string
+	RetryURL    string
+	ShowSearch  bool // false on Lobsters (no JSON search API) and Pinned views
+	Finder      bool // the /find view: the toolbar takes a URL, the list its submissions
+	FindURL     string
+	FindHost    string
+	FindNote    string // why the finder's list is empty, when it is
+	Win         windowsVM
 }
 
 type sourceOptVM struct {
@@ -80,31 +88,32 @@ type tabVM struct {
 	Active bool
 }
 
+// storyVM is one row of the list. Its link is the story's own page, and
+// with script it opens the story's window instead.
 type storyVM struct {
-	Rank      int
-	ID        string
-	Source    string // "hn" or "lobsters" — emitted as data-source for the pin/dismiss/visited stores
-	Title     string
-	URL       string
-	Host      string
-	Score     int
-	By        string
-	Age       string
-	Comments  int
-	HNURL     string // discussion URL on the source's own site
-	Selected  bool
-	SelectURL string
+	Rank     int
+	Key      string // window key, "<source>-<id>"
+	ID       string
+	Source   string // "hn" or "lobsters", emitted as data-source for the pin/dismiss/visited stores
+	Title    string
+	URL      string
+	Host     string
+	Score    int
+	By       string
+	Age      string
+	Comments int
+	Where    string // the finder's subreddit and the like; "" for HN and Lobsters
+	PageURL  string
+	Section  string // set on the first row of a labelled section, as the finder's per-source groups
 }
 
-type selectedVM struct {
-	ID            string
-	Source        string
-	Title         string
-	URL           string
-	Host          string
-	HNURL         string // discussion URL on the source's own site (kept name for template back-compat)
-	ExternalLabel string // "Open on HN ↑" / "Open on lobste.rs ↑"
-	HasArticle    bool
+func newStoryVM(rank int, src Source, item *Item) storyVM {
+	host, displayURL := storyURLs(src, item)
+	return storyVM{
+		Rank: rank, Key: src.Name() + "-" + item.ID, ID: item.ID, Source: src.Name(),
+		Title: item.Title, URL: displayURL, Host: host, Score: item.Score, By: item.By,
+		Age: relTime(item.Time), Comments: item.Descendants, PageURL: storyPageURL(src.Name(), item.ID),
+	}
 }
 
 type commentVM struct {
@@ -122,59 +131,68 @@ type threadVM struct {
 	Comments []*commentVM
 }
 
-// --- discussion-finder view models ---
-
-type finderVM struct {
-	URL         string        // the URL being looked up; "" renders the empty state
-	Host        string        // display host of the URL
-	AllSources  []sourceOptVM // header source-picker (Find active)
-	Groups      []finderGroup // one per source with >= 1 submission
-	Total       int           // total submissions across all sources
-	HasArticle  bool          // whether to lazy-load reader-mode for the URL
-	LookupError string        // set if all providers errored
+// renderList renders the desktop page, once the windows the address opens
+// are ready. status 0 means 200.
+func (s *Server) renderList(w http.ResponseWriter, vm *listVM, wins func() windowsVM, status int) {
+	vm.Win = wins()
+	if vm.Title == "" {
+		vm.Title = "YAVCHN"
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if status != 0 {
+		w.WriteHeader(status)
+	}
+	if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
+		slog.Error("render list", "source", vm.Source, "err", err)
+	}
 }
 
-type finderGroup struct {
-	Source string // "hn" / "lobsters"
-	Label  string // "HN" / "Lobsters"
-	Subs   []finderSubVM
+func pageParam(r *http.Request) int {
+	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
+		return p
+	}
+	return 1
 }
 
-type finderSubVM struct {
-	Source    string
-	ID        string
-	Title     string
-	Score     int
-	Comments  int
-	Age       string
-	Where     string // subreddit etc.; "" for HN/Lobsters
-	SourceURL string // link to the submission on its own site
-	First     bool   // the default-selected submission in its group
+// pageHref is the request's own address with its page number changed and
+// its windows kept, for the pager.
+func pageHref(r *http.Request, page int) string {
+	q := r.URL.Query()
+	rest := restParams(q)
+	if page > 1 {
+		rest.Set("page", strconv.Itoa(page))
+	} else {
+		rest.Del("page")
+	}
+	return winURL(r.URL.Path, rest, parseWinState(q))
 }
 
 // SourceIndex serves a list page for a specific source + tab. Routed by
-// main.go with paths like /hn/{tab}/, /hn/{tab}/s/{id}, /lobsters/{tab}/, etc.
-// The source and tab come from the URL path.
+// main.go with paths like /hn/, /hn/{tab}/, /lobsters/{tab}/.
 func (s *Server) SourceIndex(source Source, tab string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		page := 1
-		if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
-			page = p
-		}
-
-		var selectedID string
-		if idStr := r.PathValue("id"); idStr != "" {
-			selectedID = idStr
-		}
-
+		page := pageParam(r)
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
+		wins := s.startWindows(ctx, r)
+
+		vm := listVM{
+			Title:       source.Label() + " · " + tabLabel(source, tab) + " · YAVCHN",
+			Source:      source.Name(),
+			SourceLabel: source.Label(),
+			Tab:         tab,
+			AllSources:  s.buildSourceOpts(source.Name()),
+			Tabs:        buildTabs(source, tab),
+			Page:        page,
+			RetryURL:    r.URL.RequestURI(),
+			ShowSearch:  source.Name() == "hn", // /lobsters has no JSON search; /pinned doesn't search
+		}
 
 		pageIDs, hasNext, idsErr := source.StoryIDs(ctx, tab, page)
 		if idsErr != nil {
 			slog.Warn("storyids unavailable", "source", source.Name(), "tab", tab, "err", idsErr, "path", r.URL.Path)
-			s.renderShellWithListError(w, r, source.Name(), tab, page, selectedID,
-				"The "+source.Label()+" / "+tabLabel(source, tab)+" feed couldn't be loaded right now.")
+			vm.ListError = "The " + source.Label() + " / " + tabLabel(source, tab) + " feed couldn't be loaded right now."
+			s.renderList(w, &vm, wins, http.StatusServiceUnavailable)
 			return
 		}
 		if len(pageIDs) == 0 {
@@ -182,91 +200,16 @@ func (s *Server) SourceIndex(source Source, tab string) http.HandlerFunc {
 			return
 		}
 
-		var (
-			wg      sync.WaitGroup
-			items   []*Item
-			selItem *Item
-			selErr  error
-		)
-		wg.Add(1)
-		go func() { defer wg.Done(); items = source.ItemsParallel(ctx, pageIDs) }()
-		if selectedID != "" {
-			wg.Add(1)
-			go func() { defer wg.Done(); selItem, selErr = source.Item(ctx, selectedID) }()
-		}
-		wg.Wait()
-
+		vm.HasPrev, vm.HasNext = page > 1, hasNext
+		vm.PrevURL, vm.NextURL = pageHref(r, page-1), pageHref(r, page+1)
 		rankBase := (page - 1) * pageSize
-
-		vm := listVM{
-			Source:      source.Name(),
-			SourceLabel: source.Label(),
-			Tab:         tab,
-			AllSources:  s.buildSourceOpts(source.Name()),
-			Tabs:        buildTabs(source, tab),
-			Page:        page,
-			HasPrev:     page > 1,
-			HasNext:     hasNext,
-			PrevURL:     buildPagerURL(source.Name(), tab, selectedID, page-1),
-			NextURL:     buildPagerURL(source.Name(), tab, selectedID, page+1),
-			RetryURL:    r.URL.RequestURI(),
-			ShowSearch:  source.Name() == "hn", // /lobsters has no JSON search; /pinned doesn't search
-		}
-
-		for i, item := range items {
+		for i, item := range source.ItemsParallel(ctx, pageIDs) {
 			if item == nil || item.Dead || item.Deleted {
 				continue
 			}
-			host, displayURL := storyURLs(source, item)
-			vm.Stories = append(vm.Stories, storyVM{
-				Rank:      rankBase + i + 1,
-				ID:        item.ID,
-				Source:    source.Name(),
-				Title:     item.Title,
-				URL:       displayURL,
-				Host:      host,
-				Score:     item.Score,
-				By:        item.By,
-				Age:       relTime(item.Time),
-				Comments:  item.Descendants,
-				HNURL:     source.StoryDiscussionURL(item.ID),
-				Selected:  item.ID == selectedID,
-				SelectURL: buildSelectURL(source.Name(), tab, item.ID),
-			})
+			vm.Stories = append(vm.Stories, newStoryVM(rankBase+i+1, source, item))
 		}
-
-		if selectedID != "" {
-			s.fillSelected(&vm, source, selItem, selErr, selectedID)
-		}
-
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
-			slog.Error("render index", "err", err)
-		}
-	}
-}
-
-// fillSelected populates the Selected field on the listVM. Shared between
-// the source index path and the pinned-shell path.
-func (s *Server) fillSelected(vm *listVM, source Source, selItem *Item, selErr error, selectedID string) {
-	switch {
-	case selErr != nil || selItem == nil:
-		slog.Warn("item fetch failed", "id", selectedID, "source", source.Name(), "err", selErr)
-		vm.SelectError = "Couldn't load this story. It may have been removed, or the upstream is having a moment."
-	case selItem.Dead || selItem.Deleted:
-		vm.SelectError = "This story has been removed."
-	default:
-		host, displayURL := storyURLs(source, selItem)
-		vm.Selected = &selectedVM{
-			ID:            selItem.ID,
-			Source:        source.Name(),
-			Title:         selItem.Title,
-			URL:           displayURL,
-			Host:          host,
-			HNURL:         source.StoryDiscussionURL(selItem.ID),
-			ExternalLabel: externalLabelForSource(source.Name()),
-			HasArticle:    selItem.URL != "",
-		}
+		s.renderList(w, &vm, wins, 0)
 	}
 }
 
@@ -282,113 +225,82 @@ func externalLabelForSource(sourceName string) string {
 	}
 }
 
-// Pinned serves the global Pinned tab. The story list is empty in the
-// server-rendered shell; pinned.js populates it from localStorage on the
-// client. The selected-story handling still runs server-side so the
-// article + discussion panes work for /pinned/s/{source}/{id}.
+// Pinned serves the global Pinned view. The story list is empty in the
+// server-rendered page; pinned.js fills it from localStorage, so the
+// server keeps no per-reader state.
 func (s *Server) Pinned(w http.ResponseWriter, r *http.Request) {
-	page := 1
-	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
-		page = p
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-
-	// Selected story on /pinned/s/{source}/{id}. The source segment lets the
-	// pin entry render its article from whichever source it originally came
-	// from (HN or Lobsters).
-	var selectedID, selectedSource string
-	if idStr := r.PathValue("id"); idStr != "" {
-		selectedID = idStr
-	}
-	if src := r.PathValue("source"); src != "" {
-		selectedSource = src
-	}
-	// Backwards compat: /pinned/s/{id} without an explicit source defaults
-	// to HN (matches the pre-multi-source pin entries).
-	if selectedSource == "" && selectedID != "" {
-		selectedSource = "hn"
-	}
-
-	var selItem *Item
-	var selErr error
-	var selSrc Source
-	if selectedID != "" {
-		var ok bool
-		selSrc, ok = s.sources[selectedSource]
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		selItem, selErr = selSrc.Item(ctx, selectedID)
-	}
-
 	vm := listVM{
+		Title:       "Pinned · YAVCHN",
 		Source:      "pinned",
 		SourceLabel: "Pinned",
 		Tab:         "pinned",
 		AllSources:  s.buildSourceOpts("pinned"),
-		Page:        page,
+		Page:        pageParam(r),
 		RetryURL:    r.URL.RequestURI(),
-		ShowSearch:  false,
 	}
-
-	if selectedID != "" {
-		s.fillSelected(&vm, selSrc, selItem, selErr, selectedID)
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
-		slog.Error("render pinned shell", "err", err)
-	}
+	s.renderList(w, &vm, s.startWindows(ctx, r), 0)
 }
 
-// renderShellWithListError renders the page shell with a list-pane error placeholder.
-func (s *Server) renderShellWithListError(w http.ResponseWriter, r *http.Request, sourceName, tab string, page int, selectedID, msg string) {
-	src, ok := s.sources[sourceName]
+// Window serves /window/{key}, the markup of one story window, which
+// pudl-windows.js fetches when a story opens without a page load.
+func (s *Server) Window(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	vm, ok := s.storyWindow(ctx, r.PathValue("key"))
 	if !ok {
-		http.Error(w, "unknown source", http.StatusBadRequest)
+		http.NotFound(w, r)
 		return
 	}
-	vm := listVM{
-		Source:      sourceName,
-		SourceLabel: src.Label(),
-		Tab:         tab,
-		AllSources:  s.buildSourceOpts(sourceName),
-		Tabs:        buildTabs(src, tab),
-		Page:        page,
-		ListError:   msg,
-		RetryURL:    r.URL.RequestURI(),
-		ShowSearch:  sourceName == "hn",
-	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusServiceUnavailable)
-	if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
-		slog.Error("render shell", "err", err)
+	if err := s.tpl.ExecuteTemplate(w, "window", vm); err != nil {
+		slog.Error("render window", "key", vm.Key, "err", err)
 	}
 }
 
-// articleErrorTmpl renders the article-pane fallback when reader-mode
-// extraction fails. The CTA is rendered through html/template so the
+// StoryPage serves /story/{source}/{id}, a story's own page: its article
+// and discussion without the list. It is where a story's link goes without
+// script, and where a window's "Open as a page" button goes.
+func (s *Server) StoryPage(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	vm, ok := s.storyWindow(ctx, r.PathValue("source")+"-"+r.PathValue("id"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	page := struct {
+		Title      string
+		AllSources []sourceOptVM
+		Story      windowVM
+	}{vm.Title + " · YAVCHN", s.buildSourceOpts(""), vm}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tpl.ExecuteTemplate(w, "story.html.tmpl", page); err != nil {
+		slog.Error("render story page", "key", vm.Key, "err", err)
+	}
+}
+
+// articleErrorTmpl renders the article pane's fallback when reader-mode
+// extraction fails. The link is rendered through html/template so the
 // href is auto-escaped and javascript: schemes are neutralised.
 var articleErrorTmpl = template.Must(template.New("articleError").Parse(
-	`<div class="article-stub">
-  <h2>Reader-mode couldn't load this page</h2>
-  {{ if . }}<a class="cta" href="{{ . }}" target="_blank" rel="noopener">Open article &uarr;</a>{{ end }}
-  <p class="note">The source server didn't return readable HTML.</p>
+	`<div class="empty-state story-note">
+  <p class="empty-state-title">Reader-mode couldn't load this page</p>
+  <p class="empty-state-body">The source server didn't return readable HTML.</p>
+  {{ if . }}<div class="empty-state-actions"><a class="btn btn-sm" href="{{ . }}" target="_blank" rel="noopener">Open the article</a></div>{{ end }}
 </div>`))
 
 var rateLimitedTmpl = template.Must(template.New("rateLimited").Parse(
-	`<div class="article-stub">
-  <h2>Too many article requests</h2>
-  {{ if . }}<a class="cta" href="{{ . }}" target="_blank" rel="noopener">Open article &uarr;</a>{{ end }}
-  <p class="note">You've hit the per-visitor rate limit. Wait a minute, or open the source page directly.</p>
+	`<div class="empty-state story-note">
+  <p class="empty-state-title">Too many article requests</p>
+  <p class="empty-state-body">You've hit the per-visitor rate limit. Wait a minute, or open the source page directly.</p>
+  {{ if . }}<div class="empty-state-actions"><a class="btn btn-sm" href="{{ . }}" target="_blank" rel="noopener">Open the article</a></div>{{ end }}
 </div>`))
 
-const discussionErrorFragment = `<div class="empty-note"><p>Couldn't load the discussion right now. Use the "Open on HN &uarr;" link above to read it directly.</p></div>`
+const discussionErrorFragment = `<div class="empty-state story-note"><p class="empty-state-title">Couldn't load the discussion</p><p class="empty-state-body">The upstream didn't answer. The link above reads it on the source's own site.</p></div>`
 
-const discussionRateLimitedFragment = `<div class="empty-note"><p>You've hit the per-visitor rate limit for discussions. Wait a minute and try again, or use the "Open on HN &uarr;" link above to read on news.ycombinator.com.</p></div>`
+const discussionRateLimitedFragment = `<div class="empty-state story-note"><p class="empty-state-title">Too many discussion requests</p><p class="empty-state-body">You've hit the per-visitor rate limit for discussions. Wait a minute and try again, or use the link above to read it on the source's own site.</p></div>`
 
 func articleErrorHTML(rawURL string) string {
 	var buf bytes.Buffer
@@ -412,124 +324,81 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page := 1
-	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
-		page = p
-	}
-
-	var selectedID string
-	if idStr := r.PathValue("id"); idStr != "" {
-		selectedID = idStr
-	}
-
+	page := pageParam(r)
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
+	wins := s.startWindows(ctx, r)
 
-	hits, hasMore, searchErr := s.hn.Search(ctx, q, page)
-	if searchErr != nil {
-		slog.Warn("search failed", "q", q, "err", searchErr)
-		vm := listVM{
-			Source:      "hn",
-			SourceLabel: "Hacker News",
-			Tab:         "search",
-			AllSources:  s.buildSourceOpts("hn"),
-			Query:       q,
-			Tabs:        buildTabs(s.sources["hn"], ""),
-			Page:        page,
-			ListError:   "Search couldn't be run right now. The HN search service may be having a moment.",
-			RetryURL:    r.URL.RequestURI(),
-			ShowSearch:  true,
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_ = s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm)
-		return
-	}
-
-	var (
-		wg      sync.WaitGroup
-		selItem *Item
-		selErr  error
-	)
-	if selectedID != "" {
-		wg.Add(1)
-		go func() { defer wg.Done(); selItem, selErr = s.hn.Item(ctx, selectedID) }()
-	}
-	wg.Wait()
-
+	hn := s.sources["hn"]
 	vm := listVM{
+		Title:       "Search: " + q + " · YAVCHN",
 		Source:      "hn",
 		SourceLabel: "Hacker News",
 		Tab:         "search",
 		AllSources:  s.buildSourceOpts("hn"),
 		Query:       q,
-		Tabs:        buildTabs(s.sources["hn"], ""),
+		Tabs:        buildTabs(hn, ""),
 		Page:        page,
-		HasPrev:     page > 1,
-		HasNext:     hasMore,
-		PrevURL:     buildSearchPagerURL(q, selectedID, page-1),
-		NextURL:     buildSearchPagerURL(q, selectedID, page+1),
 		RetryURL:    r.URL.RequestURI(),
 		ShowSearch:  true,
 	}
 
-	for i, h := range hits {
-		host, displayURL := searchHitURLs(h)
-		vm.Stories = append(vm.Stories, storyVM{
-			Rank:      (page-1)*pageSize + i + 1,
-			ID:        h.ID,
-			Source:    "hn",
-			Title:     h.Title,
-			URL:       displayURL,
-			Host:      host,
-			Score:     h.Points,
-			By:        h.Author,
-			Age:       relTime(h.CreatedAt),
-			Comments:  h.NumComments,
-			HNURL:     fmt.Sprintf("https://news.ycombinator.com/item?id=%s", h.ID),
-			Selected:  h.ID == selectedID,
-			SelectURL: buildSearchSelectURL(q, h.ID),
-		})
-	}
-
-	if selectedID != "" {
-		s.fillSelected(&vm, s.sources["hn"], selItem, selErr, selectedID)
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tpl.ExecuteTemplate(w, "index.html.tmpl", vm); err != nil {
-		slog.Error("render search", "err", err)
-	}
-}
-
-// Finder handles /find (empty state) and /find?url=<encoded> (results). It
-// fans out across the registered DiscussionProviders, groups submissions by
-// source, and renders the finder shell. The article (reader-mode) and each
-// submission's thread are lazy-loaded client-side via the existing
-// /api/article and /api/discussion endpoints.
-func (s *Server) Finder(w http.ResponseWriter, r *http.Request) {
-	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
-
-	vm := finderVM{
-		URL:        rawURL,
-		AllSources: s.buildSourceOpts("find"),
-	}
-
-	if rawURL == "" {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := s.tpl.ExecuteTemplate(w, "finder.html.tmpl", vm); err != nil {
-			slog.Error("render finder empty", "err", err)
-		}
+	hits, hasMore, searchErr := s.hn.Search(ctx, q, page)
+	if searchErr != nil {
+		slog.Warn("search failed", "q", q, "err", searchErr)
+		vm.ListError = "Search couldn't be run right now. The HN search service may be having a moment."
+		s.renderList(w, &vm, wins, http.StatusServiceUnavailable)
 		return
 	}
 
-	if u, err := url.Parse(rawURL); err == nil {
-		vm.Host = strings.TrimPrefix(u.Host, "www.")
+	vm.HasPrev, vm.HasNext = page > 1, hasMore
+	vm.PrevURL, vm.NextURL = pageHref(r, page-1), pageHref(r, page+1)
+	for i, h := range hits {
+		host, displayURL := searchHitURLs(h)
+		vm.Stories = append(vm.Stories, storyVM{
+			Rank:     (page-1)*pageSize + i + 1,
+			Key:      "hn-" + h.ID,
+			ID:       h.ID,
+			Source:   "hn",
+			Title:    h.Title,
+			URL:      displayURL,
+			Host:     host,
+			Score:    h.Points,
+			By:       h.Author,
+			Age:      relTime(h.CreatedAt),
+			Comments: h.NumComments,
+			PageURL:  storyPageURL("hn", h.ID),
+		})
 	}
-	vm.HasArticle = isAllowedURL(rawURL)
+	s.renderList(w, &vm, wins, 0)
+}
 
+// Finder handles /find (empty state) and /find?url=<encoded> (results). It
+// fans out across the registered DiscussionProviders and lists every
+// submission of the URL, grouped by source, in the sidebar. Each one opens
+// as a story window, like any other list's stories.
+func (s *Server) Finder(w http.ResponseWriter, r *http.Request) {
+	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
+	wins := s.startWindows(ctx, r)
+
+	vm := listVM{
+		Title:      "Find discussions · YAVCHN",
+		Source:     "find",
+		AllSources: s.buildSourceOpts("find"),
+		Finder:     true,
+		FindURL:    rawURL,
+		RetryURL:   r.URL.RequestURI(),
+	}
+	if rawURL == "" {
+		s.renderList(w, &vm, wins, 0)
+		return
+	}
+	if u, err := url.Parse(rawURL); err == nil {
+		vm.FindHost = strings.TrimPrefix(u.Host, "www.")
+	}
+	vm.Title = "Discussions of " + vm.FindHost + " · YAVCHN"
 
 	// Fan out across providers concurrently; one slow/erroring source
 	// shouldn't sink the page.
@@ -553,44 +422,47 @@ func (s *Server) Finder(w http.ResponseWriter, r *http.Request) {
 
 	errCount := 0
 	for _, res := range results {
+		name := s.finders[res.idx].ProviderName()
 		if res.err != nil {
-			slog.Warn("finder provider failed", "provider", s.finders[res.idx].ProviderName(), "url", rawURL, "err", res.err)
+			slog.Warn("finder provider failed", "provider", name, "url", rawURL, "err", res.err)
 			errCount++
 			continue
 		}
-		if len(res.subs) == 0 {
-			continue
-		}
-		g := finderGroup{
-			Source: s.finders[res.idx].ProviderName(),
-			Label:  finderSourceLabel(s.finders[res.idx].ProviderName()),
-		}
+		section := finderSourceLabel(name)
 		for j, sub := range res.subs {
-			g.Subs = append(g.Subs, finderSubVM{
-				Source:    sub.Source,
-				ID:        sub.ID,
-				Title:     sub.Title,
-				Score:     sub.Score,
-				Comments:  sub.NumComments,
-				Age:       relTime(sub.CreatedAt),
-				Where:     sub.Where,
-				SourceURL: finderSubmissionURL(sub),
-				First:     j == 0 && len(vm.Groups) == 0, // first sub of the first non-empty group
-			})
-			vm.Total++
+			// A submission opens as a story window, so it needs a source
+			// that can show one.
+			if _, ok := s.sources[sub.Source]; !ok || !storyIDRE.MatchString(sub.ID) {
+				continue
+			}
+			st := storyVM{
+				Rank:     len(vm.Stories) + 1,
+				Key:      sub.Source + "-" + sub.ID,
+				ID:       sub.ID,
+				Source:   sub.Source,
+				Title:    sub.Title,
+				URL:      rawURL,
+				Host:     vm.FindHost,
+				Score:    sub.Score,
+				Age:      relTime(sub.CreatedAt),
+				Comments: sub.NumComments,
+				Where:    sub.Where,
+				PageURL:  storyPageURL(sub.Source, sub.ID),
+			}
+			if j == 0 {
+				st.Section = fmt.Sprintf("%s · %d", section, len(res.subs))
+			}
+			vm.Stories = append(vm.Stories, st)
 		}
-		vm.Groups = append(vm.Groups, g)
 	}
 
-	// All providers errored and produced nothing → surface a soft error.
-	if vm.Total == 0 && errCount == len(s.finders) && len(s.finders) > 0 {
-		vm.LookupError = "Couldn't reach the discussion sources right now. Try again in a moment."
+	switch {
+	case len(vm.Stories) == 0 && errCount == len(s.finders) && len(s.finders) > 0:
+		vm.ListError = "Couldn't reach the discussion sources right now. Try again in a moment."
+	case len(vm.Stories) == 0:
+		vm.FindNote = "No discussions of this URL on Hacker News or Lobsters."
 	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tpl.ExecuteTemplate(w, "finder.html.tmpl", vm); err != nil {
-		slog.Error("render finder", "err", err)
-	}
+	s.renderList(w, &vm, wins, 0)
 }
 
 func finderSourceLabel(name string) string {
@@ -598,16 +470,7 @@ func finderSourceLabel(name string) string {
 	case "lobsters":
 		return "Lobsters"
 	default:
-		return "HN"
-	}
-}
-
-func finderSubmissionURL(sub Submission) string {
-	switch sub.Source {
-	case "lobsters":
-		return fmt.Sprintf("https://lobste.rs/s/%s", sub.ID)
-	default:
-		return fmt.Sprintf("https://news.ycombinator.com/item?id=%s", sub.ID)
+		return "Hacker News"
 	}
 }
 
@@ -622,25 +485,6 @@ func searchHitURLs(h *SearchHit) (host, displayURL string) {
 		host = strings.TrimPrefix(u.Host, "www.")
 	}
 	return
-}
-
-func buildSearchSelectURL(q, id string) string {
-	qs := url.Values{}
-	qs.Set("q", q)
-	return fmt.Sprintf("/hn/search/s/%s?%s", id, qs.Encode())
-}
-
-func buildSearchPagerURL(q, selectedID string, page int) string {
-	base := "/hn/search"
-	if selectedID != "" {
-		base = fmt.Sprintf("/hn/search/s/%s", selectedID)
-	}
-	qs := url.Values{}
-	qs.Set("q", q)
-	if page > 1 {
-		qs.Set("page", strconv.Itoa(page))
-	}
-	return base + "?" + qs.Encode()
 }
 
 func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
@@ -672,8 +516,12 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The extraction is cached and shared, so the links are rewritten on a
+	// copy, as the article is sent.
+	shown := *article
+	shown.Content = template.HTML(linkThreads(string(article.Content)))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tpl.ExecuteTemplate(w, "article.html.tmpl", article); err != nil {
+	if err := s.tpl.ExecuteTemplate(w, "article.html.tmpl", &shown); err != nil {
 		slog.Error("render article", "err", err)
 	}
 }
@@ -739,7 +587,7 @@ func commentToVM(c *Comment, src Source) *commentVM {
 		ID:        c.ID,
 		Author:    c.Author,
 		Age:       relTime(c.CreatedAt),
-		HTML:      template.HTML(sanitizeHTML(c.Text)),
+		HTML:      template.HTML(linkThreads(sanitizeHTML(c.Text))),
 		HNURL:     commentExternalURL(src, c.ID),
 		CreatedAt: c.CreatedAt,
 	}
@@ -835,43 +683,6 @@ func buildTabs(src Source, activeTab string) []tabVM {
 		out = append(out, tabVM{Label: d.Label, URL: path, Active: d.Slug == activeTab})
 	}
 	return out
-}
-
-// buildSelectURL builds the URL for clicking a story in the list. Tab "" or
-// default-tab → /{source}/s/{id}. Non-default tab → /{source}/{tab}/s/{id}.
-func buildSelectURL(source, tab, id string) string {
-	if tab == "" || isDefaultTab(source, tab) {
-		return fmt.Sprintf("/%s/s/%s", source, id)
-	}
-	return fmt.Sprintf("/%s/%s/s/%s", source, tab, id)
-}
-
-func buildPagerURL(source, tab, selectedID string, page int) string {
-	q := ""
-	if page > 1 {
-		q = fmt.Sprintf("?page=%d", page)
-	}
-	base := "/" + source + "/"
-	if tab != "" && !isDefaultTab(source, tab) {
-		base = "/" + source + "/" + tab + "/"
-	}
-	if selectedID != "" {
-		base = strings.TrimRight(base, "/") + "/s/" + selectedID
-	}
-	return base + q
-}
-
-// isDefaultTab tells whether a tab slug is the source's default (rendered at
-// the bare /{source}/ URL). Hardcoded to avoid passing a Source into URL
-// builders.
-func isDefaultTab(source, tab string) bool {
-	switch source {
-	case "hn":
-		return tab == "top"
-	case "lobsters":
-		return tab == "hottest"
-	}
-	return false
 }
 
 // relTime renders relative-time for recent items and switches to a short

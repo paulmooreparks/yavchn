@@ -1,0 +1,276 @@
+{{/* The parts every page shares. Each page's template sets .Title and
+     .AllSources, which "head" and "topbar" read. */}}
+
+{{ define "head" }}
+<meta charset="utf-8">
+<title>{{ .Title }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="A desktop for reading Hacker News and Lobsters: the story list beside windows that show each story's article and discussion together.">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<meta property="og:title" content="YAVCHN">
+<meta property="og:description" content="A desktop for reading Hacker News and Lobsters: the story list beside windows that show each story's article and discussion together.">
+<meta property="og:image" content="https://yavchn.parkscomputing.com/static/logo.png">
+<meta property="og:url" content="https://yavchn.parkscomputing.com/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="YAVCHN">
+<meta name="twitter:image" content="https://yavchn.parkscomputing.com/static/logo.png">
+<script>
+(function () {
+  try {
+    /* Before PUDL the theme was kept under yavchn-theme, and a reader who
+       had chosen none followed the system. pudl-theme.js starts dark when
+       nothing is saved, so the old choice, or "system", is carried over
+       before it runs. */
+    if (!localStorage.getItem('pudl-theme')) {
+      var old = localStorage.getItem('yavchn-theme');
+      localStorage.setItem('pudl-theme', old === 'light' || old === 'dark' ? old : 'system');
+    }
+    /* The article's share of a story window, applied before the first
+       paint so the split never jumps. */
+    var h = localStorage.getItem('yavchn-article-h');
+    if (h && /^\d{1,2}(\.\d+)?%$/.test(h)) {
+      var s = document.createElement('style');
+      s.textContent = '.story-split { --split-a: ' + h + '; }';
+      document.head.appendChild(s);
+    }
+    if (localStorage.getItem('yavchn-focus') === '1') document.documentElement.classList.add('focus-mode');
+  } catch (e) { /* storage blocked: the defaults serve */ }
+})();
+</script>
+<script src="/static/pudl/pudl-theme.js"></script>
+<link rel="stylesheet" href="/static/pudl/pudl.css">
+<link rel="stylesheet" href="/static/pudl/pudl-windows.css">
+<link rel="stylesheet" href="/static/style.css">
+{{ end }}
+
+{{ define "topbar" }}
+<header class="site-header">
+  <div class="topbar">
+    <nav class="site-menubar" data-menubar aria-label="YAVCHN">
+      <ul data-menubar-source data-region-link hidden>
+        <li><img src="/static/logo-24x24.png" alt=""> YAVCHN
+          <ul>
+            <li><a href="/hn/">Hacker News</a></li>
+            <li><a href="/lobsters/">Lobsters</a></li>
+            <li><a href="/pinned/">Pinned stories</a></li>
+            <li><a href="/find">Find the discussions of a link</a></li>
+            <li>-</li>
+            <li><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN on GitHub</a></li>
+          </ul>
+        </li>
+        <li>View
+          <ul>
+            <li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>
+            <li><button type="button" commandfor="filters-dialog" command="show-modal">Domain filters&hellip;</button></li>
+            <li>-</li>
+            <li>Theme
+              <ul>
+                <li><button type="button" data-theme-choice="light" aria-checked="false">Light</button></li>
+                <li><button type="button" data-theme-choice="dark" aria-checked="false">Dark</button></li>
+                <li><button type="button" data-theme-choice="system" aria-checked="false">Follow the system</button></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li data-menubar-if="windows">Window
+          <ul>
+            <li><a href="?" data-win-back>Minimize all</a></li>
+            <li><a href="?" data-win-restore>Restore all</a></li>
+            <li><a href="?" data-close-all>Close all</a></li>
+          </ul>
+        </li>
+        <li>Help
+          <ul>
+            <li><button type="button" commandfor="help-dialog" command="show-modal">Keyboard and help&hellip;</button></li>
+            <li>-</li>
+            <li><a href="https://news.ycombinator.com/" target="_blank" rel="noopener">Hacker News</a></li>
+            <li><a href="https://lobste.rs/" target="_blank" rel="noopener">Lobsters</a></li>
+          </ul>
+        </li>
+      </ul>
+      <a class="brand" href="/"><img src="/static/logo-24x24.png" alt=""> YAVCHN</a>
+    </nav>
+    <span class="topbar-rule" aria-hidden="true"></span>
+    <div class="source-switch" data-region="sources">
+      <nav class="seg source-seg" data-seg-menu aria-label="Source">
+        {{ range .AllSources }}<a href="{{ .URL }}" data-source="{{ .Name }}"{{ if .Active }} aria-current="page"{{ end }}>{{ .Label }}</a>{{ end }}
+      </nav>
+    </div>
+  </div>
+</header>
+{{ end }}
+
+{{/* A story's article above its discussion, with a splitter between
+     them: the body of a story window, and of a story's own page. */}}
+{{ define "storybody" }}
+<div class="story" data-story-key="{{ .Key }}" data-story-id="{{ .ID }}" data-story-source="{{ .Source }}" data-title="{{ .Title }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}"{{ if .HasArticle }} data-reader-url="{{ .URL }}"{{ end }}{{ if .Error }} data-error{{ else }} data-applet="story" data-applet-page="{{ .PageURL }}"{{ end }}>
+{{ if .Error }}
+  <div class="empty-state story-note">
+    <p class="empty-state-title">{{ .Title }}</p>
+    <p class="empty-state-body">{{ .Error }}</p>
+    <div class="empty-state-actions"><a class="btn btn-sm" href="{{ .SourceURL }}" target="_blank" rel="noopener">{{ .SourceLabel }}</a></div>
+  </div>
+{{ else }}
+  <div class="split stacked story-split">
+    <section class="split-pane story-pane story-article" aria-label="Article">
+      <div class="story-bar">
+        <span class="story-bar-label">{{ if .IsComment }}Comment{{ else }}Article{{ end }}</span>
+        {{ if not .IsComment }}<span class="story-bar-meta">{{ .Host }}</span>{{ end }}
+        <span class="story-bar-spacer"></span>
+        {{/* The story after this one in the list, filled in by script from
+             the list beside the window, so it stays hidden on a story's
+             own page and without script. */}}
+        <a class="story-next" href="{{ .PageURL }}" data-win-replace hidden>Next story</a>
+        {{ if .HasArticle }}
+        <button type="button" class="icon-btn story-refresh" aria-label="Fetch the article again"></button>
+        <a href="{{ .URL }}" target="_blank" rel="noopener">Open original</a>
+        {{ end }}
+      </div>
+      <div class="story-scroll story-article-body" tabindex="0">
+        {{ if .HasArticle }}
+        <div class="loading js-reader-status" role="status"><span class="spinner" aria-hidden="true"></span> Loading the reader view&hellip;</div>
+        <noscript><div class="empty-state story-note"><p class="empty-state-body">The reader view needs JavaScript. The &ldquo;Open original&rdquo; link above works without it.</p></div></noscript>
+        {{ else if .Text }}
+        <article class="article-content story-text">
+          <h1>{{ .Title }}</h1>
+          {{ .Text }}
+        </article>
+        {{ else }}
+        <div class="empty-state story-note">
+          <p class="empty-state-title">{{ .Title }}</p>
+          <p class="empty-state-body">This story has no link of its own. Its discussion is below.</p>
+        </div>
+        {{ end }}
+      </div>
+    </section>
+    <div class="split-handle" aria-label="Resize the article" data-split-min="60"></div>
+    <section class="split-pane story-pane story-discussion" aria-label="Discussion">
+      <div class="story-bar">
+        <span class="story-bar-label">{{ if .IsComment }}Replies{{ else }}Discussion{{ end }}</span>
+        <span class="story-bar-meta num">{{ if not .IsComment }}{{ .Comments }} comments &middot; {{ .Score }} points{{ if .By }} &middot; {{ end }}{{ end }}{{ if .By }}{{ .By }}{{ end }}{{ if .Age }} &middot; {{ .Age }}{{ end }}</span>
+        <span class="story-bar-spacer"></span>
+        <div class="seg sm story-sort" role="group" aria-label="Sort the comments">
+          <button type="button" data-sort="best" aria-pressed="true">Best</button>
+          <button type="button" data-sort="newest" aria-pressed="false">Newest</button>
+          <button type="button" data-sort="oldest" aria-pressed="false">Oldest</button>
+        </div>
+        <a href="{{ .SourceURL }}" target="_blank" rel="noopener">{{ .SourceLabel }}</a>
+      </div>
+      <div class="story-scroll story-discussion-body" tabindex="0">
+        <div class="loading js-discussion-status" role="status"><span class="spinner" aria-hidden="true"></span> Loading the discussion&hellip;</div>
+        <noscript><div class="empty-state story-note"><p class="empty-state-body">The discussion needs JavaScript. The &ldquo;{{ .SourceLabel }}&rdquo; link above works without it.</p></div></noscript>
+      </div>
+    </section>
+  </div>
+{{ end }}
+</div>
+{{ end }}
+
+{{/* One story window, the same markup whether the page renders it for
+     its address or /window/{key} returns it. */}}
+{{ define "window" }}
+<section class="win story-win{{ if .Active }} active{{ end }}" data-win="{{ .Key }}" data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
+  <header class="win-head">
+    <h2 class="win-title" id="win-{{ .Key }}-title">{{ .Title }}</h2>
+    <nav class="win-chrome" aria-label="Window">
+      <a class="win-btn" data-win-action="page" href="{{ .PageURL }}" aria-label="Open as a page"></a>
+      <a class="win-btn" data-win-action="minimize" href="{{ .MinHref }}" aria-label="Minimize"></a>
+      <a class="win-btn" data-win-action="maximize" href="{{ .MaxHref }}" aria-label="{{ if eq .Mode "floating" }}Maximize{{ else }}Restore{{ end }}"></a>
+      <a class="win-btn" data-win-action="close" href="{{ .CloseHref }}" aria-label="Close"></a>
+    </nav>
+  </header>
+  <div class="win-body story-win-body">{{ template "storybody" . }}</div>
+</section>
+{{ end }}
+
+{{ define "dialogs" }}
+<dialog class="dialog wide-dialog" id="filters-dialog" aria-labelledby="filters-dialog-title">
+  <h3 class="dialog-title" id="filters-dialog-title">Domain filters</h3>
+  <div class="dialog-body">
+    <p>Stories from these domains are hidden from every list. Subdomains match too: blocking <code>substack.com</code> also hides <code>danluu.substack.com</code>. The list is kept in this browser only.</p>
+    <ul class="filters-list" aria-label="Blocked domains"></ul>
+    <p class="filters-empty" hidden>No domains are blocked.</p>
+    <form class="filters-add">
+      <div class="form-group">
+        <label class="form-label" for="filters-add-input">Block a domain</label>
+        <div class="filters-add-row">
+          <input class="form-input" id="filters-add-input" type="text" name="domain" placeholder="example.com" autocomplete="off" spellcheck="false">
+          <button class="btn" type="submit">Block</button>
+        </div>
+      </div>
+    </form>
+  </div>
+  <form class="dialog-actions" method="dialog">
+    <button class="btn" value="close">Close</button>
+  </form>
+</dialog>
+
+<dialog class="dialog wide-dialog" id="help-dialog" aria-labelledby="help-dialog-title">
+  <h3 class="dialog-title" id="help-dialog-title">Help</h3>
+  <div class="dialog-body help-body">
+    <section>
+      <h4>Keyboard</h4>
+      <dl class="keys">
+        <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Move down and up the story list. The arrow keys scroll whatever has focus.</dd>
+        <dt><kbd>Enter</kbd></dt><dd>Open the marked story in a window.</dd>
+        <dt><kbd>]</kbd></dt><dd>Open the next story in the list in place of the one in front. Back returns to it.</dd>
+        <dt><kbd>p</kbd></dt><dd>Pin or unpin the marked story, which keeps it in Pinned.</dd>
+        <dt><kbd>n</kbd> / <kbd>N</kbd></dt><dd>Move to the next or previous top-level comment in the window in front.</dd>
+        <dt><kbd>c</kbd></dt><dd>Collapse or expand that comment.</dd>
+        <dt><kbd>f</kbd></dt><dd>Hide or show the story list.</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Close a menu or this help.</dd>
+        <dt>Access key <kbd>m</kbd></dt><dd>Go to the menu bar. Most browsers take it with <kbd>Alt</kbd> on Windows and Linux, and Safari with <kbd>Control</kbd> and <kbd>Option</kbd>.</dd>
+        <dt><kbd>?</kbd></dt><dd>Show this help.</dd>
+      </dl>
+    </section>
+    <section>
+      <h4>Windows</h4>
+      <p>Each story opens in a window holding its article above its discussion; drag the bar between them to share the room differently. A window can be moved by its title bar, resized from any edge, snapped to a half or a corner by dragging it there, maximised, or minimised to the bar at the foot of the page. Open several stories to compare them, and switch between them from that bar. A window's Next story link reads on down the list in the same window.</p>
+      <p>A link in a comment or an article to another Hacker News or Lobsters thread opens that thread in a window too. A link to a single HN comment opens the comment above its replies.</p>
+      <p>While a story's window is in front, the Story and Discussion menus in the menu bar hold its commands: pinning, Next story, sorting, collapsing every thread, jumping to the first new comment. Each window also remembers where you were in its article and discussion, so a reload, or Back to a story that Next took you past, finds your place again. Closing a window forgets it.</p>
+      <p>The whole arrangement lives in the address, so a bookmark or a shared link brings it back, and Back undoes the last change. Moving between Hacker News, Lobsters, their lists, Pinned and Find changes only the list, and leaves the windows open.</p>
+    </section>
+    <section>
+      <h4>The list</h4>
+      <p>The pin at the start of a row keeps the story in Pinned, and the cross at its end hides it. Scroll past the end of the list to load more. Domain filters, in the View menu, hide every story from a site.</p>
+    </section>
+    <section>
+      <h4>Find</h4>
+      <p>Find takes any link and lists every time it was submitted to Hacker News and Lobsters, so you can read each discussion of it.</p>
+    </section>
+    <section>
+      <h4>About</h4>
+      <p>YAVCHN never sees your Hacker News or Lobsters login. The discussion is fetched from each site's public API; to vote or reply, follow the link above the discussion, or the arrow beside a comment, to the source's own site. Pins, hidden stories, filters and layout are kept in this browser only.</p>
+      <p>Open source: <a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">github.com/paulmooreparks/yavchn</a>. Built with <a href="https://github.com/paulmooreparks/pudl" target="_blank" rel="noopener">PUDL</a>.</p>
+    </section>
+  </div>
+  <form class="dialog-actions" method="dialog">
+    <button class="btn" value="close" autofocus>Close</button>
+  </form>
+</dialog>
+{{ end }}
+
+{{ define "scripts" }}
+<script src="/static/pudl/pudl-windows.js" defer></script>
+<script src="/static/pudl/pudl-menu.js" defer></script>
+<script src="/static/pudl/pudl-applets.js" defer></script>
+<script src="/static/pudl/pudl-menubar.js" defer></script>
+<script src="/static/pudl/pudl-regions.js" defer></script>
+<script src="/static/pudl/pudl-md.js" defer></script>
+<script src="/static/pudl/pudl-split.js" defer></script>
+<script src="/static/pudl/pudl-dialog.js" defer></script>
+<script src="/static/pudl/pudl-tooltip.js" defer></script>
+<script src="/static/desktop.js" defer></script>
+<script src="/static/story.js" defer></script>
+<script src="/static/discussion.js" defer></script>
+<script src="/static/sort.js" defer></script>
+<script src="/static/list.js" defer></script>
+<script src="/static/pinned.js" defer></script>
+<script src="/static/dismissed.js" defer></script>
+<script src="/static/visited.js" defer></script>
+<script src="/static/filters.js" defer></script>
+<script src="/static/infinite.js" defer></script>
+<script src="/static/prefetch.js" defer></script>
+{{ end }}
