@@ -37,3 +37,5 @@ Menu visibility uses a server-rendered page context, borrowing Parks Computing's
 The feed selector and its matching YAVCHN menu entries appear only on stories views, including Classic feeds, Pinned, and Find. Standalone Classic article and applet pages omit both the selector and its divider. Articles retain their Back to stories link.
 
 The top bar exposes a Windowed / Classic segmented selector immediately before the feed selector. It remains available on standalone pages and submits the same preference forms as the View menu. At narrow widths it uses the existing segmented-control dropdown. The visible mode name is Windowed; URL and cookie values remain `window`.
+
+The view selector pairs Windowed with overlapping window outlines and Classic with a single window outline. The glyphs follow the text color and appear in both the full selector and its mobile dropdown, which retains a separate selection tick.
