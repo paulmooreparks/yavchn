@@ -71,8 +71,9 @@
   function syncNext(a) {
     var story = a.closest('.story');
     var next = story && a.closest('.win') ? nextLink(story.dataset.storyKey) : null;
-    a.hidden = !next;
-    if (!next) { a.removeAttribute('data-win-open'); return; }
+    a.hidden = !a.closest('.win');
+    a.setAttribute('aria-disabled', String(!next));
+    if (!next) { a.removeAttribute('data-win-open'); a.removeAttribute('href'); a.setAttribute('aria-label', 'Next story'); return; }
     a.setAttribute('data-win-open', next.getAttribute('data-win-open'));
     a.setAttribute('href', next.getAttribute('href'));
     a.setAttribute('aria-label', 'Next story: ' + next.firstChild.textContent.trim());
@@ -95,7 +96,7 @@
   function nextStory(win) {
     var a = win && win.querySelector('.story-next');
     if (a) syncNext(a);
-    return a && !a.hidden ? a : null;
+    return a && !a.hidden && a.getAttribute('aria-disabled') !== 'true' ? a : null;
   }
   window.yavchn.nextStory = nextStory;
 

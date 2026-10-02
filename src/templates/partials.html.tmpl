@@ -139,9 +139,18 @@
     <div class="empty-state-actions"><a class="btn btn-sm" href="{{ .SourceURL }}" target="_blank" rel="noopener">{{ .SourceLabel }}</a></div>
   </div>
 {{ else }}
+  <div class="reader-toolbar" hidden>
+    <div class="seg reader-panes" role="group" aria-label="Reader panes">
+      <button type="button" data-reader-pane="article" aria-pressed="false">Article</button>
+      <button type="button" data-reader-pane="discussion" aria-pressed="false">Discussion</button>
+      <button type="button" data-reader-pane="split" aria-pressed="true">Split</button>
+    </div>
+    <a class="btn btn-sm story-next" href="{{ .PageURL }}" data-win-replace hidden>Next story</a>
+  </div>
   <div class="split stacked story-split">
     <section class="split-pane story-pane story-article" aria-label="Article">
-      <div class="story-bar">
+      <div class="story-scroll story-article-body" tabindex="0">
+      <div class="story-bar article-info">
         <span class="story-bar-label">{{ if .IsComment }}Comment{{ else }}Article{{ end }}</span>
         {{ if not .IsComment }}<span class="story-bar-meta">{{ .Host }}</span>{{ end }}
         <span class="story-bar-spacer"></span>
@@ -149,13 +158,8 @@
         <a href="{{ .URL }}" target="_blank" rel="noopener">Open original</a>
         <button type="button" class="icon-btn story-refresh" aria-label="Fetch the article again"></button>
         {{ end }}
-        {{/* The story after this one in the list, filled in by script from
-             the list beside the window, so it stays hidden on a story's
-             own page and without script. Keep it last so its position does
-             not depend on whether the story has an original article. */}}
-        <a class="story-next" href="{{ .PageURL }}" data-win-replace hidden>Next story</a>
       </div>
-      <div class="story-scroll story-article-body" tabindex="0">
+      <div class="story-article-content">
         {{ if .HasArticle }}
         <div class="loading js-reader-status" role="status"><span class="spinner" aria-hidden="true"></span> Loading the reader view&hellip;</div>
         <noscript><div class="empty-state story-note"><p class="empty-state-body">The reader view needs JavaScript. The &ldquo;Open original&rdquo; link above works without it.</p></div></noscript>
@@ -171,10 +175,12 @@
         </div>
         {{ end }}
       </div>
+      </div>
     </section>
     <div class="split-handle" aria-label="Resize the article" data-split-min="60"></div>
     <section class="split-pane story-pane story-discussion" aria-label="Discussion">
-      <div class="story-bar">
+      <div class="story-scroll story-discussion-body" tabindex="0">
+      <div class="story-bar discussion-info">
         <span class="story-bar-label">{{ if .IsComment }}Replies{{ else }}Discussion{{ end }}</span>
         <span class="story-bar-meta num">{{ if not .IsComment }}{{ .Comments }} comments &middot; {{ .Score }} points{{ if .By }} &middot; {{ end }}{{ end }}{{ if .ByKey }}<a class="story-poster" href="{{ .ByURL }}" data-win-open="{{ .ByKey }}">{{ .By }}</a>{{ else if .By }}{{ .By }}{{ end }}{{ if .Age }} &middot; {{ .Age }}{{ end }}</span>
         <span class="story-bar-spacer"></span>
@@ -185,9 +191,10 @@
         </div>
         <a href="{{ .SourceURL }}" target="_blank" rel="noopener">{{ .SourceLabel }}</a>
       </div>
-      <div class="story-scroll story-discussion-body" tabindex="0">
+      <div class="story-discussion-content">
         <div class="loading js-discussion-status" role="status"><span class="spinner" aria-hidden="true"></span> Loading the discussion&hellip;</div>
         <noscript><div class="empty-state story-note"><p class="empty-state-body">The discussion needs JavaScript. The &ldquo;{{ .SourceLabel }}&rdquo; link above works without it.</p></div></noscript>
+      </div>
       </div>
     </section>
   </div>
@@ -208,6 +215,7 @@
 {{ define "window" }}
 <section class="win {{ if .App }}app-win app-win-{{ .App.Kind }}{{ else }}story-win{{ end }}{{ if .Active }} active{{ end }}" data-win="{{ .Key }}"{{ if .ContentSized }} data-win-size="content"{{ end }} data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="{{ if and (not .App) .Source }}win-{{ .Key }}-site {{ end }}win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
   <header class="win-head">
+    <nav class="win-chrome reader-return" aria-label="Story list"><a class="reader-back" href="{{ .MinHref }}" data-win-back aria-label="Back to stories">‹ <span>Stories</span></a></nav>
     {{ if and (not .App) .Source }}<span class="reader-site" id="win-{{ .Key }}-site">{{ template "sourceicon" .Source }}<span class="visually-hidden">{{ if eq .Source "hn" }}HN{{ else if eq .Source "lobsters" }}Lobsters{{ else }}{{ .Source }}{{ end }}</span></span>{{ end }}
     <h2 class="win-title" id="win-{{ .Key }}-title">{{ .Title }}</h2>
     <nav class="win-chrome" aria-label="Window">

@@ -20,7 +20,6 @@
 (function () {
   'use strict';
 
-  var SPLIT_KEY = 'yavchn-article-h';
 
   var failed = '<div class="empty-state story-note"><p class="empty-state-title">This could not be loaded</p>' +
     '<p class="empty-state-body">The link above opens it on its own site.</p></div>';
@@ -32,7 +31,7 @@
         if (!html) throw new Error('empty');
         body.innerHTML = html;
         body.scrollTop = 0;
-        body.dispatchEvent(new CustomEvent('yavchn:loaded', { bubbles: true }));
+        (body.closest('.story-scroll') || body).dispatchEvent(new CustomEvent('yavchn:loaded', { bubbles: true }));
       })
       .catch(function (err) { if (!err || err.name !== 'AbortError') body.innerHTML = failed; });
   }
@@ -41,7 +40,7 @@
      c=the id of the top-level comment the keyboard reached. */
   function parseState(s) {
     var q = new URLSearchParams(s || '');
-    return { a: parseInt(q.get('a') || '0', 10) || 0, d: parseInt(q.get('d') || '0', 10) || 0, c: q.get('c') || '' };
+    return { a: parseInt(q.get('a') || '0', 10) || 0, d: parseInt(q.get('d') || '0', 10) || 0, c: q.get('c') || '', pane: q.get('pane') || '', ratio: q.get('ratio') || '' };
   }
 
   function init(root, opts) {
@@ -53,16 +52,67 @@
     var refreshBtn = null;
     var wanted = null;
     var timer = 0;
+    var paneMode = '';
+    var splitRatio = '';
+    var positions = { a: 0, d: 0 };
     var d = root.dataset;
     var lib = window.yavchn;
 
     function state() {
       var q = new URLSearchParams();
-      if (article && article.scrollTop) q.set('a', String(Math.round(article.scrollTop)));
-      if (discussion && discussion.scrollTop) q.set('d', String(Math.round(discussion.scrollTop)));
+      if (paneMode) q.set('pane', paneMode);
+      if (splitRatio) q.set('ratio', splitRatio);
+      if (article && article.offsetHeight) positions.a = article.scrollTop;
+      if (positions.a) q.set('a', String(Math.round(positions.a)));
+      if (discussion && discussion.offsetHeight) positions.d = discussion.scrollTop;
+      if (positions.d) q.set('d', String(Math.round(positions.d)));
       var c = root.querySelector('.discussion-content > .thread > .comment.focused');
       if (c && c.dataset.id) q.set('c', c.dataset.id);
       return q.toString();
+    }
+
+
+    function validPane(value) { return ['article', 'discussion', 'split'].indexOf(value) >= 0; }
+    function sharedPage() {
+      var page = new URL(root.getAttribute('data-applet-page') || opts.pageUrl, location.href);
+      if (paneMode) page.searchParams.set('pane', paneMode);
+      if (splitRatio) page.searchParams.set('ratio', splitRatio);
+      return page;
+    }
+    function savePresentation(persist) {
+      if (persist !== false) opts.changed(state());
+      var page = sharedPage();
+      var host = root.closest('.win');
+      if (host) {
+        host.setAttribute('data-win-href', page.href);
+        var pageLink = host.querySelector('[data-win-action="page"]');
+        if (pageLink) pageLink.href = page.href;
+      } else if (opts.host === 'page' && persist !== false) {
+        var url = new URL(location.href);
+        url.searchParams.set('pane', paneMode);
+        if (splitRatio) url.searchParams.set('ratio', splitRatio);
+        else url.searchParams.delete('ratio');
+        history.replaceState(history.state, '', url);
+      }
+    }
+    function showPane(mode, save) {
+      var split = root.querySelector('.story-split');
+      if (!split || !validPane(mode)) return;
+      if (save && article && article.offsetHeight) positions.a = article.scrollTop;
+      if (save && discussion && discussion.offsetHeight) positions.d = discussion.scrollTop;
+      paneMode = mode;
+      root.dataset.readerPane = mode;
+      // Single panes leave the splitter layout until both panes are visible.
+      split.classList.toggle('split', mode === 'split');
+      split.querySelector('.story-article').hidden = mode === 'discussion';
+      split.querySelector('.story-discussion').hidden = mode === 'article';
+      split.querySelector('.split-handle').hidden = mode !== 'split';
+      if (splitRatio) split.style.setProperty('--split-a', splitRatio + '%');
+      root.querySelectorAll('[data-reader-pane]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.readerPane === mode)); });
+      if (article && mode !== 'discussion') article.scrollTop = positions.a;
+      if (discussion && mode !== 'article') discussion.scrollTop = positions.d;
+      if (mode === 'split' && window.pudlSplit) window.pudlSplit.refresh();
+      if (save) savePresentation();
     }
 
     function changedSoon() {
@@ -83,7 +133,9 @@
     function refresh() {
       if (!refreshBtn || !article || !d.readerUrl || refreshBtn.disabled) return;
       var button = refreshBtn;
-      var body = article;
+      var body = root.querySelector('.story-article-content');
+      positions.a = 0;
+      article.scrollTop = 0;
       var signal = contentCtl.signal;
       button.disabled = true;
       button.setAttribute('aria-busy', 'true');
@@ -103,10 +155,27 @@
       refreshBtn = root.querySelector('.story-refresh');
       wanted = parseState(stateText);
       var wantedState = wanted;
+      positions = { a: wanted.a, d: wanted.d };
+      var urlState = opts.host === 'page' ? parseState(location.search.slice(1)) : null;
+      if (urlState && validPane(urlState.pane)) paneMode = urlState.pane;
+      else if (!paneMode && validPane(wanted.pane)) paneMode = wanted.pane;
+      if (!paneMode && d.storyKey) {
+        var width = root.getBoundingClientRect().width || window.innerWidth;
+        paneMode = !d.readerUrl && !root.querySelector('.story-text') ? 'discussion' : width <= 600 ? 'article' : 'split';
+      }
+      var ratio = (urlState && urlState.ratio) || splitRatio || wanted.ratio;
+      if (/^\d+(\.\d+)?$/.test(ratio) && +ratio >= 10 && +ratio <= 90) splitRatio = ratio;
+      var toolbar = root.querySelector('.reader-toolbar');
+      if (toolbar) toolbar.hidden = false;
+      showPane(paneMode, false);
+      root.querySelectorAll('[data-reader-pane]').forEach(function (b) {
+        b.addEventListener('click', function () { showPane(b.dataset.readerPane, true); }, { signal: signal });
+      });
+      if (d.storyKey) savePresentation(false);
 
       if (article && d.readerUrl) {
         var articleBody = article;
-        fill(articleBody, articleSrc(false), signal).then(function () {
+        fill(root.querySelector('.story-article-content'), articleSrc(false), signal).then(function () {
           if (!signal.aborted) restore(articleBody, wantedState.a);
         });
       } else if (article) {
@@ -114,7 +183,7 @@
       }
       if (discussion) {
         var discussionBody = discussion;
-        fill(discussionBody, '/api/discussion?id=' + encodeURIComponent(d.storyId) +
+        fill(root.querySelector('.story-discussion-content'), '/api/discussion?id=' + encodeURIComponent(d.storyId) +
           '&source=' + encodeURIComponent(d.storySource || 'hn'), signal).then(function () {
           if (signal.aborted) return;
           if (wantedState.c && lib.discussion) lib.discussion.focusId(root, wantedState.c, false);
@@ -211,6 +280,16 @@
     root.addEventListener('yavchn:story-change', function () {
       if (window.pudlMenubar) window.pudlMenubar.refresh();
     }, { signal: ctl.signal });
+    root.addEventListener('pudl:split', function (e) {
+      var split = e.target.closest('.story-split');
+      if (!split || paneMode !== 'split') return;
+      splitRatio = e.detail.size == null ? '' : String(Math.max(10, Math.min(90, e.detail.size / split.getBoundingClientRect().height * 100)).toFixed(2));
+      if (splitRatio) split.style.setProperty('--split-a', splitRatio + '%');
+      savePresentation();
+    }, { signal: ctl.signal });
+    root.addEventListener('yavchn:show-discussion', function () {
+      if (paneMode === 'article') showPane('discussion', true);
+    }, { signal: ctl.signal });
     root.addEventListener('yavchn:comment-focus', changedSoon, { signal: ctl.signal });
     wire(opts.state);
     var unmountReader = lib.readers.mount(root, loadStory);
@@ -221,7 +300,7 @@
       if (!d.storyKey) return { titles: [] };
       var pins = lib.pins, disc = lib.discussion, sort = lib.sort;
       var next = win() && lib.nextStory ? lib.nextStory(win()) : null;
-      var page = new URL(root.getAttribute('data-applet-page') || opts.pageUrl, location.href).href;
+      var page = sharedPage().href;
       var original = d.readerUrl || '';
       var source = root.querySelector('.story-discussion .story-bar a[target="_blank"]');
       var story = [
@@ -262,7 +341,9 @@
           { label: 'Story', items: story },
           { label: 'Discussion', items: discussionMenu }
         ],
-        into: { go: navigation }
+        into: { go: navigation, view: ['article', 'discussion', 'split'].map(function (mode) {
+          return { label: mode === 'article' ? 'Article only' : mode === 'discussion' ? 'Discussion only' : 'Article and discussion', radio: 'reader-pane', checked: paneMode === mode, run: function () { showPane(mode, true); } };
+        }) }
       };
     }
 
@@ -270,6 +351,8 @@
       state: state,
       setState: function (s) {
         var key = new URLSearchParams(s || '').get('story');
+        var incoming = parseState(s);
+        if (validPane(incoming.pane)) showPane(incoming.pane, true);
         if (key) loadStory(key, true);
       },
       menus: menus,
@@ -285,26 +368,4 @@
 
   window.pudlApplets.register('story', { init: init });
 
-  /* === The split ======================================================== */
-  function applySplit(pct) {
-    document.querySelectorAll('.story-split').forEach(function (s) {
-      if (pct) s.style.setProperty('--split-a', pct);
-      else s.style.removeProperty('--split-a');
-    });
-  }
-
-  document.addEventListener('pudl:split', function (e) {
-    var split = e.target.closest('.story-split');
-    if (!split) return;
-    var pct = null;
-    if (e.detail.size != null) {
-      var whole = split.getBoundingClientRect().height;
-      if (whole > 0) pct = Math.max(10, Math.min(90, e.detail.size / whole * 100)).toFixed(2) + '%';
-    }
-    try {
-      if (pct) localStorage.setItem(SPLIT_KEY, pct);
-      else localStorage.removeItem(SPLIT_KEY);
-    } catch (err) { /* storage blocked */ }
-    applySplit(pct);
-  });
 })();

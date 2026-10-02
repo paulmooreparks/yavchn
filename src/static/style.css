@@ -16,6 +16,11 @@
   --accent: #a84600;
   --accent-hover: #8c3b00;
   --warn: #76620a;
+  --tb-bg: #d7dce2;
+  --tb-fg: #1b1f24;
+  --tb-border: color-mix(in srgb, #000 18%, var(--tb-bg));
+  --tb-chip: linear-gradient(rgb(255 255 255 / 28%), rgb(255 255 255 / 10%));
+  --tb-chip-shadow: inset 0 1px rgb(255 255 255 / 55%), 0 1px 2px rgb(0 0 0 / 18%);
 }
 
 [data-theme="dark"] {
@@ -23,6 +28,11 @@
   --accent-hover: #ffa766;
   --on-accent: #121417;
   --warn: #d4b84a;
+  --tb-bg: #20252b;
+  --tb-fg: #e6e8eb;
+  --tb-border: color-mix(in srgb, #000 40%, var(--tb-bg));
+  --tb-chip: linear-gradient(color-mix(in srgb, var(--tb-fg) 19%, transparent), color-mix(in srgb, var(--tb-fg) 10%, transparent));
+  --tb-chip-shadow: inset 0 1px color-mix(in srgb, var(--tb-fg) 22%, transparent), 0 1px 2px rgb(0 0 0 / 35%);
 }
 
 /* YAVCHN's own glyphs, drawn as SVG masks as PUDL draws its own, so they
@@ -68,28 +78,29 @@
   align-items: center;
 }
 
-/* On the top bar the switcher's track is the bar's chip. Its segments keep
-   PUDL's own colours. */
-.topbar .source-seg,
-.topbar .view-seg {
-  background: var(--tb-chip);
+/* Every selector shares the top-bar track and selected-state treatment.
+   Existing size classes and layout rules continue to set its dimensions. */
+.seg {
+  background: var(--tb-chip), var(--tb-grad);
   border-color: var(--tb-border);
   box-shadow: var(--tb-chip-shadow);
 }
-
-/* The choices not taken sit on the bar's dark chip in both themes, so
-   they take the bar's foreground; the chosen one is raised in PUDL's own
-   colours. */
-.topbar .source-seg a:not([aria-current]),
-.topbar .view-seg button[aria-pressed="false"] {
+.topbar .seg { background: var(--tb-chip); }
+.seg :is(a, button):not([aria-current]:not([aria-current="false"])):not([aria-pressed="true"]):not([aria-checked="true"]):not(.active) {
   color: var(--tb-chrome-fg);
 }
-
-.topbar .source-seg a:not([aria-current]):hover,
-.topbar .view-seg button[aria-pressed="false"]:hover {
+.seg :is(a, button):not([aria-current]:not([aria-current="false"])):not([aria-pressed="true"]):not([aria-checked="true"]):not(.active):hover {
   color: var(--tb-fg);
   background: color-mix(in srgb, var(--tb-fg) 12%, transparent);
 }
+.seg-menu > .menu-btn {
+  color: var(--tb-chrome-fg);
+  background: var(--tb-chip), var(--tb-grad);
+  border-color: var(--tb-border);
+  box-shadow: var(--tb-chip-shadow);
+}
+.seg-menu > .menu-btn:hover { color: var(--tb-fg); }
+.seg-menu > .menu-btn:focus-visible { box-shadow: var(--tb-chip-shadow), 0 0 0 3px var(--focus-ring); }
 
 @media (max-width: 560px) {
   .topbar {
@@ -293,9 +304,10 @@ html.focus-mode .md-resize {
   background: var(--raise-active-bg);
   box-shadow: var(--raise-active-shadow);
 }
-.story-hide { --yv-glyph: var(--glyph-close); margin-inline-start: 0; }
-
-.story-new-reader { margin-inline-start: 0; }
+.story-hide { --yv-glyph: var(--glyph-close); width: 28px; height: 28px; margin: 6px; color: var(--text); }
+.story-row-actions { display: flex; flex-direction: column; flex: none; gap: 8px; align-self: flex-start; margin: 6px; }
+.story-row-actions .icon-btn { width: 28px; height: 28px; margin: 0; padding: 0; }
+.story-pin, .story-row-actions .icon-btn { color: var(--text); }
 
 .source-icon { width: 16px; height: 16px; flex: none; object-fit: contain; }
 .feed-refresh::before { content: ""; width: 16px; height: 16px; background: currentColor; -webkit-mask: var(--yv-glyph-refresh) center / contain no-repeat; mask: var(--yv-glyph-refresh) center / contain no-repeat; }
@@ -345,17 +357,6 @@ html.focus-mode .md-resize {
   background: currentColor;
   -webkit-mask: var(--glyph-open) center / contain no-repeat;
   mask: var(--glyph-open) center / contain no-repeat;
-}
-
-/* The row's controls show in full on the row the pointer or the keyboard
-   is on, and stay faint elsewhere so thirty rows of buttons do not crowd
-   the headlines. A pinned story's pin always shows, since it states the
-   pin. On a touch screen, with nothing to hover, they always show. */
-@media (hover: hover) {
-  .story-row:not(:hover):not(:focus-within):not(.focused) .story-hide,
-  .story-row:not(:hover):not(:focus-within):not(.focused) .story-pin[aria-pressed="false"] {
-    opacity: .35;
-  }
 }
 
 /* The keyboard's place in the list (j and k), marked at the row's start
@@ -1217,3 +1218,78 @@ html.focus-mode .classic-list .md-sidebar { display: block; }
 .settings-section .seg { margin-top: var(--space-2); max-width: 100%; flex-wrap: wrap; }
 .settings-hint { font-size: var(--text-xs); margin-block: var(--space-2); }
 .settings-status { min-height: 1.5em; font-size: var(--text-sm); }
+
+/* Responsive reader presentation. The controls remain available through menus
+   when narrow windows put content ahead of secondary window chrome. */
+.story-win, .story-page-main { container-type: inline-size; container-name: reader; }
+.reader-toolbar { display: flex; flex: none; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
+.reader-toolbar[hidden] { display: none; }
+.reader-panes { flex: none; }
+.reader-panes button { min-height: 32px; padding-inline: 12px; }
+.reader-toolbar .story-next { margin-left: auto; white-space: nowrap; min-height: 32px; }
+.story-next[aria-disabled="true"] { opacity: .45; cursor: default; }
+.story[data-reader-pane] .story-bar-label { display: none; }
+.story-split:not(.split) { display: flex; flex-direction: column; }
+.story-split:not(.split) > .story-pane:not([hidden]) { flex: 1; min-height: 0; }
+.story-split > .story-pane[hidden], .story-split > .split-handle[hidden] { display: none; }
+.article-info, .discussion-info { background: transparent; padding: 12px 16px; }
+.article-info { border: 0; }
+.discussion-info { flex-wrap: wrap; }
+.discussion-info .story-bar-meta { white-space: normal; overflow: visible; }
+.story-scroll { overscroll-behavior: contain; }
+.reader-return { display: none; order: -1; }
+.reader-back { display: none; flex: none; color: inherit; font-size: var(--text-sm); align-items: center; gap: 4px; white-space: nowrap; }
+.win-bar { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+.taskbar-scroll { font-size: 21px; }
+.taskbar-scroll[hidden] { display: none; }
+.win-bar-dock .win-tab { flex: 0 0 auto; max-width: 250px; }
+body.desktop, body.story-page { height: 100dvh; }
+@container reader (max-width: 600px) {
+  .reader-toolbar { padding: 6px; gap: 6px; }
+  .reader-panes { flex: 1; min-width: 0; display: flex; }
+  .reader-panes button { flex: 1; padding-inline: 6px; min-height: 40px; font-size: 12px; }
+  .reader-toolbar .story-next { font-size: 12px; padding-inline: 8px; min-height: 40px; }
+  .article-info, .discussion-info { padding: 10px 14px; }
+  .discussion-info .story-bar-meta { flex-basis: 100%; }
+  .discussion-info .story-bar-spacer { display: none; }
+  .discussion-info > a:last-child { margin-left: auto; }
+  .story-sort button { min-height: 36px; }
+  .win-head:has([data-win-action="menu"]) .win-chrome:not(.reader-return) { display: none; }
+  .win-head [data-win-action="menu"] { order: 5; margin-left: auto; }
+  .win-title { font-size: var(--text-sm); }
+  .story-page-title { display: none; }
+  .story-page-head { gap: 16px; flex-wrap: wrap; }
+}
+.story-split.split.stacked > .split-handle { height: 18px; margin: 0; background: var(--surface-alt); }
+.story-split.split.stacked > .split-handle::before { inset: 7px 0; }
+@media (pointer: coarse) {
+  .reader-toolbar button, .reader-toolbar .story-next, .story-sort button { min-height: 44px; }
+  .article-info .icon-btn { width: 44px; height: 44px; }
+  .story-row .story-pin, .story-row-actions .icon-btn { width: 44px; height: 44px; }
+}
+@media (max-width: 640px) {
+  .reader-stage .story-win { left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; max-width: none; max-height: none; border-radius: 0; }
+  .reader-return { display: flex; }
+  .reader-back { display: inline-flex; min-height: 40px; order: -1; }
+  .win-head { gap: 6px; }
+  .win-head:has([data-win-action="menu"]) .win-chrome:not(.reader-return) { display: none; }
+  .win-head [data-win-action="menu"] { order: 5; width: 40px; height: 40px; }
+  .win-bar { padding-inline: 6px; gap: 4px; }
+  .win-bar-dock .win-tab { max-width: 175px; min-height: 40px; }
+  .win-bar .icon-btn { width: 36px; height: 40px; }
+  .win-bar-dock .reader-site .visually-hidden { display: none; }
+  .site-listbar .md-filter-group { flex: 1; min-width: 0; }
+  .site-listbar .md-filter { width: 100%; min-width: 0; }
+  .site-listbar .feed-refresh { flex: none; }
+  .site-listbar .md-tabs { flex-basis: 100%; }
+}
+@media (max-width: 420px) {
+  .view-switch, .topbar-rule { display: none; }
+  .reader-back span { display: none; }
+  .reader-back { min-width: 28px; justify-content: center; font-size: 24px; }
+  .win-bar-dock .win-tab { max-width: 145px; }
+}
+@media print {
+  .reader-toolbar, .reader-back, .win-bar { display: none; }
+  .story-split > .story-pane[hidden] { display: block; }
+}

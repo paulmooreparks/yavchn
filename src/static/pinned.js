@@ -69,6 +69,7 @@
       if (btn) {
         btn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
         btn.setAttribute('aria-label', pinned ? 'Unpin this story' : 'Pin this story');
+        btn.title = btn.getAttribute('aria-label');
       }
     });
     var count = Object.keys(store).length;
@@ -172,14 +173,16 @@
         ' data-id="' + esc(id) + '" data-source="' + esc(source) + '" data-url="' + esc(s.url || '') + '"' +
         ' data-host="' + esc(host) + '" data-by="' + esc(s.by || '') + '" data-score="' + (s.score || 0) + '"' +
         ' data-comments="' + (s.comments || 0) + '">' +
-        '<button type="button" class="icon-btn story-pin" aria-pressed="true" aria-label="Unpin this story"></button>' +
+        '<div class="story-row-actions"><button type="button" class="icon-btn story-pin" aria-pressed="true" aria-label="Unpin this story" title="Unpin this story"></button>' +
+        '<a class="icon-btn story-new-reader" href="/hn/?open=reader-1&amp;top=reader-1&amp;r.reader-1=' + esc(key) + '" data-reader-new="' + esc(key) + '" aria-label="Open in new reader window" title="Open in new reader window"></a>' +
+        '</div>' +
         '<a class="md-item" href="/story/' + esc(source) + '/' + esc(id) + '" data-win-open="' + esc(key) + '"' +
         (current ? ' aria-current="true"' : '') + '>' + esc(s.title || '(no title)') +
         '<span class="md-meta num">' + esc(host) + ' &middot; ' + (s.score || 0) + ' points' +
         (s.by ? ' &middot; ' + esc(s.by) : '') + ' &middot; pinned ' + relTime(s.pinned_at) +
         ' &middot; ' + (s.comments || 0) + ' comments</span></a>' +
-        '<a class="icon-btn story-new-reader" href="/hn/?open=reader-1&amp;top=reader-1&amp;r.reader-1=' + esc(key) + '" data-reader-new="' + esc(key) + '" aria-label="Open in new reader window"></a>' +
-        '<button type="button" class="icon-btn story-hide" aria-label="Hide this story"></button></div>';
+
+        '<button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story"></button></div>';
     }).join('');
     box.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));
   }

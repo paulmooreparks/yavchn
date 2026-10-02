@@ -51,6 +51,7 @@
   // story, so each window remembers its own. The story applet keeps it in
   // its state, and hears of each move through yavchn:comment-focus.
   function setFocus(story, idx, scroll) {
+    if (scroll) story.dispatchEvent(new CustomEvent('yavchn:show-discussion'));
     var comments = topLevel(story);
     comments.forEach(function (c, i) { c.classList.toggle('focused', i === idx); });
     story.dataset.commentIdx = String(idx);

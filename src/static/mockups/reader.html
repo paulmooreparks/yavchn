@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>YAVCHN reader mockup</title><link rel="stylesheet" href="../pudl/pudl.css"><link rel="stylesheet" href="reader.css"></head>
+<body>
+<header class="shell">
+ <button class="btn icon" id="menu-toggle" aria-label="Site menu" aria-expanded="false">☰</button>
+ <strong class="brand"><img src="../logo-24x24.png" alt="">YAVCHN</strong>
+ <nav class="desktop-menus" aria-label="Site menus"><button class="menu-link" data-menu="Go">Go</button><button class="menu-link" data-menu="Applets">Applets</button><button class="menu-link" data-menu="Feed">Feed</button><button class="menu-link" data-menu="View">View</button><button class="menu-link" data-menu="Window">Window</button><button class="menu-link" data-menu="Help">Help</button></nav>
+ <span class="shell-rule"></span><div class="seg layout-choice" role="group" aria-label="Browsing view"><button aria-pressed="true" id="windowed">▣ Windowed</button><button aria-pressed="false" id="classic">▢ Classic</button></div>
+ <button class="btn source-choice" id="feed-button"><img src="../hn-favicon.svg" alt=""> <span>Hacker News</span> <span class="chevron">▾</span></button>
+</header>
+<main class="workspace">
+ <aside class="sidebar" aria-label="Stories"><div class="feed-tools"><button class="btn icon" id="refresh-feed" aria-label="Refresh feed">↻</button><input type="search" class="form-input" placeholder="Search stories…" aria-label="Search stories"></div><div class="categories seg" role="group" aria-label="Feed category"><button aria-pressed="true">Top</button><button aria-pressed="false">New</button><button aria-pressed="false">Best</button><button aria-pressed="false">Show HN</button></div><div id="story-list"></div></aside>
+ <section class="desktop" aria-label="Reader workspace"><div class="desktop-hint">Your stories stay open here.</div>
+ <div id="readers"></div>
+ </section>
+</main>
+<footer class="taskbar" aria-label="Open windows"><button class="btn stories-task" aria-label="Show story list">☷ <span>Stories</span></button><div id="tasks"></div><button class="btn window-count" data-menu="Window" aria-label="Show open windows">2 <span>▣</span></button></footer>
+<div id="menu" class="mock-menu" popover aria-label="Commands"><div class="menu-heading"></div><div class="menu-items"></div><div class="scroll-cue" aria-hidden="true">⌄ More below</div></div>
+<div class="toast" role="status" hidden></div>
+<template id="reader-template"><section class="reader" aria-label="Article reader">
+ <header class="reader-head"><button class="back" aria-label="Back to stories">‹ <span>Stories</span></button><img class="site-icon" alt=""><strong class="reader-title"></strong><div class="window-chrome"><button class="btn icon minimize" aria-label="Minimize window">−</button><button class="btn icon maximize" aria-label="Maximize window">□</button></div><button class="btn icon reader-options" aria-label="Reader actions" aria-expanded="false">▾</button></header>
+ <div class="reading-tools"><div class="seg pane-choice" role="group" aria-label="Reader panes"><button data-mode="article" aria-pressed="true">Article</button><button data-mode="discussion" aria-pressed="false">Discussion <span class="count">14</span></button><button data-mode="split" aria-pressed="false">Split</button></div><button class="btn next" aria-label="Next story">Next ›</button></div>
+ <div class="panes" data-mode="article"><div class="article-scroll" tabindex="0"><div class="article-meta"><span class="domain"></span><a class="original" target="_blank" rel="noopener">Open original ↗</a></div><article></article></div>
+ <div class="divider" role="separator" tabindex="0" aria-label="Resize article and discussion" aria-orientation="horizontal" aria-valuemin="20" aria-valuemax="80" aria-valuenow="55"><span></span></div>
+ <div class="discussion-scroll" tabindex="0"><header class="discussion-info"><span>14 comments · 110 points</span><a target="_blank" rel="noopener" class="source-link">Open on HN ↗</a><div class="seg sort" role="group" aria-label="Comment order"><button aria-pressed="true">Best</button><button aria-pressed="false">Newest</button><button aria-pressed="false">Oldest</button></div></header><div class="comments"></div></div></div>
+ </section></template>
+<script src="reader.js"></script></body></html>

@@ -95,10 +95,12 @@
         {{ range .Stories }}
           {{ if .Section }}<div class="md-section-label">{{ .Section }}</div>{{ end }}
           <div class="md-row story-row" id="row-{{ .Key }}" data-key="{{ .Key }}" data-id="{{ .ID }}" data-source="{{ .Source }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}">
-            <button type="button" class="icon-btn story-pin" aria-pressed="false" aria-label="Pin this story"></button>
+            <div class="story-row-actions">
+            <button type="button" class="icon-btn story-pin" aria-pressed="false" aria-label="Pin this story" title="Pin this story"></button>
+              {{ if $.WindowView }}<a class="icon-btn story-new-reader" href="{{ .NewReaderHref }}" data-reader-new="{{ .Key }}" aria-label="Open in new reader window" title="Open in new reader window"></a>{{ end }}
+            </div>
             <a class="md-item" href="{{ .PageURL }}" data-win-open="{{ .Key }}">{{ .Title }}<span class="md-meta num">{{ if $.Finder }}{{ if .Where }}{{ .Where }} &middot; {{ end }}{{ else }}{{ .Rank }}. {{ .Host }} &middot; {{ end }}{{ .Score }} points{{ if .By }} &middot; {{ .By }}{{ end }} &middot; {{ .Age }} &middot; {{ .Comments }} comments</span></a>
-            {{ if $.WindowView }}<a class="icon-btn story-new-reader" href="{{ .NewReaderHref }}" data-reader-new="{{ .Key }}" aria-label="Open in new reader window"></a>{{ end }}
-            <button type="button" class="icon-btn story-hide" aria-label="Hide this story"></button>
+            <button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story"></button>
           </div>
         {{ end }}
         </div>
@@ -115,7 +117,6 @@
     {{ if .WindowView }}<div class="md-resize" role="separator" aria-orientation="vertical" aria-label="Resize the story list"></div>
     <div class="md-detail reader-stage" tabindex="0">
       <div class="reader-col">
-        <a class="md-back" href="{{ .Win.MinAllHref }}" data-win-back>Stories</a>
         <main class="win-host">
           <div class="reader-empty" data-region="intro">
             {{ if .Finder }}
@@ -127,8 +128,8 @@
             {{ else }}
             <div class="card welcome-card">
               <h1>Pick a story from the list</h1>
-              <p>Each story opens in a window that holds the article, in a reader view, above its discussion. Drag the bar between them to share the room differently.</p>
-              <p>Open several and switch between them from the bar at the foot of this area, or drag them side by side. The arrangement lives in the address, so a bookmark brings it back, and changing lists or sources leaves the windows where they are.</p>
+              <p>Each story opens in a reader window. Choose Article, Discussion, or Split to make room for what you want to read. In Split, drag the divider to adjust the panes.</p>
+              <p>Open several and switch between them from the taskbar at the bottom of the workspace, or drag them side by side. The arrangement lives in the address, so a bookmark brings it back, and changing lists or sources leaves the windows where they are.</p>
               <p>Press <kbd>?</kbd> for the keyboard, or open the Help menu.</p>
             </div>
             {{ end }}
@@ -137,16 +138,20 @@
             {{ range .Win.List }}{{ template "window" . }}{{ end }}
           </div>
         </main>
-        <div class="win-bar">
-          <nav class="win-dock win-bar-dock" data-win-dock aria-label="Open stories"></nav>
-          <a class="icon-btn min-all" data-win-back href="{{ .Win.MinAllHref }}"{{ if not .Win.Shown }} aria-disabled="true"{{ end }} aria-label="Minimize all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="13" height="9" rx="1.5"/><line x1="4.5" y1="14" x2="11.5" y2="14"/><path d="M6 5.5l2 2 2-2"/></svg></a>
-          <a class="icon-btn restore-all" data-win-restore href="{{ .Win.RestoreAllHref }}"{{ if not .Win.AnyMin }} aria-disabled="true"{{ end }} aria-label="Restore all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="13" height="9" rx="1.5"/><line x1="4.5" y1="14" x2="11.5" y2="14"/><path d="M6 7.5l2-2 2 2"/></svg></a>
-          <a class="icon-btn close-all" data-close-all href="{{ .Win.CloseAllHref }}"{{ if not .Win.Open }} aria-disabled="true" tabindex="-1"{{ end }} aria-label="Close all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="4.5" width="9" height="9" rx="1.5"/><path d="M5.5 4V3a1.5 1.5 0 0 1 1.5-1.5h6A1.5 1.5 0 0 1 14.5 3v6A1.5 1.5 0 0 1 13 10.5h-1"/><line x1="4" y1="7" x2="8" y2="11"/><line x1="8" y1="7" x2="4" y2="11"/></svg></a>
-        </div>
       </div>
     </div>
     {{ end }}
   </div>
+  {{ if .WindowView }}
+        <div class="win-bar">
+          <button class="icon-btn taskbar-scroll" type="button" data-taskbar-scroll="-1" aria-label="Earlier open windows" hidden>‹</button>
+          <nav class="win-dock win-bar-dock" data-win-dock aria-label="Open windows"></nav>
+          <button class="icon-btn taskbar-scroll" type="button" data-taskbar-scroll="1" aria-label="More open windows" hidden>›</button>
+          <a class="icon-btn min-all" data-win-back href="{{ .Win.MinAllHref }}"{{ if not .Win.Shown }} aria-disabled="true"{{ end }} aria-label="Minimize all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="13" height="9" rx="1.5"/><line x1="4.5" y1="14" x2="11.5" y2="14"/><path d="M6 5.5l2 2 2-2"/></svg></a>
+          <a class="icon-btn restore-all" data-win-restore href="{{ .Win.RestoreAllHref }}"{{ if not .Win.AnyMin }} aria-disabled="true"{{ end }} aria-label="Restore all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="13" height="9" rx="1.5"/><line x1="4.5" y1="14" x2="11.5" y2="14"/><path d="M6 7.5l2-2 2 2"/></svg></a>
+          <a class="icon-btn close-all" data-close-all href="{{ .Win.CloseAllHref }}"{{ if not .Win.Open }} aria-disabled="true" tabindex="-1"{{ end }} aria-label="Close all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="4.5" width="9" height="9" rx="1.5"/><path d="M5.5 4V3a1.5 1.5 0 0 1 1.5-1.5h6A1.5 1.5 0 0 1 14.5 3v6A1.5 1.5 0 0 1 13 10.5h-1"/><line x1="4" y1="7" x2="8" y2="11"/><line x1="8" y1="7" x2="4" y2="11"/></svg></a>
+        </div>
+  {{ end }}
 </div>
 
 {{ template "dialogs" . }}

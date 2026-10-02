@@ -59,3 +59,63 @@ Reader provides Open as a page, Copy story link, and Close window where supporte
 Explicit applet identity menus use the documented window command API for supported page, sharing, and close operations. Standalone pages offer sharing without window-close commands. PUDL owns contribution routing and target lifetime. A reader calls the documented menu refresh API after replacing its article because its menu inventory changes within the same applet instance. No new menu-runtime patches are introduced; the existing reader URL and feed-refresh integrations remain in the bundled regions and windows scripts.
 
 Script and stylesheet URLs carry a hash of the embedded static asset set. Lazy applet scripts use the same version, so a deployment cannot combine cached scripts from the previous release with the new shell. The version is computed when templates are parsed and changes automatically with asset contents.
+
+## Mobile review in progress
+
+The user requested a consolidated proposal for the PUDL agent after the mobile review is complete. The following items record reports and proposed remedies; they do not authorize a PUDL release or represent implemented behavior.
+
+1. The mobile Window menu cuts off its open-window entries beneath the Open windows heading. Auto-hiding scrollbars leave no persistent indication of overflow. PUDL currently caps menu panels at 32rem. The proposed shared fix is to use the available viewport height on phones and provide persistent directional cues whenever more menu content exists above or below.
+2. The article/discussion splitter is difficult to drag with a finger, and keeping both panes visible wastes scarce reading space on phones. The proposed YAVCHN control is an Article / Discussion / Split selector, with matching mutually exclusive commands in View under Reader. Single-pane modes use the reader's full content height and keep the selector accessible. Switching preserves both scroll positions, the loaded content, and the previous split ratio. The choice belongs to each reader instance and should be addressable in its URL state. The initial mobile mode remains undecided. PUDL should provide a larger touch target for splitters and, if its current public API cannot support this cleanly, a documented way to show either pane or both while retaining the split ratio. Those generic capabilities belong in the later PUDL proposal; the article/discussion labels and menu contributions belong in YAVCHN.
+3. The taskbar is inside the detail area, so returning to the story list on a phone hides access to open windows. The recommendation is a full-width taskbar at the bottom of the Windowed workspace on both desktop and mobile, outside the sidebar/detail visibility switch. Both panes reserve space above it rather than letting it cover content. It remains available while browsing stories, including when readers are minimized; selecting a window restores it and switches to the detail view on phones. Classic pages do not acquire a taskbar because they have no window workspace. YAVCHN owns the layout change; the PUDL proposal should identify any missing documented support for a workspace-level taskbar independent of the detail pane.
+
+### Proposed responsive reader layout
+
+This design is proposed for review and has not been implemented. PUDL's raised buttons, recessed segmented selectors, flat informational text, and scoped menus remain the control grammar. Responsive layout changes presentation without switching the user's Windowed or Classic preference.
+
+The reader has one identity row and one primary toolbar. On a narrow screen, the identity row combines Back to stories, the source favicon, the truncated story title, and access to window actions. The separate Stories strip disappears. Desktop readers retain their normal draggable title bar and window buttons; compact readers move secondary window actions into the existing window menu through supported PUDL capabilities. The full title remains available in the content and accessible name.
+
+The primary toolbar contains an Article / Discussion / Split segmented selector and Next story at a stable right-hand position. The selector remains visible in every pane mode and never collapses into a dropdown. Next story is disabled at the end of a list and absent on standalone pages without list navigation. In single-pane mode the divider and the other pane's header disappear. Changing panes preserves loaded content, scroll positions, and split proportions. The proposed initial choice for a newly opened reader is Article on narrow screens and Split where both panes have useful room. Text-only submissions retain their post text in Article; a submission without an article or post body initially shows Discussion. An explicit or restored choice takes precedence, and resizing an existing reader does not silently change its mode. This default remains a proposal pending user review.
+
+Open original becomes a link near the article title in the scrolling content rather than a permanent toolbar row. Article refresh remains in Story, with a direct retry action on load failure. Discussion metadata, its source-site link, and comment ordering occupy a compact header inside the discussion's scroll area. Comment ordering also remains in Discussion. Split mode uses the same content headers without repeating a separate ARTICLE or DISCUSSION command bar. The pane selector supplies those labels. No separate hide-discussion toggle is added because Article already expresses that state.
+
+The shell keeps the menu and feed selector visible on phones. If horizontal space is insufficient, the secondary Windowed/Classic toolbar selector yields to its existing View menu commands before primary reading controls are compressed. Wider layouts retain it. The feed toolbar places refresh beside search and keeps list-category selection on a second row only when needed. The full-width taskbar remains outside both scrollable panes in Windowed mode, with a compact visible window count or overflow control when all window entries cannot fit. Safe-area insets and the on-screen keyboard must not conceal window navigation or the focused input.
+
+Layout decisions should use the reader's available width, including narrow desktop windows, rather than device detection. Touch targets should aim for at least 44 CSS pixels without making all visual glyphs that large. A thicker visible splitter and a larger hit area must not overlap adjacent links or steal ordinary content scrolling. The intermediate layout retains optional controls only where they fit; it does not wrap window chrome into extra rows. Validation should cover 320, 390, and 768 CSS-pixel widths, narrow floating windows on a wide desktop, landscape phones, enlarged text, and keyboard-only operation.
+
+YAVCHN owns the action priorities, reader toolbar, metadata placement, URL state, and feed/taskbar layout. The eventual PUDL proposal should cover menu overflow affordances, touch splitter geometry, supported single-pane presentation, and any missing public hooks for compact window chrome or taskbar placement. Shared runtime changes must be delivered by PUDL rather than copied into the site's vendor files.
+
+
+### Control audit and accepted implementation
+
+The responsive layout was accepted after local review on port 8080. No control in the supplied desktop screenshot is discarded. The mockup's simplified feed and window menus are not carried into the application. The following inventory records the actual destinations.
+
+| Existing control or information | Responsive treatment |
+| --- | --- |
+| Site menu glyph, YAVCHN, Go, Applets, Feed, View, Window, Help | Retained with PUDL's existing collapsed menu behavior. |
+| Reader, Story, Discussion menus | Retained; View also receives the active reader's three pane choices. |
+| Windowed / Classic selector | Retained above 420px; both choices remain in View at narrower widths. |
+| Hacker News, Lobsters, Pinned count, Find | Retained in the real feed selector and Feed menu. |
+| Feed refresh, Hottest / Active / Newest and source-specific categories | Retained. Search and its submit button remain available on feeds that support search. |
+| Story-row pin, read marker, title, rank, host, points, author, age, comment count | Retained. Text continues to wrap rather than hiding story titles. |
+| Story-row open in new reader and hide | Retained, with larger touch targets. Hidden-story recovery remains below the list. |
+| Sidebar divider | Retained at wide widths; mobile still uses the full-width story list. |
+| Window source favicon, title, active-window indication | Retained; narrow titles truncate visually while retaining their accessible names. |
+| Window menu, open as page, minimize, maximize/restore, close | All remain in the window menu. Wide readers retain the title-bar buttons; compact readers show the menu button. |
+| Stories navigation | Moved into the mobile title bar so it no longer needs a separate strip. |
+| Article label and source domain | The pane selector replaces the repeated label. The domain remains in the article's scrolling metadata row. |
+| Open original and article refresh | Retained beside the domain inside the article scroll area, and in Story. Reader failure and archive lookup actions remain in the article content. |
+| Next story | Kept at the fixed right edge of the new reading toolbar. It remains visible but disabled when no next story exists; standalone pages omit it. Go retains its navigation command. |
+| Article/discussion splitter | Available in Split mode, with an 18px non-overlapping target at every viewport size and for every pointer type. Keyboard resizing remains supported. |
+| Discussion count, points, author/profile link, age | Retained inside the discussion's scrolling header, wrapping on narrow readers. |
+| Best / Newest / Oldest and source discussion link | Retained inside that header and in the existing menus. |
+| Comment collapse controls, author links, ages, permalinks and nested replies | Retained. Comment navigation reveals Discussion if Article alone was visible. |
+| Taskbar window buttons, source icons and titles | Retained in a full-width workspace row, visible from the mobile story list. Overflow arrows provide access without relying on transient scrollbars. |
+| Taskbar minimize all / restore all and close all | Retained, including the existing state-dependent minimize/restore choice. Window also retains these commands. |
+
+Each reader preserves its pane selection and split ratio through article changes. Browser-local continuity stores those values alongside independent article and discussion scroll positions. Open as a page and Copy story link include the chosen pane and ratio in the story URL; standalone pages read those parameters. Workspace window layout and article assignments continue to use their existing URL representation. Resizing does not change an explicit pane choice. Without JavaScript, both panes and their original/source links remain available.
+
+This implementation uses public PUDL markup, window commands, split properties and events. No vendor files are changed. The outstanding upstream proposal still includes menu height and overflow cues, and should evaluate standard compact chrome and touch-target conventions using this local implementation as evidence.
+
+The accepted layout retains its current control styling. Sidebar controls remain at normal contrast on idle rows. Pin sits above open-in-window in a left-side column with equal 28px buttons and an 8px gap. Hide stays on the right to separate it from the opening action. Touch targets expand to 44px. Pinned stories retain their orange pressed state, and each action has an accessible label and tooltip. All segmented selectors and their compact menu buttons share the top-bar selector track and foreground tokens, including feed filters, reader panes, comment ordering, and Settings. Each selector retains its existing dimensions.
+
+Menu bars and selector tracks follow the active theme. Light mode uses a light gray background with dark text; dark mode uses a slightly darker graphite background. The palettes are not exchanged between modes. Raised selected states and control dimensions remain unchanged.

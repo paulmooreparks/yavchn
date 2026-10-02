@@ -187,3 +187,22 @@
     });
   });
 })();
+
+/* Keep a visible route to taskbar entries even when scrollbars auto-hide. */
+(function () {
+  var dock = document.querySelector('[data-win-dock]');
+  if (!dock) return;
+  var buttons = document.querySelectorAll('[data-taskbar-scroll]');
+  function sync() {
+    var overflow = dock.scrollWidth > dock.clientWidth + 2;
+    buttons.forEach(function (b) {
+      b.hidden = !overflow;
+      b.disabled = b.dataset.taskbarScroll === '-1' ? dock.scrollLeft <= 1 : dock.scrollLeft + dock.clientWidth >= dock.scrollWidth - 1;
+    });
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { dock.scrollBy({ left: Number(b.dataset.taskbarScroll) * dock.clientWidth * 0.8, behavior: 'smooth' }); }); });
+  dock.addEventListener('scroll', sync, { passive: true });
+  new ResizeObserver(sync).observe(dock);
+  new MutationObserver(sync).observe(dock, { childList: true, subtree: true });
+  sync();
+})();
