@@ -54,6 +54,7 @@ func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
 // (a source's tab, search, Pinned and Find) renders it, so moving between
 // them swaps only the list and leaves the windows alone.
 type listVM struct {
+	menuContext
 	NewReaderHref string
 	Title         string        // the page's <title>
 	Source        string        // active view: "hn" / "lobsters" / "pinned" / "find"
@@ -241,8 +242,46 @@ type threadVM struct {
 
 // renderList renders the desktop page, once the windows the address opens
 // are ready. status 0 means 200.
-func (s *Server) renderList(w http.ResponseWriter, vm *listVM, wins func() windowsVM, status int) {
+func (s *Server) renderList(w http.ResponseWriter, r *http.Request, vm *listVM, wins func() windowsVM, status int) {
+	vm.menuContext = listMenu(r, vm.Source == "hn" || vm.Source == "lobsters")
+	w.Header().Add("Vary", "Cookie")
 	vm.Win = wins()
+	if vm.WindowView {
+		for _, win := range vm.Win.List {
+			if win.Active && !win.Hidden && win.PageURL != "" && win.PageURL != "/" {
+				vm.ClassicURL = win.PageURL
+				break
+			}
+		}
+	}
+	if vm.View == "classic" || r.URL.Query().Has("view") {
+		for i := range vm.AllSources {
+			vm.AllSources[i].URL = viewURL(vm.AllSources[i].URL, vm.View)
+		}
+		for i := range vm.Tabs {
+			vm.Tabs[i].URL = viewURL(vm.Tabs[i].URL, vm.View)
+		}
+		if vm.PrevURL != "" {
+			vm.PrevURL = viewURL(vm.PrevURL, vm.View)
+		}
+		if vm.NextURL != "" {
+			vm.NextURL = viewURL(vm.NextURL, vm.View)
+		}
+		if vm.RetryURL != "" {
+			vm.RetryURL = viewURL(vm.RetryURL, vm.View)
+		}
+		if vm.Pin != nil {
+			for _, choices := range [][]choiceVM{vm.Pin.Sources, vm.Pin.Shows, vm.Pin.Sorts} {
+				for i := range choices {
+					choices[i].URL = viewURL(choices[i].URL, vm.View)
+				}
+			}
+			for i := range vm.Pin.Chips {
+				vm.Pin.Chips[i].RemoveURL = viewURL(vm.Pin.Chips[i].RemoveURL, vm.View)
+			}
+			vm.Pin.ClearURL = viewURL(vm.Pin.ClearURL, vm.View)
+		}
+	}
 	vm.NewReaderHref = vm.Win.NewReaderHref
 	for i := range vm.Stories {
 		u, _ := url.Parse(vm.NewReaderHref)
@@ -317,7 +356,7 @@ func (s *Server) SourceIndex(source Source, tab string) http.HandlerFunc {
 		if idsErr != nil {
 			slog.Warn("storyids unavailable", "source", source.Name(), "tab", tab, "err", idsErr, "path", r.URL.Path)
 			vm.ListError = "The " + source.Label() + " / " + tabLabel(source, tab) + " feed couldn't be loaded right now."
-			s.renderList(w, &vm, wins, http.StatusServiceUnavailable)
+			s.renderList(w, r, &vm, wins, http.StatusServiceUnavailable)
 			return
 		}
 		if len(pageIDs) == 0 {
@@ -334,7 +373,7 @@ func (s *Server) SourceIndex(source Source, tab string) http.HandlerFunc {
 			}
 			vm.Stories = append(vm.Stories, newStoryVM(rankBase+i+1, source, item))
 		}
-		s.renderList(w, &vm, wins, 0)
+		s.renderList(w, r, &vm, wins, 0)
 	}
 }
 
@@ -366,7 +405,7 @@ func (s *Server) Pinned(w http.ResponseWriter, r *http.Request) {
 		RetryURL:    r.URL.RequestURI(),
 		Pin:         pinFilter(r),
 	}
-	s.renderList(w, &vm, s.startWindows(ctx, r), 0)
+	s.renderList(w, r, &vm, s.startWindows(ctx, r), 0)
 }
 
 // Window serves /window/{key}, the markup of one window, a story's or an
@@ -397,11 +436,15 @@ func (s *Server) StoryPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := struct {
+		menuContext
 		NewReaderHref string
 		Title         string
 		AllSources    []sourceOptVM
 		Story         windowVM
-	}{"/hn/?open=reader-1&top=reader-1", vm.Title + " · YAVCHN", s.buildSourceOpts(""), vm}
+	}{pageMenu(r, vm.Key, vm.Source), "/hn/?view=window&open=reader-1&top=reader-1", vm.Title + " · YAVCHN", s.buildSourceOpts(""), vm}
+	for i := range page.AllSources {
+		page.AllSources[i].URL = viewURL(page.AllSources[i].URL, "classic")
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tpl.ExecuteTemplate(w, "story.html.tmpl", page); err != nil {
 		slog.Error("render story page", "key", vm.Key, "err", err)
@@ -495,7 +538,7 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 	if searchErr != nil {
 		slog.Warn("search failed", "q", q, "err", searchErr)
 		vm.ListError = "Search couldn't be run right now. The HN search service may be having a moment."
-		s.renderList(w, &vm, wins, http.StatusServiceUnavailable)
+		s.renderList(w, r, &vm, wins, http.StatusServiceUnavailable)
 		return
 	}
 
@@ -518,7 +561,7 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 			PageURL:  storyPageURL("hn", h.ID),
 		})
 	}
-	s.renderList(w, &vm, wins, 0)
+	s.renderList(w, r, &vm, wins, 0)
 }
 
 // Finder handles /find (empty state) and /find?url=<encoded> (results). It
@@ -540,7 +583,7 @@ func (s *Server) Finder(w http.ResponseWriter, r *http.Request) {
 		RetryURL:   r.URL.RequestURI(),
 	}
 	if rawURL == "" {
-		s.renderList(w, &vm, wins, 0)
+		s.renderList(w, r, &vm, wins, 0)
 		return
 	}
 	if u, err := url.Parse(rawURL); err == nil {
@@ -610,7 +653,7 @@ func (s *Server) Finder(w http.ResponseWriter, r *http.Request) {
 	case len(vm.Stories) == 0:
 		vm.FindNote = "No discussions of this URL on Hacker News or Lobsters."
 	}
-	s.renderList(w, &vm, wins, 0)
+	s.renderList(w, r, &vm, wins, 0)
 }
 
 func finderSourceLabel(name string) string {

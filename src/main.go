@@ -82,6 +82,7 @@ func main() {
 	mux.HandleFunc("GET /api/article", srv.ArticleAPI)
 	mux.HandleFunc("GET /api/discussion", srv.DiscussionAPI)
 	mux.HandleFunc("GET /healthz", srv.Healthz)
+	mux.HandleFunc("POST /settings/view", srv.ViewSetting)
 
 	// Discussion-finder: /find (empty) and /find?url=<encoded> (results).
 	mux.HandleFunc("GET /find", srv.Finder)

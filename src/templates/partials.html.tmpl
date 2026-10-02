@@ -52,17 +52,21 @@
       <ul data-menubar-source data-region-link hidden>
         <li><img src="/static/logo-24x24.png" alt=""> YAVCHN
           <ul>
-            <li><a href="/hn/">Hacker News</a></li>
+            {{ if .HasList }}<li><a href="/hn/">Hacker News</a></li>
             <li><a href="/lobsters/">Lobsters</a></li>
             <li><a href="/pinned/">Pinned stories</a></li>
             <li><a href="/find">Find the discussions of a link</a></li>
             <li>-</li>
-            <li><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN on GitHub</a></li>
+            {{ end }}<li><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN on GitHub</a></li>
           </ul>
         </li>
         <li>View
           <ul>
-            <li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>
+            <li><button type="submit" form="view-window-form" aria-checked="{{ .WindowView }}">Window</button></li>
+            <li><button type="submit" form="view-classic-form" aria-checked="{{ not .WindowView }}">Classic</button></li>
+            <li>-</li>
+            {{ if .WindowView }}<li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>{{ end }}
+            {{ if not .HasList }}<li><a href="{{ .WindowURL }}">Open in a window</a></li>{{ end }}
             <li><button type="button" commandfor="filters-dialog" command="show-modal">Domain filters&hellip;</button></li>
             <li>-</li>
             <li>Theme
@@ -74,12 +78,13 @@
             </li>
           </ul>
         </li>
-        <li>Feed
+        {{ if .HasList }}<li>Feed
           <ul>
             <li><button type="button" data-feed-refresh disabled>Refresh feed</button></li>
           </ul>
         </li>
-        <li>Window
+        {{ end }}
+        {{ if .WindowView }}<li>Window
           <ul>
             <li><a href="{{ .NewReaderHref }}" data-reader-new>New reader window</a></li>
             <li>-</li>
@@ -88,6 +93,7 @@
             <li><a href="?" data-close-all>Close all</a></li>
           </ul>
         </li>
+        {{ end }}
         <li>Applets
           <ul>
             <li><a href="/applets/replies" data-win-open="replies">Replies to me</a></li>
@@ -106,13 +112,13 @@
       </ul>
       <a class="brand" href="/"><img src="/static/logo-24x24.png" alt=""> YAVCHN</a>
     </nav>
-    <noscript><a class="btn btn-sm" href="{{ .NewReaderHref }}">New reader window</a></noscript>
-    <span class="topbar-rule" aria-hidden="true"></span>
+    <noscript><button type="submit" form="view-window-form">Window view</button><button type="submit" form="view-classic-form">Classic view</button>{{ if .WindowView }}<a class="btn btn-sm" href="{{ .NewReaderHref }}">New reader window</a>{{ end }}</noscript>
+    {{ if .HasList }}<span class="topbar-rule" aria-hidden="true"></span>
     <div class="source-switch" data-region="sources">
       <nav class="seg source-seg" data-seg-menu aria-label="Source">
         {{ range .AllSources }}<a href="{{ .URL }}" data-source="{{ .Name }}"{{ if .Active }} aria-current="page"{{ end }}>{{ template "sourceicon" .Name }}<span class="source-label">{{ .Label }}</span></a>{{ end }}
       </nav>
-    </div>
+    </div>{{ end }}
   </div>
 </header>
 {{ end }}
@@ -211,6 +217,12 @@
 {{ end }}
 
 {{ define "dialogs" }}
+<form id="view-window-form" action="/settings/view" method="post" hidden>
+  <input type="hidden" name="view" value="window"><input type="hidden" name="target" value="{{ .WindowURL }}">
+</form>
+<form id="view-classic-form" action="/settings/view" method="post" hidden>
+  <input type="hidden" name="view" value="classic"><input type="hidden" name="target" value="{{ .ClassicURL }}">
+</form>
 <dialog class="dialog wide-dialog" id="filters-dialog" aria-labelledby="filters-dialog-title">
   <h3 class="dialog-title" id="filters-dialog-title">Domain filters</h3>
   <div class="dialog-body">
@@ -264,6 +276,10 @@
       <p>The pin at the start of a row keeps the story in Pinned, and the cross at its end hides it. Pinned can be narrowed by words in the title, site or author, by source, and to the stories you haven't opened yet, and ordered by when you pinned them, by points or by comments; the filters are part of the address, so a filtered view can be bookmarked. Scroll past the end of the list to load more. Domain filters, in the View menu, hide every story from a site.</p>
     </section>
     <section>
+      <h4>Browsing view</h4>
+      <p>View &gt; Window and View &gt; Classic select the browsing view and save your default in this browser. Window view reuses a reader for each feed. Classic view opens stories and applets as pages. Open as a page and Open in a window are one-off actions that do not change your saved default. Direct page links always open as pages.</p>
+    </section>
+    <section>
       <h4>Applets</h4>
       <p>The Applets menu in the menu bar holds three tools, each a window of its own. <strong>Replies to me</strong> takes your Hacker News user name and lists the replies to your last thirty comments and stories, checking again every three minutes while it is open, and marking what is new since you last marked them read. <strong>Look up a user</strong> opens a profile on Hacker News or Lobsters, with their submissions and recent comments, as a commenter's name in any discussion does; the bar at the top of a profile looks up someone else in the same window, and Back returns to the one before. <strong>Who is hiring?</strong> filters the posts of HN's monthly hiring threads by the words you type.</p>
       <p>They read only what the sites publish to everyone, so none of them asks for a login, and your user name stays in this browser.</p>
@@ -295,6 +311,7 @@
 <script src="/static/pudl/pudl-dialog.js" defer></script>
 <script src="/static/pudl/pudl-tooltip.js" defer></script>
 <script src="/static/desktop.js" defer></script>
+<script src="/static/views.js" defer></script>
 <script src="/static/continuity.js" defer></script>
 <script src="/static/applets/registry.js" defer></script>
 <script src="/static/readers.js" defer></script>

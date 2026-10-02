@@ -468,15 +468,19 @@ func (t terms) match(text string) bool {
 // --- handlers ---
 
 type appPageVM struct {
+	menuContext
 	NewReaderHref string
 	Title         string
 	AllSources    []sourceOptVM
 	Win           windowVM
 }
 
-func (s *Server) renderAppPage(w http.ResponseWriter, win windowVM) {
-	vm := appPageVM{NewReaderHref: "/hn/?open=reader-1&top=reader-1", Title: win.Title + " · YAVCHN", AllSources: s.buildSourceOpts(""), Win: win}
+func (s *Server) renderAppPage(w http.ResponseWriter, r *http.Request, win windowVM) {
+	vm := appPageVM{menuContext: pageMenu(r, win.Key, "hn"), NewReaderHref: "/hn/?open=reader-1&top=reader-1", Title: win.Title + " · YAVCHN", AllSources: s.buildSourceOpts(""), Win: win}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	for i := range vm.AllSources {
+		vm.AllSources[i].URL = viewURL(vm.AllSources[i].URL, "classic")
+	}
 	if err := s.tpl.ExecuteTemplate(w, "applet.html.tmpl", vm); err != nil {
 		slog.Error("render applet page", "key", win.Key, "err", err)
 	}
@@ -502,7 +506,7 @@ func (s *Server) appletPage(key string) http.HandlerFunc {
 				s.loadJobs(ctx, win.App.Hiring, clientIP(r))
 			}
 		}
-		s.renderAppPage(w, win)
+		s.renderAppPage(w, r, win)
 	}
 }
 
@@ -525,7 +529,7 @@ func (s *Server) UserPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	s.renderAppPage(w, win)
+	s.renderAppPage(w, r, win)
 }
 
 // RepliesAPI serves /api/replies?u=, the replies list the watcher checks.

@@ -3,10 +3,10 @@
 <head>
 {{ template "head" . }}
 </head>
-<body class="desktop">
+<body class="{{ if .WindowView }}desktop{{ else }}classic-list{{ end }}" data-view="{{ .View }}">
 {{ template "topbar" . }}
 
-<div class="md-layout" data-md-pane="{{ if .Win.Shown }}detail{{ else }}list{{ end }}">
+<div class="md-layout" data-md-pane="{{ if and .WindowView .Win.Shown }}detail{{ else }}list{{ end }}">
   <script>
     /* The list's width is the reader's, applied as the layout is parsed so
        the page never draws at the default first, and saved whenever
@@ -30,13 +30,15 @@
     {{ end }}
     {{ if .Finder }}
     <form class="md-filter-group find-form" action="/find" method="get" role="search">
+      <input type="hidden" name="view" value="{{ $.View }}">
       <input class="md-filter" type="search" name="url" value="{{ .FindURL }}" placeholder="Paste a link to find its discussions&hellip;" aria-label="The link to find discussions of" autocomplete="off" spellcheck="false">
       <button class="icon-btn md-filter-go" type="submit" aria-label="Find its discussions"></button>
     </form>
     {{ else }}
       {{ if .ShowSearch }}
       <form class="md-filter-group" action="/hn/search" method="get" role="search">
-        <input class="md-filter" type="search" name="q" value="{{ .Query }}" placeholder="Search Hacker News&hellip;" aria-label="Search Hacker News" autocomplete="off">
+        <input type="hidden" name="view" value="{{ $.View }}">
+      <input class="md-filter" type="search" name="q" value="{{ .Query }}" placeholder="Search Hacker News&hellip;" aria-label="Search Hacker News" autocomplete="off">
         <button class="icon-btn md-filter-go" type="submit" aria-label="Search"></button>
       </form>
       {{ end }}
@@ -47,7 +49,8 @@
       {{ end }}
       {{ with .Pin }}
       <form class="md-filter-group pin-filter" action="/pinned/" method="get" role="search">
-        <input class="md-filter" type="search" name="q" value="{{ .Q }}" placeholder="Filter pinned stories&hellip;" aria-label="Filter pinned stories by title, site or author" autocomplete="off">
+        <input type="hidden" name="view" value="{{ $.View }}">
+      <input class="md-filter" type="search" name="q" value="{{ .Q }}" placeholder="Filter pinned stories&hellip;" aria-label="Filter pinned stories by title, site or author" autocomplete="off">
         {{ if .Source }}<input type="hidden" name="source" value="{{ .Source }}">{{ end }}
         {{ if .Unread }}<input type="hidden" name="show" value="unread">{{ end }}
         {{ if .Sort }}<input type="hidden" name="sort" value="{{ .Sort }}">{{ end }}
@@ -94,7 +97,7 @@
           <div class="md-row story-row" id="row-{{ .Key }}" data-key="{{ .Key }}" data-id="{{ .ID }}" data-source="{{ .Source }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}">
             <button type="button" class="icon-btn story-pin" aria-pressed="false" aria-label="Pin this story"></button>
             <a class="md-item" href="{{ .PageURL }}" data-win-open="{{ .Key }}">{{ .Title }}<span class="md-meta num">{{ if $.Finder }}{{ if .Where }}{{ .Where }} &middot; {{ end }}{{ else }}{{ .Rank }}. {{ .Host }} &middot; {{ end }}{{ .Score }} points{{ if .By }} &middot; {{ .By }}{{ end }} &middot; {{ .Age }} &middot; {{ .Comments }} comments</span></a>
-            <a class="icon-btn story-new-reader" href="{{ .NewReaderHref }}" data-reader-new="{{ .Key }}" aria-label="Open in new reader window"></a>
+            {{ if $.WindowView }}<a class="icon-btn story-new-reader" href="{{ .NewReaderHref }}" data-reader-new="{{ .Key }}" aria-label="Open in new reader window"></a>{{ end }}
             <button type="button" class="icon-btn story-hide" aria-label="Hide this story"></button>
           </div>
         {{ end }}
@@ -109,7 +112,7 @@
         {{ end }}
       {{ end }}
     </nav>
-    <div class="md-resize" role="separator" aria-orientation="vertical" aria-label="Resize the story list"></div>
+    {{ if .WindowView }}<div class="md-resize" role="separator" aria-orientation="vertical" aria-label="Resize the story list"></div>
     <div class="md-detail reader-stage" tabindex="0">
       <div class="reader-col">
         <a class="md-back" href="{{ .Win.MinAllHref }}" data-win-back>Stories</a>
@@ -142,6 +145,7 @@
         </div>
       </div>
     </div>
+    {{ end }}
   </div>
 </div>
 

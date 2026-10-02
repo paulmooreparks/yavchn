@@ -25,3 +25,13 @@ The reader preserves upstream HTTP status codes and displays them when extractio
 The calendar URL format is documented in the [Internet Archive Wayback CDX documentation](https://github.com/internetarchive/wayback/blob/master/wayback-cdx-server/README.md#filtering).
 
 The article toolbar places Open original before Refresh, with Next story at the far right. Next story retains its position when a story has no external article.
+
+## Window and Classic views
+
+Window and Classic are explicit browsing views, independent of viewport width. Feed URLs accept `view=window` or `view=classic`. An explicit view takes priority over the browser preference. An address that names open windows implies Window when no view is specified. Other feed addresses use the saved preference, defaulting to Window. Standalone story and applet routes always render Classic pages, including shared links opened by someone whose preference is Window.
+
+View menu choices submit to `POST /settings/view`, save the preference in the browser's `yavchn-view` cookie, and navigate to the selected view. Switching from a window to Classic keeps the active article or applet as a page. Switching a standalone page to Window opens that content in the desktop. One-off Open as a page and Open in a window links do not modify the preference. Classic feeds use the full content width, navigate to story pages, and provide a return link from each story to its source feed.
+
+Menu visibility uses a server-rendered page context, borrowing Parks Computing's server-side `when` filtering approach without introducing its configuration format. Standalone pages omit Feed, Window, and the story-list visibility command. Classic feeds retain Feed controls. Theme and Domain filters apply across views; Applets links open standalone pages outside the desktop. Story pages omit Next story and Close. Discussion commands are disabled without comments, and article refresh is disabled while fetching. Keyboard shortcuts use the same contextual restrictions as menu commands. No window or classic mode is inferred from screen width.
+
+The feed selector and its matching YAVCHN menu entries appear only on stories views, including Classic feeds, Pinned, and Find. Standalone Classic article and applet pages omit both the selector and its divider. Articles retain their Back to stories link.

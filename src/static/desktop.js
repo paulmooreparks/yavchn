@@ -93,17 +93,18 @@
 
   function syncCloseAll() {
     var none = !window.pudlWindows || window.pudlWindows.state().open.length === 0;
-    document.querySelectorAll('.win-bar [data-close-all]').forEach(function (a) {
+    document.querySelectorAll('[data-close-all]').forEach(function (a) {
       if (none) { a.setAttribute('aria-disabled', 'true'); a.tabIndex = -1; }
       else { a.removeAttribute('aria-disabled'); a.removeAttribute('tabindex'); }
     });
   }
   document.addEventListener('pudl:windows-change', syncCloseAll);
+  syncCloseAll();
 
   /* === Keys ============================================================= */
   document.addEventListener('keydown', function (e) {
     if (!plainKey(e)) return;
-    if (e.key === 'f' && !e.shiftKey) {
+    if (e.key === 'f' && !e.shiftKey && document.querySelector('[data-win-layer]') && document.querySelector('.story-list')) {
       e.preventDefault();
       setListHidden(!listHidden());
     } else if (e.key === '?') {

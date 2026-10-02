@@ -33,6 +33,8 @@ The UI is built with [PUDL](https://github.com/paulmooreparks/pudl), my design l
 
 ![YAVCHN showing the HN story list beside separate HN and Lobsters reader windows, with the SvelteKit and Rust articles above their discussions](screenshot.png)
 
+Choose **View > Window** for the desktop or **View > Classic** for page-based browsing. The choice saves your default in this browser. Direct article and applet links still open as pages, and **Open as a page** / **Open in a window** do not change that default. Both views work at desktop and mobile widths.
+
 ## Live Site
 
 The site is live at https://yavchn.parkscomputing.com/ if you'd like to try it out.

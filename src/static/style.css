@@ -1171,3 +1171,9 @@ kbd {
   flex: 1;
   min-width: 0;
 }
+
+/* Classic feeds use the full page without a window workspace. */
+.classic-list .md-sidebar { width: 100%; max-width: none; flex: 1; display: block; }
+.classic-list .md-layout { --md-sidebar-w: 100%; }
+.classic-list .story-new-reader { display: none; }
+html.focus-mode .classic-list .md-sidebar { display: block; }

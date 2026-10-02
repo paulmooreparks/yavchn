@@ -222,13 +222,13 @@
       var source = root.querySelector('.story-discussion .story-bar a[target="_blank"]');
       var story = [
         { label: 'Pin this story', checked: !!(pins && pins.isPinned(d.storyId)), run: function () { pins.toggleStory(root); } },
-        { label: 'Next story', disabled: !next, run: function () { if (next) next.click(); } },
+        ...(win() ? [{ label: 'Next story', disabled: !next, run: function () { if (next) next.click(); } }] : []),
         '-',
         { label: 'Open the original', disabled: !original, run: function () { window.open(original, '_blank', 'noopener'); } },
         { label: source ? source.textContent.trim() : 'Open on the source site', disabled: !source,
           run: function () { window.open(source.href, '_blank', 'noopener'); } },
         { label: 'Copy the link to this story', run: function () { if (navigator.clipboard) navigator.clipboard.writeText(page).catch(function () {}); } },
-        { label: 'Fetch the article again', disabled: !original, run: refresh }
+        { label: 'Fetch the article again', disabled: !original || !!(refreshBtn && refreshBtn.disabled), run: refresh }
       ];
       if (lib.hiding) {
         story.push('-', { label: 'Hide this story', run: function () { lib.hiding.hide(d.storyId); } });
@@ -243,17 +243,18 @@
 
       var mode = sort ? sort.get() : 'best';
       var hasNew = !!root.querySelector('.comment-new');
+      var hasComments = !!root.querySelector('.discussion-content .comment');
       var discussionMenu = [
-        { label: 'Best first', radio: 'sort', checked: mode === 'best', run: function () { sort.set('best'); } },
-        { label: 'Newest first', radio: 'sort', checked: mode === 'newest', run: function () { sort.set('newest'); } },
-        { label: 'Oldest first', radio: 'sort', checked: mode === 'oldest', run: function () { sort.set('oldest'); } },
+        { label: 'Best first', disabled: !hasComments, radio: 'sort', checked: mode === 'best', run: function () { sort.set('best'); } },
+        { label: 'Newest first', disabled: !hasComments, radio: 'sort', checked: mode === 'newest', run: function () { sort.set('newest'); } },
+        { label: 'Oldest first', disabled: !hasComments, radio: 'sort', checked: mode === 'oldest', run: function () { sort.set('oldest'); } },
         '-',
-        { label: 'Next comment', run: function () { disc.step(root, 1); } },
-        { label: 'Previous comment', run: function () { disc.step(root, -1); } },
+        { label: 'Next comment', disabled: !hasComments, run: function () { disc.step(root, 1); } },
+        { label: 'Previous comment', disabled: !hasComments, run: function () { disc.step(root, -1); } },
         { label: 'First new comment', disabled: !hasNew, run: function () { disc.firstNew(root); } },
         '-',
-        { label: 'Collapse every thread', run: function () { disc.collapseAll(root, true); } },
-        { label: 'Expand every thread', run: function () { disc.collapseAll(root, false); } }
+        { label: 'Collapse every thread', disabled: !hasComments, run: function () { disc.collapseAll(root, true); } },
+        { label: 'Expand every thread', disabled: !hasComments, run: function () { disc.collapseAll(root, false); } }
       ];
       return { titles: [{ label: 'Story', items: story }, { label: 'Discussion', items: discussionMenu }] };
     }

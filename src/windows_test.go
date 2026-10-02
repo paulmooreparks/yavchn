@@ -180,6 +180,8 @@ func testServer(t *testing.T) (*Server, *http.ServeMux) {
 	}}
 	s := NewServer(map[string]Source{"hn": src}, nil, "hn", nil, tpl, nil, nil)
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /settings/view", s.ViewSetting)
+	mux.HandleFunc("GET /user", s.UserLookup)
 	mux.HandleFunc("GET /hn/{$}", s.SourceIndex(src, "top"))
 	mux.HandleFunc("GET /hn/s/{id}", windowRedirect("/hn/", "hn"))
 	mux.HandleFunc("GET /window/{key}", s.Window)
