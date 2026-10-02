@@ -245,7 +245,8 @@
     /* Links that act on windows or menus belong to those scripts, and links
        meant for another tab or a download to the browser. */
     if (a.matches('[data-win-open], [data-win-tab], [data-win-back], [data-win-action], [target]:not([target="_self"]), [download]')) return;
-    if (a.closest('.menu-panel')) return;
+    // Collapsed segment choices are the mobile version of region links.
+    if (a.closest('.menu-panel') && !a.classList.contains('seg-choice')) return;
     var url = new URL(a.href);
     if (url.origin !== location.origin) return;
     /* A link to what the regions already show would reload the page and

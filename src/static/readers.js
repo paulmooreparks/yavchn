@@ -108,10 +108,14 @@
     var st = window.pudlWindows.state();
     var candidates = recent.concat(st.open).filter(function (key) {
       var entry = mounted.get(key);
-      return entry && entry.root.isConnected && !st.min[key] &&
+      return entry && entry.root.isConnected &&
         (!entry.source || entry.source === source) &&
         entry.root.closest('.win').getAttribute('data-win-mode').indexOf('dock-') !== 0;
     });
+    // Prefer a visible reader, but restore a minimized one before creating
+    // another. Mobile's Stories action minimizes readers to reveal the list.
+    var visible = candidates.filter(function (key) { return !st.min[key]; });
+    if (visible.length) candidates = visible;
     // Activity wins over opening order, including a reader behind another applet.
     var key = recent.slice().reverse().find(function (k) { return candidates.indexOf(k) >= 0; }) || candidates[candidates.length - 1];
     if (!key) return create(article, from);

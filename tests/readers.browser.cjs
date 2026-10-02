@@ -150,6 +150,44 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.locator('.source-switch .menu-btn').click();
     assert.match(await page.locator('.source-switch .menu-btn-label').evaluate(el => getComputedStyle(el, '::before').backgroundImage), /hn-favicon/);
     assert.match(await page.locator('.source-switch .seg-choice[href="/lobsters/"]').evaluate(el => getComputedStyle(el, '::before').backgroundImage), /lobsters-favicon/);
+    // Returning to the feed on mobile minimizes readers. Each source must
+    // restore its own instance across repeated selections and source switches.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(process.argv[2] + '/hn/');
+    await clickRow('1');
+    await story('reader-1', 'hn-1');
+    await page.locator('.md-back[data-win-back]').click();
+    await clickRow('2');
+    await story('reader-1', 'hn-2');
+    assert.equal(await page.locator('.win.story-win').count(), 1);
+    const mobileSource = async source => {
+      await page.locator('.source-switch .menu-btn').click();
+      await page.locator(`.source-switch .seg-choice[href="/${source}/"]`).click();
+      await page.waitForURL(`**/${source}/**`);
+    };
+    await page.locator('.md-back[data-win-back]').click();
+    await mobileSource('lobsters');
+    await page.locator('#row-lobsters-1 > a.md-item').click();
+    await story('reader-2', 'lobsters-1');
+    await page.locator('.md-back[data-win-back]').click();
+    await page.locator('#row-lobsters-2 > a.md-item').click();
+    await story('reader-2', 'lobsters-2');
+    await page.locator('.md-back[data-win-back]').click();
+    await mobileSource('hn');
+    await clickRow('1');
+    await story('reader-1', 'hn-1');
+    await page.locator('.md-back[data-win-back]').click();
+    await page.reload();
+    await clickRow('2');
+    await story('reader-1', 'hn-2');
+    assert.equal(await page.locator('.win.story-win').count(), 2);
+    await story('reader-2', 'lobsters-2');
+    // The same minimized-reader reuse applies after widening the viewport.
+    await page.locator('.md-back[data-win-back]').click();
+    await page.setViewportSize({ width: 1500, height: 1000 });
+    await clickRow('1');
+    await story('reader-1', 'hn-1');
+    assert.equal(await page.locator('.win.story-win').count(), 2);
     assert.deepEqual(errors, []);
     const nojs = await browser.newContext({ javaScriptEnabled: false });
     const plain = await nojs.newPage();

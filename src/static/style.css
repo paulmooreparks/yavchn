@@ -34,13 +34,17 @@
 }
 
 /* === The top bar ==========================================================
-   The menu bar at the left, then a rule and the source switcher at the far
-   right, as parkscomputing.com puts its view switcher. */
+   The source switcher follows the menus so navigation stays together
+   on wide displays. */
 .topbar {
   position: relative;
   justify-content: flex-start;
   padding-block: 6px;
   --tb-pad-y: 6px;
+}
+
+.topbar .site-menubar {
+  flex: 0 1 auto;
 }
 
 .brand img {
@@ -53,7 +57,7 @@
   flex: none;
   width: 1px;
   height: 22px;
-  margin: 0 var(--space-3) 0 auto;
+  margin: 0 var(--space-3);
   background: var(--tb-border, var(--border));
 }
 
