@@ -210,6 +210,19 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.locator('.source-switch .menu-btn').click();
     assert.match(await page.locator('.source-switch .menu-btn-label').evaluate(el => getComputedStyle(el, '::before').backgroundImage), /hn-favicon/);
     assert.match(await page.locator('.source-switch .seg-choice[href="/lobsters/"]').evaluate(el => getComputedStyle(el, '::before').backgroundImage), /lobsters-favicon/);
+    // The narrow policy preserves URL placement and the mounted reader.
+    await page.waitForFunction(() => window.pudlWindows.effectivePlacement('reader-1').mode === 'maximized');
+    const requestedPlacement = await page.evaluate(() => JSON.stringify(window.pudlWindows.state().place['reader-1']));
+    const policyURL = page.url();
+    await page.evaluate(() => { window.policyReader = document.querySelector('[data-win="reader-1"] .story'); });
+    assert.equal(await page.evaluate(() => window.pudlWindows.menuCommands('reader-1').find(c => c.label === 'Restore to floating')?.disabled), true);
+    await page.evaluate(() => window.pudlWindows.dock('reader-1', 'left'));
+    assert.equal(page.url(), policyURL);
+    await page.setViewportSize({ width: 1500, height: 1000 });
+    await page.waitForFunction(() => !document.querySelector('[data-win="reader-1"]').hasAttribute('data-win-restricted'));
+    assert.equal(await page.evaluate(() => JSON.stringify(window.pudlWindows.state().place['reader-1'])), requestedPlacement);
+    assert.equal(await page.evaluate(() => window.policyReader === document.querySelector('[data-win="reader-1"] .story')), true);
+    assert.equal(page.url(), policyURL);
     // Returning to the feed on mobile minimizes readers. Each source must
     // restore its own instance across repeated selections and source switches.
     await page.setViewportSize({ width: 390, height: 844 });

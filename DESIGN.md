@@ -133,3 +133,13 @@ The taskbar begins with a sidebar glyph button. On wide layouts it shares the Vi
 Narrow readers must expose only maximized and minimized placement states, with Restore to floating disabled. PUDL 0.40.0 has no documented host capability restriction covering its menus, gestures, and script actions. That runtime support remains pending; the larger 20px window-menu chevron is implemented locally.
 
 The site menu, feed toolbar, and story text share a left inset of 12px on wide layouts and 8px at phone widths. The shared inset replaces the larger toolbar margins and aligns story entries with the controls above them.
+
+The sidebar divider is 18px wide. Collapsing the sidebar retains a gripped edge rail; dragging outward reopens it, and Enter, Space, or the outward arrow key also opens it. Wide layouts resize through the drag and remember the resulting width. Narrow layouts switch back to the full-width list. The taskbar toggle remains available.
+
+## PUDL 0.41.0 adoption
+
+The vendored distribution is updated from tag v0.41.0, retaining existing host patches for region refresh, reader assignments, and mobile feed navigation. Reader windows opt into its maximized-only narrow policy, which preserves requested placement in the URL and restores it when the workspace widens. PUDL now controls placement restrictions and menu overflow cues. Reader pane selection uses the mounted single-pane contract, and the 18px article divider and raised menu groups use component tokens. The existing sidebar-collapse work is unchanged.
+
+## PUDL 0.42.0 menu styling
+
+PUDL supplies the raised menu groups and light-theme topbar surface. YAVCHN no longer overrides those styles. The responsive workspace adoption and existing host patches remain in place.

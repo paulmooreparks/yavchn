@@ -102,11 +102,12 @@
       if (save && discussion && discussion.offsetHeight) positions.d = discussion.scrollTop;
       paneMode = mode;
       root.dataset.readerPane = mode;
-      // Single panes leave the splitter layout until both panes are visible.
-      split.classList.toggle('split', mode === 'split');
-      split.querySelector('.story-article').hidden = mode === 'discussion';
-      split.querySelector('.story-discussion').hidden = mode === 'article';
-      split.querySelector('.split-handle').hidden = mode !== 'split';
+      var hiddenPane = split.querySelector(mode === 'article' ? '.story-discussion' : '.story-article');
+      if (mode !== 'split' && hiddenPane.contains(document.activeElement)) {
+        root.querySelector('[data-reader-pane="' + mode + '"]').focus();
+      }
+      if (mode === 'split') delete split.dataset.splitPane;
+      else split.dataset.splitPane = mode === 'article' ? 'first' : 'second';
       if (splitRatio) split.style.setProperty('--split-a', splitRatio + '%');
       root.querySelectorAll('[data-reader-pane]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.readerPane === mode)); });
       if (article && mode !== 'discussion') article.scrollTop = positions.a;
