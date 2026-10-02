@@ -1,0 +1,59 @@
+{{ define "settings" }}
+<div class="settings-panel" data-settings>
+  <p class="settings-intro">These preferences apply only to this browser. Changes save immediately.</p>
+  <section class="settings-section">
+    <h2>Reading</h2>
+    <form action="/settings/view" method="post" class="settings-view-form" data-saved-view="{{ .SettingsView }}">
+      <input type="hidden" name="target" value="/settings">
+      <fieldset>
+        <legend class="form-label">Default browsing view</legend>
+        <div class="seg">
+          <button type="submit" name="view" value="window" aria-pressed="{{ eq .SettingsView "window" }}">Windowed</button>
+          <button type="submit" name="view" value="classic" aria-pressed="{{ eq .SettingsView "classic" }}">Classic</button>
+        </div>
+      </fieldset>
+      <p class="settings-hint">Used when a link does not specify a view. Your current page stays open.</p>
+    </form>
+    <fieldset data-settings-js disabled>
+      <legend class="form-label">Default comment order</legend>
+      <div class="seg">
+        <button type="button" data-setting="sort" value="best" aria-pressed="false">Best first</button>
+        <button type="button" data-setting="sort" value="newest" aria-pressed="false">Newest first</button>
+        <button type="button" data-setting="sort" value="oldest" aria-pressed="false">Oldest first</button>
+      </div>
+    </fieldset>
+  </section>
+  <section class="settings-section">
+    <h2>Appearance</h2>
+    <fieldset data-settings-js disabled>
+      <legend class="form-label">Theme</legend>
+      <div class="seg">
+        <button type="button" data-setting="theme" value="light" aria-pressed="false">Light</button>
+        <button type="button" data-setting="theme" value="dark" aria-pressed="false">Dark</button>
+        <button type="button" data-setting="theme" value="system" aria-pressed="false">Follow the system</button>
+      </div>
+    </fieldset>
+  </section>
+  <section class="settings-section">
+    <h2>Blocked domains</h2>
+    <fieldset data-settings-js disabled>{{ template "domainfilters" "settings" }}</fieldset>
+  </section>
+  <noscript><p>Theme, comment order, and blocked domains need JavaScript to access this browser's preferences.</p></noscript>
+  <p class="settings-status" role="status" aria-live="polite"></p>
+</div>
+{{ end }}
+
+{{ define "domainfilters" }}
+<div data-domain-filters>
+  <p>Stories from these domains are hidden from every list. Subdomains match too: blocking <code>substack.com</code> also hides <code>danluu.substack.com</code>.</p>
+  <ul class="filters-list" aria-label="Blocked domains"></ul>
+  <p class="filters-empty" hidden>No domains are blocked.</p>
+  <form class="filters-add">
+    <label class="form-label" for="{{ . }}-filters-input">Block a domain</label>
+    <div class="filters-add-row">
+      <input class="form-input" id="{{ . }}-filters-input" type="text" name="domain" placeholder="example.com" autocomplete="off" spellcheck="false" required>
+      <button class="btn" type="submit">Block</button>
+    </div>
+  </form>
+</div>
+{{ end }}

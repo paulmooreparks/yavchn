@@ -411,6 +411,7 @@ func (s *Server) Pinned(w http.ResponseWriter, r *http.Request) {
 // Window serves /window/{key}, the markup of one window, a story's or an
 // applet's, which pudl-windows.js fetches when it opens without a page load.
 func (s *Server) Window(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Vary", "Cookie")
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	vm, ok := s.window(ctx, r, r.PathValue("key"))

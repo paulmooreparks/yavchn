@@ -3,7 +3,8 @@
      for a fragment the view model it renders. */}}
 
 {{ define "appbody" }}
-{{ if eq .Kind "profile" }}{{ template "lookupbar" .Lookup }}{{ template "profile" .Profile }}
+{{ if eq .Kind "settings" }}{{ template "settings" . }}
+{{ else if eq .Kind "profile" }}{{ template "lookupbar" .Lookup }}{{ template "profile" .Profile }}
 {{ else if eq .Kind "lookup" }}{{ template "lookupbar" .Lookup }}
 <p class="app-note lookup-note">Enter a user name and choose the site. A commenter's name in any discussion opens their profile too.</p>
 {{ else if eq .Kind "replies" }}{{ template "repliesapp" .Replies }}

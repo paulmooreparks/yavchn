@@ -182,6 +182,7 @@ func testServer(t *testing.T) (*Server, *http.ServeMux) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /settings/view", s.ViewSetting)
 	mux.HandleFunc("GET /user", s.UserLookup)
+	mux.HandleFunc("GET /settings", s.appletPage("settings"))
 	mux.HandleFunc("GET /hn/{$}", s.SourceIndex(src, "top"))
 	mux.HandleFunc("GET /hn/s/{id}", windowRedirect("/hn/", "hn"))
 	mux.HandleFunc("GET /window/{key}", s.Window)

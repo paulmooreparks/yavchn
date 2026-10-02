@@ -35,6 +35,8 @@ The UI is built with [PUDL](https://github.com/paulmooreparks/pudl), my design l
 
 Choose **View > Windowed** for the desktop or **View > Classic** for page-based browsing. The choice saves your default in this browser. Direct article and applet links still open as pages, and **Open as a page** / **Open in a window** do not change that default. Both views work at desktop and mobile widths.
 
+**YAVCHN > Settings** collects the default view, theme, comment order, and blocked domains. Changes apply immediately and stay in this browser. Settings opens in a window on the desktop or as a page at `/settings` in Classic view.
+
 ## Live Site
 
 The site is live at https://yavchn.parkscomputing.com/ if you'd like to try it out.

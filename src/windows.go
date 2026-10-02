@@ -418,6 +418,7 @@ func (st winState) layerStyle(attrs map[string]winAttrs) template.CSS {
 // a tool applet's window, Reader for the article reader's bootstrap, and
 // the story fields for a loaded story.
 type windowVM struct {
+	ContentSized     bool
 	StoryKey         string
 	App              *appVM
 	Reader           bool

@@ -45,12 +45,10 @@
     });
   }
 
-  var dialog = document.getElementById('filters-dialog');
-
   function renderList() {
-    if (!dialog) return;
-    var ul = dialog.querySelector('.filters-list');
-    var empty = dialog.querySelector('.filters-empty');
+    document.querySelectorAll('[data-domain-filters]').forEach(function (container) {
+    var ul = container.querySelector('.filters-list');
+    var empty = container.querySelector('.filters-empty');
     var arr = load().sort();
     ul.textContent = '';
     if (empty) empty.hidden = arr.length > 0;
@@ -69,39 +67,41 @@
       li.appendChild(btn);
       ul.appendChild(li);
     });
+    });
   }
 
-  if (dialog) {
-    var form = dialog.querySelector('.filters-add');
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var input = form.querySelector('input[name="domain"]');
-      var d = normalize(input.value);
-      if (!d) {
-        input.setCustomValidity('Enter a domain like example.com');
-        input.reportValidity();
-        return;
-      }
-      input.setCustomValidity('');
-      var arr = load();
-      if (arr.indexOf(d) < 0) { arr.push(d); save(arr); }
-      input.value = '';
-      renderList();
-      apply();
-    });
-    form.querySelector('input[name="domain"]').addEventListener('input', function (e) {
-      e.target.setCustomValidity('');
-    });
-
-    dialog.addEventListener('click', function (e) {
-      var btn = e.target.closest('.filters-list-remove');
-      if (!btn) return;
-      save(load().filter(function (x) { return x !== btn.dataset.domain; }));
-      renderList();
-      apply();
-    });
+  document.addEventListener('submit', function (e) {
+    var form = e.target.closest('.filters-add');
+    if (!form) return;
+    e.preventDefault();
+    var input = form.querySelector('input[name="domain"]');
+    var d = normalize(input.value);
+    if (!d) {
+      input.setCustomValidity('Enter a domain like example.com');
+      input.reportValidity();
+      return;
+    }
+    input.setCustomValidity('');
+    var arr = load();
+    if (arr.indexOf(d) < 0) { arr.push(d); save(arr); }
+    input.value = '';
     renderList();
-  }
+    apply();
+    document.dispatchEvent(new CustomEvent('yavchn:list-change'));
+  });
+  document.addEventListener('input', function (e) {
+    if (e.target.matches('.filters-add input[name="domain"]')) e.target.setCustomValidity('');
+  });
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.filters-list-remove');
+    if (!btn) return;
+    save(load().filter(function (x) { return x !== btn.dataset.domain; }));
+    renderList();
+    apply();
+    document.dispatchEvent(new CustomEvent('yavchn:list-change'));
+  });
+  renderList();
+  document.addEventListener('pudl:window-open', renderList);
 
   // For the story applet's menu, which blocks the site of the story in front.
   window.yavchn.hiding = window.yavchn.hiding || {};

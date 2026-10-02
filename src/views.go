@@ -41,6 +41,10 @@ func listView(r *http.Request) string {
 	if r.URL.Query().Has("open") {
 		return "window"
 	}
+	return savedView(r)
+}
+
+func savedView(r *http.Request) string {
 	if c, err := r.Cookie("yavchn-view"); err == nil && c.Value == "classic" {
 		return "classic"
 	}
@@ -83,5 +87,9 @@ func (s *Server) ViewSetting(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: "yavchn-view", Value: v, Path: "/", MaxAge: 31536000, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	w.Header().Set("Cache-Control", "no-store")
+	if r.Header.Get("Accept") == "application/json" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }

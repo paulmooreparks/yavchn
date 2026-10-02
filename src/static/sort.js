@@ -50,6 +50,7 @@
     setPref(mode);
     syncButtons(document);
     document.querySelectorAll('.story').forEach(applySort);
+    document.dispatchEvent(new CustomEvent('yavchn:sort-change'));
   }
 
   window.yavchn.sort = { get: getPref, set: choose };

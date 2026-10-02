@@ -38,11 +38,12 @@ const whoIsHiringUser = "whoishiring"
 
 // appVM is the body of an applet's window or page.
 type appVM struct {
-	Kind    string    // "replies", "hiring", "lookup" or "profile"
-	Lookup  *lookupVM // the lookup bar, above a profile and alone in the lookup
-	Profile *profileVM
-	Replies *repliesVM
-	Hiring  *hiringVM
+	SettingsView string
+	Kind         string    // "replies", "hiring", "lookup" or "profile"
+	Lookup       *lookupVM // the lookup bar, above a profile and alone in the lookup
+	Profile      *profileVM
+	Replies      *repliesVM
+	Hiring       *hiringVM
 }
 
 // lookupVM is the lookup bar: a user name and a site. In a window,
@@ -140,6 +141,10 @@ func (s *Server) appletWindow(ctx context.Context, r *http.Request, key string) 
 	w := windowVM{Key: key, MinHref: "?", MaxHref: "?", CloseHref: "?"}
 	q := r.URL.Query()
 	switch {
+	case key == "settings":
+		w.ContentSized = true
+		w.Title, w.PageURL, w.Def = "Settings", "/settings", floatingAt(0.12, 0.05, 0.48, 0.86)
+		w.App = &appVM{Kind: "settings", SettingsView: savedView(r)}
 	case key == "replies":
 		// A watcher stands beside the reading, so it docks at the right.
 		w.Title, w.PageURL, w.Def = "Replies to me", "/applets/replies", dockedAt("right", 0.3)
@@ -476,6 +481,7 @@ type appPageVM struct {
 }
 
 func (s *Server) renderAppPage(w http.ResponseWriter, r *http.Request, win windowVM) {
+	w.Header().Add("Vary", "Cookie")
 	vm := appPageVM{menuContext: pageMenu(r, win.Key, "hn"), NewReaderHref: "/hn/?open=reader-1&top=reader-1", Title: win.Title + " · YAVCHN", AllSources: s.buildSourceOpts(""), Win: win}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	for i := range vm.AllSources {

@@ -39,3 +39,11 @@ The feed selector and its matching YAVCHN menu entries appear only on stories vi
 The top bar exposes a Windowed / Classic segmented selector immediately before the feed selector. It remains available on standalone pages and submits the same preference forms as the View menu. At narrow widths it uses the existing segmented-control dropdown. The visible mode name is Windowed; URL and cookie values remain `window`.
 
 The view selector pairs Windowed with overlapping window outlines and Classic with a single window outline. The glyphs follow the text color and appear in both the full selector and its mobile dropdown, which retains a separate selection tick.
+
+## Settings
+
+YAVCHN > Settings opens the `settings` window on the desktop and navigates to `/settings` in Classic view. The same template provides default browsing view, theme, default comment order, and blocked domains. Preferences are scoped to the current browser. Settings reuses the existing theme and sort APIs, view cookie, and domain-filter storage; it does not keep a second set of preferences. The domain editor is shared with View > Domain filters, and both editors refresh together.
+
+Default browsing view, comment order, and theme use PUDL segmented buttons with `aria-pressed` selection state. All choices remain visible at narrow widths. Changes apply immediately. Updating the default browsing view saves the cookie through the existing POST endpoint without navigating away or changing the current workspace. The view selector and View menu continue to switch the current view and save the default together. A failed default-view save restores the prior selection and displays a retry message. Without JavaScript, the default-view form still submits normally; controls requiring browser storage are disabled with an explanation. Settings does not expose automatically saved window placement or reading progress as preferences.
+
+The Settings window uses PUDL's `data-win-size="content"` behavior. Its dimensions follow its content, its title bar remains draggable, and resizing, maximizing, snapping, and docking are unavailable. Content scrolls when it reaches the workspace bounds.

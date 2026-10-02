@@ -1208,3 +1208,12 @@ html.focus-mode .classic-list .md-sidebar { display: block; }
   background: currentColor; -webkit-mask: var(--glyph-tick) center / contain no-repeat;
   mask: var(--glyph-tick) center / contain no-repeat;
 }
+
+.settings-panel { max-width: 640px; margin-inline: auto; padding: var(--space-4); }
+.settings-intro, .settings-hint { color: var(--text-muted); }
+.settings-section { margin-block: var(--space-4); }
+.settings-section h2 { font-size: var(--text-sm); margin-block: 0 var(--space-3); }
+.settings-section fieldset { border: 0; padding: 0; margin: var(--space-3) 0; min-width: 0; }
+.settings-section .seg { margin-top: var(--space-2); max-width: 100%; flex-wrap: wrap; }
+.settings-hint { font-size: var(--text-xs); margin-block: var(--space-2); }
+.settings-status { min-height: 1.5em; font-size: var(--text-sm); }

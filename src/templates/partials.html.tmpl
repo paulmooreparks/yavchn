@@ -57,7 +57,9 @@
             <li><a href="/pinned/">Pinned stories</a></li>
             <li><a href="/find">Find the discussions of a link</a></li>
             <li>-</li>
-            {{ end }}<li><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN on GitHub</a></li>
+            {{ end }}<li><a href="/settings" data-win-open="settings">Settings&hellip;</a></li>
+            <li>-</li>
+            <li><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN on GitHub</a></li>
           </ul>
         </li>
         <li>View
@@ -208,7 +210,7 @@
 {{/* One story window, the same markup whether the page renders it for
      its address or /window/{key} returns it. */}}
 {{ define "window" }}
-<section class="win {{ if .App }}app-win app-win-{{ .App.Kind }}{{ else }}story-win{{ end }}{{ if .Active }} active{{ end }}" data-win="{{ .Key }}" data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="{{ if and (not .App) .Source }}win-{{ .Key }}-site {{ end }}win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
+<section class="win {{ if .App }}app-win app-win-{{ .App.Kind }}{{ else }}story-win{{ end }}{{ if .Active }} active{{ end }}" data-win="{{ .Key }}"{{ if .ContentSized }} data-win-size="content"{{ end }} data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="{{ if and (not .App) .Source }}win-{{ .Key }}-site {{ end }}win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
   <header class="win-head">
     {{ if and (not .App) .Source }}<span class="reader-site" id="win-{{ .Key }}-site">{{ template "sourceicon" .Source }}<span class="visually-hidden">{{ if eq .Source "hn" }}HN{{ else if eq .Source "lobsters" }}Lobsters{{ else }}{{ .Source }}{{ end }}</span></span>{{ end }}
     <h2 class="win-title" id="win-{{ .Key }}-title">{{ .Title }}</h2>
@@ -232,20 +234,7 @@
 </form>
 <dialog class="dialog wide-dialog" id="filters-dialog" aria-labelledby="filters-dialog-title">
   <h3 class="dialog-title" id="filters-dialog-title">Domain filters</h3>
-  <div class="dialog-body">
-    <p>Stories from these domains are hidden from every list. Subdomains match too: blocking <code>substack.com</code> also hides <code>danluu.substack.com</code>. The list is kept in this browser only.</p>
-    <ul class="filters-list" aria-label="Blocked domains"></ul>
-    <p class="filters-empty" hidden>No domains are blocked.</p>
-    <form class="filters-add">
-      <div class="form-group">
-        <label class="form-label" for="filters-add-input">Block a domain</label>
-        <div class="filters-add-row">
-          <input class="form-input" id="filters-add-input" type="text" name="domain" placeholder="example.com" autocomplete="off" spellcheck="false">
-          <button class="btn" type="submit">Block</button>
-        </div>
-      </div>
-    </form>
-  </div>
+  <div class="dialog-body">{{ template "domainfilters" "dialog" }}</div>
   <form class="dialog-actions" method="dialog">
     <button class="btn" value="close">Close</button>
   </form>
@@ -330,6 +319,7 @@
 <script src="/static/pinned.js" defer></script>
 <script src="/static/dismissed.js" defer></script>
 <script src="/static/filters.js" defer></script>
+<script src="/static/settings.js" defer></script>
 <script src="/static/infinite.js" defer></script>
 <script src="/static/prefetch.js" defer></script>
 {{ end }}
