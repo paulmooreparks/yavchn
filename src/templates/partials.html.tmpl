@@ -215,7 +215,6 @@
 {{ define "window" }}
 <section class="win {{ if .App }}app-win app-win-{{ .App.Kind }}{{ else }}story-win{{ end }}{{ if .Active }} active{{ end }}" data-win="{{ .Key }}"{{ if .ContentSized }} data-win-size="content"{{ end }} data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="{{ if and (not .App) .Source }}win-{{ .Key }}-site {{ end }}win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
   <header class="win-head">
-    <nav class="win-chrome reader-return" aria-label="Story list"><a class="reader-back" href="{{ .MinHref }}" data-win-back aria-label="Back to stories">‹ <span>Stories</span></a></nav>
     {{ if and (not .App) .Source }}<span class="reader-site" id="win-{{ .Key }}-site">{{ template "sourceicon" .Source }}<span class="visually-hidden">{{ if eq .Source "hn" }}HN{{ else if eq .Source "lobsters" }}Lobsters{{ else }}{{ .Source }}{{ end }}</span></span>{{ end }}
     <h2 class="win-title" id="win-{{ .Key }}-title">{{ .Title }}</h2>
     <nav class="win-chrome" aria-label="Window">

@@ -58,17 +58,51 @@
 
   /* === Hiding the story list =========================================== */
   var FOCUS_KEY = 'yavchn-focus';
-  function listHidden() { return document.documentElement.classList.contains('focus-mode'); }
+  var layout = document.querySelector('.md-layout');
+  var mobileWindows = null;
+  function narrowLayout() { return layout && layout.getBoundingClientRect().width <= 640; }
+  function listHidden() {
+    return narrowLayout() ? layout.dataset.mdPane === 'detail' : document.documentElement.classList.contains('focus-mode');
+  }
   function syncFocus() {
+    var hidden = listHidden();
     document.querySelectorAll('[data-focus-toggle]').forEach(function (b) {
-      b.setAttribute('aria-pressed', listHidden() ? 'true' : 'false');
+      b.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+      if (b.classList.contains('sidebar-toggle')) {
+        b.hidden = false;
+        b.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+        var label = hidden ? 'Show sidebar' : narrowLayout() ? 'Show article windows' : 'Hide sidebar';
+        b.setAttribute('aria-label', label);
+        b.title = label;
+        b.disabled = !!(narrowLayout() && !hidden && (!window.pudlWindows || !window.pudlWindows.state().open.length));
+      }
     });
   }
   function setListHidden(on) {
-    document.documentElement.classList.toggle('focus-mode', !!on);
-    try { localStorage.setItem(FOCUS_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked */ }
+    if (narrowLayout()) {
+      if (!window.pudlWindows) return;
+      var state = window.pudlWindows.state();
+      if (on) {
+        var keys = mobileWindows ? mobileWindows.keys.filter(function (key) { return state.open.indexOf(key) >= 0; }) : [];
+        var key = mobileWindows && keys.indexOf(mobileWindows.top) >= 0 ? mobileWindows.top : state.top || state.open[state.open.length - 1];
+        if (!key) return;
+        keys.filter(function (k) { return k !== key; }).forEach(function (k) { window.pudlWindows.raise(k); });
+        window.pudlWindows.raise(key);
+      } else {
+        mobileWindows = { keys: state.open.filter(function (key) { return !state.min[key]; }), top: state.top };
+        window.pudlWindows.minimizeAll();
+      }
+    } else {
+      document.documentElement.classList.toggle('focus-mode', !!on);
+      try { localStorage.setItem(FOCUS_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked */ }
+    }
     syncFocus();
   }
+  if (layout) {
+    new MutationObserver(syncFocus).observe(layout, { attributes: true, attributeFilter: ['data-md-pane'] });
+    new ResizeObserver(syncFocus).observe(layout);
+  }
+  document.addEventListener('pudl:windows-change', syncFocus);
   syncFocus();
 
   document.addEventListener('click', function (e) {

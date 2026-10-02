@@ -75,7 +75,7 @@
   </div>
 
   <div class="md-body">
-    <nav class="md-sidebar story-list" data-region="list" data-source="{{ .Source }}"{{ if and .Finder .Stories }} data-auto-open{{ end }}{{ with .Pin }} data-pin-q="{{ .Q }}" data-pin-source="{{ .Source }}" data-pin-sort="{{ .Sort }}"{{ if .Unread }} data-pin-unread{{ end }}{{ end }} aria-label="Stories">
+    <nav class="md-sidebar story-list" id="story-list" data-region="list" data-source="{{ .Source }}"{{ if and .Finder .Stories }} data-auto-open{{ end }}{{ with .Pin }} data-pin-q="{{ .Q }}" data-pin-source="{{ .Source }}" data-pin-sort="{{ .Sort }}"{{ if .Unread }} data-pin-unread{{ end }}{{ end }} aria-label="Stories">
       {{ if .ListError }}
       <div class="notice danger list-notice" role="alert">
         <div class="notice-content">
@@ -144,6 +144,7 @@
   </div>
   {{ if .WindowView }}
         <div class="win-bar">
+          <button class="icon-btn sidebar-toggle" type="button" aria-controls="story-list" data-focus-toggle aria-label="Hide sidebar" title="Hide sidebar" aria-expanded="true" hidden><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path class="sidebar-glyph-pane" d="M2 3h3v10H2z" stroke="none"/><path d="M5.5 2v12"/></svg></button>
           <button class="icon-btn taskbar-scroll" type="button" data-taskbar-scroll="-1" aria-label="Earlier open windows" hidden>‹</button>
           <nav class="win-dock win-bar-dock" data-win-dock aria-label="Open windows"></nav>
           <button class="icon-btn taskbar-scroll" type="button" data-taskbar-scroll="1" aria-label="More open windows" hidden>›</button>
