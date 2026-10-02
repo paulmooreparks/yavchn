@@ -116,6 +116,14 @@ Each reader preserves its pane selection and split ratio through article changes
 
 This implementation uses public PUDL markup, window commands, split properties and events. No vendor files are changed. The outstanding upstream proposal still includes menu height and overflow cues, and should evaluate standard compact chrome and touch-target conventions using this local implementation as evidence.
 
-The accepted layout retains its current control styling. Sidebar controls remain at normal contrast on idle rows. Pin sits above open-in-window in a left-side column with equal 28px buttons and an 8px gap. Hide stays on the right to separate it from the opening action. Touch targets expand to 44px. Pinned stories retain their orange pressed state, and each action has an accessible label and tooltip. All segmented selectors and their compact menu buttons share the top-bar selector track and foreground tokens, including feed filters, reader panes, comment ordering, and Settings. Each selector retains its existing dimensions.
+The accepted layout retains its current control styling. Sidebar controls remain at normal contrast on idle rows. Pin sits above open-in-window in a left-side column with equal 28px buttons and an 8px gap. Hide stays on the right to separate it from the opening action. Pin, open, and hide remain equal at 28px on mobile as well as desktop. Pinned stories retain their orange pressed state, and each action has an accessible label and tooltip. All segmented selectors and their compact menu buttons use PUDL's standard component styling, including feed filters, reader panes, comment ordering, and Settings. Each selector retains its existing dimensions.
 
 Menu bars and selector tracks follow the active theme. Light mode uses a light gray background with dark text; dark mode uses a slightly darker graphite background. The palettes are not exchanged between modes. Raised selected states and control dimensions remain unchanged.
+
+The editable base palettes are exported in `src/static/yavchn-theme.css` for PUDL Theme Studio. Studio edits those palette tokens. PUDL derives menu and selector styling from them, matching the Studio previews; the site supplies layout and sizing.
+
+The Theme Studio comparison supersedes the custom selector tracks and derived top-bar overrides. Those overrides have been removed so the exported palette produces the same standard PUDL control appearance in YAVCHN.
+
+In light mode, the top bar uses the Settings surface color behind its selectors so their recessed tracks remain distinct. This background adjustment does not change selector colors or the dark-mode top bar.
+
+Menu-bar groups use the selector track background (`--recess-bg`) with PUDL raised borders and shadows in both themes. The border replaces one pixel of padding to preserve their size. Menu items, open-menu states, and dropdown panels keep their existing styling.

@@ -18,9 +18,6 @@
   --warn: #76620a;
   --tb-bg: #d7dce2;
   --tb-fg: #1b1f24;
-  --tb-border: color-mix(in srgb, #000 18%, var(--tb-bg));
-  --tb-chip: linear-gradient(rgb(255 255 255 / 28%), rgb(255 255 255 / 10%));
-  --tb-chip-shadow: inset 0 1px rgb(255 255 255 / 55%), 0 1px 2px rgb(0 0 0 / 18%);
 }
 
 [data-theme="dark"] {
@@ -30,9 +27,6 @@
   --warn: #d4b84a;
   --tb-bg: #20252b;
   --tb-fg: #e6e8eb;
-  --tb-border: color-mix(in srgb, #000 40%, var(--tb-bg));
-  --tb-chip: linear-gradient(color-mix(in srgb, var(--tb-fg) 19%, transparent), color-mix(in srgb, var(--tb-fg) 10%, transparent));
-  --tb-chip-shadow: inset 0 1px color-mix(in srgb, var(--tb-fg) 22%, transparent), 0 1px 2px rgb(0 0 0 / 35%);
 }
 
 /* YAVCHN's own glyphs, drawn as SVG masks as PUDL draws its own, so they
@@ -53,8 +47,19 @@
   --tb-pad-y: 6px;
 }
 
+/* Match the Settings surface behind selectors without changing their tokens. */
+:root:not([data-theme="dark"]) .topbar { background: var(--surface); }
+
 .topbar .site-menubar {
   flex: 0 1 auto;
+}
+
+/* Menu-bar groups share the selector track color, with raised elevation. */
+.menubar-menu {
+  background: var(--recess-bg);
+  border: 1px solid var(--raise-border);
+  padding: 1px;
+  box-shadow: var(--raise-shadow);
 }
 
 .brand img {
@@ -78,29 +83,7 @@
   align-items: center;
 }
 
-/* Every selector shares the top-bar track and selected-state treatment.
-   Existing size classes and layout rules continue to set its dimensions. */
-.seg {
-  background: var(--tb-chip), var(--tb-grad);
-  border-color: var(--tb-border);
-  box-shadow: var(--tb-chip-shadow);
-}
-.topbar .seg { background: var(--tb-chip); }
-.seg :is(a, button):not([aria-current]:not([aria-current="false"])):not([aria-pressed="true"]):not([aria-checked="true"]):not(.active) {
-  color: var(--tb-chrome-fg);
-}
-.seg :is(a, button):not([aria-current]:not([aria-current="false"])):not([aria-pressed="true"]):not([aria-checked="true"]):not(.active):hover {
-  color: var(--tb-fg);
-  background: color-mix(in srgb, var(--tb-fg) 12%, transparent);
-}
-.seg-menu > .menu-btn {
-  color: var(--tb-chrome-fg);
-  background: var(--tb-chip), var(--tb-grad);
-  border-color: var(--tb-border);
-  box-shadow: var(--tb-chip-shadow);
-}
-.seg-menu > .menu-btn:hover { color: var(--tb-fg); }
-.seg-menu > .menu-btn:focus-visible { box-shadow: var(--tb-chip-shadow), 0 0 0 3px var(--focus-ring); }
+/* Selectors retain PUDL styling from the palette, matching Theme Studio. */
 
 @media (max-width: 560px) {
   .topbar {
@@ -1263,7 +1246,6 @@ body.desktop, body.story-page { height: 100dvh; }
 @media (pointer: coarse) {
   .story-sort button { min-height: 44px; }
   .article-info .icon-btn { width: 44px; height: 44px; }
-  .story-row .story-pin, .story-row-actions .icon-btn { width: 44px; height: 44px; }
 }
 @media (max-width: 640px) {
   .reader-stage .story-win { left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; max-width: none; max-height: none; border-radius: 0; }
