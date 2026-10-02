@@ -306,6 +306,7 @@
       var story = [
         { label: 'Pin this story', checked: !!(pins && pins.isPinned(d.storyId)), run: function () { pins.toggleStory(root); } },
         '-',
+        ...(win() ? [{ label: 'Open in new reader window', run: function () { lib.readers.create(d.storyKey); } }] : []),
         { label: 'Open the original', disabled: !original, run: function () { window.open(original, '_blank', 'noopener'); } },
         { label: source ? source.textContent.trim() : 'Open on the source site', disabled: !source,
           run: function () { window.open(source.href, '_blank', 'noopener'); } },

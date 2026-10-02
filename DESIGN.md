@@ -2,7 +2,7 @@
 
 Reader windows have stable instance keys such as `reader-1`. The `r.<window-key>` query parameter names the article displayed in that instance. PUDL continues to own placement, minimization and stacking. Reload and browser history restore both the arrangement and each instance's article. Existing article-key URLs remain supported.
 
-The Applets menu starts with New reader window, which opens an empty floating reader. Applets follows Go and precedes Feed. An article row offers Open in new reader window, which creates a floating reader containing that article.
+The Window menu starts with New reader window, which opens an empty floating reader. Applets follows Go and precedes Feed. The active reader's Story menu offers Open in new reader window, which creates a separate reader containing that article.
 
 Sidebar navigation uses the most recently active undocked reader for the article's source, preferring a visible reader and otherwise restoring a minimized reader. An empty reader can take any source and acquires that source when an article is selected. Navigation creates a reader when none qualifies. Switching between HN and Lobsters therefore preserves a reader for each site by default. Docking protects an article from sidebar navigation. Minimizing a reader does not prevent reuse; the mobile Stories action minimizes readers to reveal the feed. Next story remains an explicit action on its own reader, including docked readers; it can change the reader's source when navigating a mixed list.
 
@@ -97,7 +97,7 @@ The responsive layout was accepted after local review on port 8080. No control i
 | Hacker News, Lobsters, Pinned count, Find | Retained in the real feed selector and Feed menu. |
 | Feed refresh, Hottest / Active / Newest and source-specific categories | Retained. Search and its submit button remain available on feeds that support search. |
 | Story-row pin, read marker, title, rank, host, points, author, age, comment count | Retained. Text continues to wrap rather than hiding story titles. |
-| Story-row open in new reader and hide | Retained as equal 28px buttons on desktop and mobile. Hidden-story recovery remains below the list. |
+| Story-row hide and opening another reader | Hide sits below pin on the right. Opening another reader for the active article moves to the Story menu. Hidden-story recovery remains below the list. |
 | Sidebar divider | Retained at wide widths; mobile still uses the full-width story list. |
 | Window source favicon, title, active-window indication | Retained; narrow titles truncate visually while retaining their accessible names. |
 | Window menu, open as page, minimize, maximize/restore, close | All remain in the window menu. Wide readers retain the title-bar buttons; compact readers show the menu button. |
@@ -116,7 +116,7 @@ Each reader preserves its pane selection and split ratio through article changes
 
 This implementation uses public PUDL markup, window commands, split properties and events. No vendor files are changed. The outstanding upstream proposal still includes menu height and overflow cues, and should evaluate standard compact chrome and touch-target conventions using this local implementation as evidence.
 
-The accepted layout retains its current control styling. Sidebar controls remain at normal contrast on idle rows. Pin sits above open-in-window in a left-side column with equal 28px buttons and an 8px gap. Hide stays on the right to separate it from the opening action. Pin, open, and hide remain equal at 28px on mobile as well as desktop. Pinned stories retain their orange pressed state, and each action has an accessible label and tooltip. All segmented selectors and their compact menu buttons use PUDL's standard component styling, including feed filters, reader panes, comment ordering, and Settings. Each selector retains its existing dimensions.
+The accepted layout retains its current control styling. Sidebar controls remain at normal contrast on idle rows. Pin sits above hide in a right-side column with equal 28px buttons and an 8px gap on mobile and desktop. Per-row open-in-window buttons are removed. Story > Open in new reader window duplicates the active article into a separate reader; Window > New reader window still creates an empty reader. Pinned stories retain their orange pressed state, and each action has an accessible label and tooltip. All segmented selectors and their compact menu buttons use PUDL's standard component styling, including feed filters, reader panes, comment ordering, and Settings. Each selector retains its existing dimensions.
 
 Menu bars and selector tracks follow the active theme. Light mode uses a light gray background with dark text; dark mode uses a slightly darker graphite background. The palettes are not exchanged between modes. Raised selected states and control dimensions remain unchanged.
 
@@ -131,3 +131,5 @@ Menu-bar groups use the selector track background (`--recess-bg`) with PUDL rais
 The taskbar begins with a sidebar glyph button. On wide layouts it shares the View menu and F-key sidebar visibility setting. At widths of 640px or less it switches between the list and reader workspace using PUDL window minimization and restoration, preserving mounted readers and restoring the previously visible windows with the active one last. Previously minimized windows stay minimized. The glyph shows a filled sidebar when visible and an outline when hidden; its tooltip and accessible state describe the current action. The mobile title-bar back link is removed. With no open windows on mobile, the toggle remains disabled until a reader is opened.
 
 Narrow readers must expose only maximized and minimized placement states, with Restore to floating disabled. PUDL 0.40.0 has no documented host capability restriction covering its menus, gestures, and script actions. That runtime support remains pending; the larger 20px window-menu chevron is implemented locally.
+
+The site menu, feed toolbar, and story text share a left inset of 12px on wide layouts and 8px at phone widths. The shared inset replaces the larger toolbar margins and aligns story entries with the controls above them.

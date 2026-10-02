@@ -21,7 +21,7 @@ func TestReaderInstancesRenderAndLink(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("status %d: %s", rec.Code, body)
 	}
-	for _, want := range []string{`data-win="reader-1" data-win-mode="dock-left"`, `data-win="reader-2" data-win-mode="floating"`, `data-state-key="reader-1:hn-1"`, `data-state-key="reader-2:hn-1"`, `data-reader-new="hn-1"`} {
+	for _, want := range []string{`data-win="reader-1" data-win-mode="dock-left"`, `data-win="reader-2" data-win-mode="floating"`, `data-state-key="reader-1:hn-1"`, `data-state-key="reader-2:hn-1"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q", want)
 		}

@@ -16,6 +16,7 @@
   --accent: #a84600;
   --accent-hover: #8c3b00;
   --warn: #76620a;
+  --yv-edge-inset: 12px;
   --tb-bg: #d7dce2;
   --tb-fg: #1b1f24;
 }
@@ -44,6 +45,7 @@
   position: relative;
   justify-content: flex-start;
   padding-block: 6px;
+  padding-inline: var(--yv-edge-inset);
   --tb-pad-y: 6px;
 }
 
@@ -86,10 +88,6 @@
 /* Selectors retain PUDL styling from the palette, matching Theme Studio. */
 
 @media (max-width: 560px) {
-  .topbar {
-    padding-inline: 10px;
-  }
-
   .topbar-rule {
     margin-right: 8px;
   }
@@ -106,6 +104,7 @@ body.desktop .md-layout {
 /* The list's bar: search or the finder's link box, the list's tabs, and
    the list's name, wrapping on a narrow screen. */
 .site-listbar {
+  padding-inline: var(--yv-edge-inset);
   flex-wrap: wrap;
   row-gap: var(--space-2);
 }
@@ -251,6 +250,7 @@ html.focus-mode .md-resize {
 .story-row .md-item {
   white-space: normal;
   padding-inline: 6px;
+  padding-inline-start: var(--yv-edge-inset);
   line-height: 1.35;
   padding-block: 6px;
 }
@@ -281,7 +281,7 @@ html.focus-mode .md-resize {
 
 .story-pin { --yv-glyph: var(--yv-glyph-pin); }
 /* A pinned story's pin latches, pressed in, and its glyph fills. */
-.story-pin[aria-pressed="true"] {
+.story-row .story-pin[aria-pressed="true"] {
   --yv-glyph: var(--yv-glyph-pinned);
   color: var(--accent);
   background: var(--raise-active-bg);
@@ -333,14 +333,7 @@ html.focus-mode .md-resize {
 .source-switch:has(.source-seg [data-source="lobsters"][aria-current]) .menu-btn-label::before,
 .source-switch .seg-choice[href^="/lobsters/"]::before { background-image: url('/static/lobsters-favicon.png'); }
 .source-switch:not(:has(.source-seg [data-source][aria-current])) .menu-btn-label::before { display: none; }
-.story-new-reader::before {
-  content: "";
-  width: 14px;
-  height: 14px;
-  background: currentColor;
-  -webkit-mask: var(--glyph-open) center / contain no-repeat;
-  mask: var(--glyph-open) center / contain no-repeat;
-}
+
 
 /* The keyboard's place in the list (j and k), marked at the row's start
    so it stays distinct from PUDL's accent edge at the end, which marks the
@@ -1163,7 +1156,6 @@ kbd {
 /* Classic feeds use the full page without a window workspace. */
 .classic-list .md-sidebar { width: 100%; max-width: none; flex: 1; display: block; }
 .classic-list .md-layout { --md-sidebar-w: 100%; }
-.classic-list .story-new-reader { display: none; }
 html.focus-mode .classic-list .md-sidebar { display: block; }
 
 /* Browsing-view glyphs share the selector text color in both themes. */
@@ -1276,4 +1268,8 @@ body.desktop, body.story-page { height: 100dvh; }
 .sidebar-toggle[aria-expanded="false"] .sidebar-glyph-pane { fill: none; }
 @container md (max-width: 640px) {
   html.focus-mode .md-layout:not([data-md-pane="detail"]) .md-sidebar { display: block; }
+}
+
+@media (max-width: 640px) {
+  :root { --yv-edge-inset: 8px; }
 }

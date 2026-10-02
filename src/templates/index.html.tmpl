@@ -95,12 +95,11 @@
         {{ range .Stories }}
           {{ if .Section }}<div class="md-section-label">{{ .Section }}</div>{{ end }}
           <div class="md-row story-row" id="row-{{ .Key }}" data-key="{{ .Key }}" data-id="{{ .ID }}" data-source="{{ .Source }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}">
-            <div class="story-row-actions">
-            <button type="button" class="icon-btn story-pin" aria-pressed="false" aria-label="Pin this story" title="Pin this story"></button>
-              {{ if $.WindowView }}<a class="icon-btn story-new-reader" href="{{ .NewReaderHref }}" data-reader-new="{{ .Key }}" aria-label="Open in new reader window" title="Open in new reader window"></a>{{ end }}
-            </div>
             <a class="md-item" href="{{ .PageURL }}" data-win-open="{{ .Key }}">{{ .Title }}<span class="md-meta num">{{ if $.Finder }}{{ if .Where }}{{ .Where }} &middot; {{ end }}{{ else }}{{ .Rank }}. {{ .Host }} &middot; {{ end }}{{ .Score }} points{{ if .By }} &middot; {{ .By }}{{ end }} &middot; {{ .Age }} &middot; {{ .Comments }} comments</span></a>
-            <button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story"></button>
+            <div class="story-row-actions">
+              <button type="button" class="icon-btn story-pin" aria-pressed="false" aria-label="Pin this story" title="Pin this story"></button>
+              <button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story"></button>
+            </div>
           </div>
         {{ end }}
         </div>
