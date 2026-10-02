@@ -24,6 +24,10 @@
   </script>
 
   <div class="md-toolbar site-listbar" data-region="listbar">
+    {{ if or (eq .Source "hn") (eq .Source "lobsters") }}
+    <button id="feed-refresh" class="icon-btn feed-refresh" type="button" aria-label="Refresh {{ .SourceLabel }} feed" title="Refresh {{ .SourceLabel }} feed" hidden></button>
+    <span class="feed-refresh-status visually-hidden" role="status" hidden></span>
+    {{ end }}
     {{ if .Finder }}
     <form class="md-filter-group find-form" action="/find" method="get" role="search">
       <input class="md-filter" type="search" name="url" value="{{ .FindURL }}" placeholder="Paste a link to find its discussions&hellip;" aria-label="The link to find discussions of" autocomplete="off" spellcheck="false">
@@ -90,6 +94,7 @@
           <div class="md-row story-row" id="row-{{ .Key }}" data-key="{{ .Key }}" data-id="{{ .ID }}" data-source="{{ .Source }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}">
             <button type="button" class="icon-btn story-pin" aria-pressed="false" aria-label="Pin this story"></button>
             <a class="md-item" href="{{ .PageURL }}" data-win-open="{{ .Key }}">{{ .Title }}<span class="md-meta num">{{ if $.Finder }}{{ if .Where }}{{ .Where }} &middot; {{ end }}{{ else }}{{ .Rank }}. {{ .Host }} &middot; {{ end }}{{ .Score }} points{{ if .By }} &middot; {{ .By }}{{ end }} &middot; {{ .Age }} &middot; {{ .Comments }} comments</span></a>
+            <a class="icon-btn story-new-reader" href="{{ .NewReaderHref }}" data-reader-new="{{ .Key }}" aria-label="Open in new reader window"></a>
             <button type="button" class="icon-btn story-hide" aria-label="Hide this story"></button>
           </div>
         {{ end }}

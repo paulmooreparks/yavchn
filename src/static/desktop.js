@@ -128,10 +128,12 @@
   function autoOpen() {
     var list = document.querySelector('.story-list[data-auto-open]');
     if (!list || !window.pudlWindows) return;
-    var open = window.pudlWindows.state().open;
+    var open = Array.prototype.map.call(document.querySelectorAll('.win .story[data-story-key]'), function (story) {
+      return story.dataset.storyKey;
+    });
     var links = Array.prototype.slice.call(list.querySelectorAll('a[data-win-open]'));
     if (!links.length || links.some(function (a) { return open.indexOf(a.getAttribute('data-win-open')) >= 0; })) return;
-    window.pudlWindows.open(links[0].getAttribute('data-win-open'), links[0]);
+    window.yavchn.readers.read(links[0].getAttribute('data-win-open'), links[0]);
   }
   document.addEventListener('pudl:regions-swap', function () {
     if (!fromHistory) autoOpen();
@@ -191,6 +193,46 @@
     if (location.pathname !== '/hn/search') return;
     var top = document.querySelector('.list-tabs a');
     if (top) top.click();
+  });
+
+  function showFeedRefresh() {
+    var button = document.querySelector('#feed-refresh');
+    var available = !!(button && window.pudlRegions && window.pudlRegions.reload);
+    if (available) button.hidden = false;
+    document.querySelectorAll('[data-feed-refresh]').forEach(function (command) {
+      command.disabled = !available || button.disabled;
+    });
+  }
+  onList(showFeedRefresh);
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest || !e.target.closest('#feed-refresh, [data-feed-refresh]')) return;
+    var button = document.querySelector('#feed-refresh');
+    if (!button || button.disabled) return;
+    var status = button.parentNode.querySelector('.feed-refresh-status');
+    var restoreButtonFocus = document.activeElement === button;
+    button.disabled = true;
+    showFeedRefresh();
+    button.setAttribute('aria-busy', 'true');
+    status.hidden = false;
+    status.classList.add('visually-hidden');
+    status.textContent = 'Refreshing feed...';
+    window.pudlRegions.reload().then(function (changed) {
+      if (!changed) return;
+      var freshStatus = document.querySelector('.feed-refresh-status');
+      if (freshStatus) { freshStatus.hidden = false; freshStatus.textContent = 'Feed refreshed.'; }
+      if (restoreButtonFocus && document.activeElement === document.body) document.querySelector('#feed-refresh').focus();
+    }).catch(function () {
+      if (!status.isConnected) return;
+      status.hidden = false;
+      status.classList.remove('visually-hidden');
+      status.textContent = 'The feed could not be refreshed. Try again.';
+    }).finally(function () {
+      if (button.isConnected) {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
+      showFeedRefresh();
+    });
   });
 
   /* Before pudl-windows.js lays out the windows the address names, which

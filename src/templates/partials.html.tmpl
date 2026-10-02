@@ -60,13 +60,6 @@
             <li><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN on GitHub</a></li>
           </ul>
         </li>
-        <li>Applets
-          <ul>
-            <li><a href="/applets/replies" data-win-open="replies">Replies to me</a></li>
-            <li><a href="/user" data-win-open="user">Look up a user&hellip;</a></li>
-            <li><a href="/applets/hiring" data-win-open="hiring">Who is hiring?</a></li>
-          </ul>
-        </li>
         <li>View
           <ul>
             <li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>
@@ -81,28 +74,43 @@
             </li>
           </ul>
         </li>
-        <li data-menubar-if="windows">Window
+        <li>Feed
           <ul>
+            <li><button type="button" data-feed-refresh disabled>Refresh feed</button></li>
+          </ul>
+        </li>
+        <li>Window
+          <ul>
+            <li><a href="{{ .NewReaderHref }}" data-reader-new>New reader window</a></li>
+            <li>-</li>
             <li><a href="?" data-win-back>Minimize all</a></li>
             <li><a href="?" data-win-restore>Restore all</a></li>
             <li><a href="?" data-close-all>Close all</a></li>
+          </ul>
+        </li>
+        <li>Applets
+          <ul>
+            <li><a href="/applets/replies" data-win-open="replies">Replies to me</a></li>
+            <li><a href="/user" data-win-open="user">Look up a user&hellip;</a></li>
+            <li><a href="/applets/hiring" data-win-open="hiring">Who is hiring?</a></li>
           </ul>
         </li>
         <li>Help
           <ul>
             <li><button type="button" commandfor="help-dialog" command="show-modal">Keyboard and help&hellip;</button></li>
             <li>-</li>
-            <li><a href="https://news.ycombinator.com/" target="_blank" rel="noopener">Hacker News</a></li>
-            <li><a href="https://lobste.rs/" target="_blank" rel="noopener">Lobsters</a></li>
+            <li><a href="https://news.ycombinator.com/" target="_blank" rel="noopener">Go to Hacker News</a></li>
+            <li><a href="https://lobste.rs/" target="_blank" rel="noopener">Go to Lobsters</a></li>
           </ul>
         </li>
       </ul>
       <a class="brand" href="/"><img src="/static/logo-24x24.png" alt=""> YAVCHN</a>
     </nav>
+    <noscript><a class="btn btn-sm" href="{{ .NewReaderHref }}">New reader window</a></noscript>
     <span class="topbar-rule" aria-hidden="true"></span>
     <div class="source-switch" data-region="sources">
       <nav class="seg source-seg" data-seg-menu aria-label="Source">
-        {{ range .AllSources }}<a href="{{ .URL }}" data-source="{{ .Name }}"{{ if .Active }} aria-current="page"{{ end }}>{{ .Label }}</a>{{ end }}
+        {{ range .AllSources }}<a href="{{ .URL }}" data-source="{{ .Name }}"{{ if .Active }} aria-current="page"{{ end }}>{{ template "sourceicon" .Name }}<span class="source-label">{{ .Label }}</span></a>{{ end }}
       </nav>
     </div>
   </div>
@@ -112,7 +120,7 @@
 {{/* A story's article above its discussion, with a splitter between
      them: the body of a story window, and of a story's own page. */}}
 {{ define "storybody" }}
-<div class="story" data-story-key="{{ .Key }}" data-story-id="{{ .ID }}" data-story-source="{{ .Source }}" data-title="{{ .Title }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}"{{ if .HasArticle }} data-reader-url="{{ .URL }}"{{ end }}{{ if .Error }} data-error{{ else }} data-applet="story" data-applet-page="{{ .PageURL }}" data-state-key="{{ .Key }}"{{ end }}>
+<div class="story" data-story-key="{{ .StoryKey }}" data-story-id="{{ .ID }}" data-story-source="{{ .Source }}" data-title="{{ .Title }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}"{{ if .HasArticle }} data-reader-url="{{ .URL }}"{{ end }}{{ if .Error }} data-error{{ else }} data-applet="story" data-applet-page="{{ .PageURL }}" data-state-key="{{ .Key }}:{{ .StoryKey }}"{{ end }}>
 {{ if .Error }}
   <div class="empty-state story-note">
     <p class="empty-state-title">{{ .Title }}</p>
@@ -126,14 +134,15 @@
         <span class="story-bar-label">{{ if .IsComment }}Comment{{ else }}Article{{ end }}</span>
         {{ if not .IsComment }}<span class="story-bar-meta">{{ .Host }}</span>{{ end }}
         <span class="story-bar-spacer"></span>
+        {{ if .HasArticle }}
+        <a href="{{ .URL }}" target="_blank" rel="noopener">Open original</a>
+        <button type="button" class="icon-btn story-refresh" aria-label="Fetch the article again"></button>
+        {{ end }}
         {{/* The story after this one in the list, filled in by script from
              the list beside the window, so it stays hidden on a story's
-             own page and without script. */}}
+             own page and without script. Keep it last so its position does
+             not depend on whether the story has an original article. */}}
         <a class="story-next" href="{{ .PageURL }}" data-win-replace hidden>Next story</a>
-        {{ if .HasArticle }}
-        <button type="button" class="icon-btn story-refresh" aria-label="Fetch the article again"></button>
-        <a href="{{ .URL }}" target="_blank" rel="noopener">Open original</a>
-        {{ end }}
       </div>
       <div class="story-scroll story-article-body" tabindex="0">
         {{ if .HasArticle }}
@@ -175,11 +184,20 @@
 </div>
 {{ end }}
 
+{{ define "sourceicon" }}{{ if eq . "hn" }}<img class="source-icon" src="/static/hn-favicon.svg" width="16" height="16" alt="">{{ else if eq . "lobsters" }}<img class="source-icon" src="/static/lobsters-favicon.png" width="16" height="16" alt="">{{ else if eq . "pinned" }}<span class="source-glyph source-glyph-pin" aria-hidden="true"></span>{{ else if eq . "find" }}<span class="source-glyph source-glyph-find" aria-hidden="true"></span>{{ end }}{{ end }}
+
+{{ define "readerbody" }}
+<div class="story" data-applet="story" data-state-key="story">
+  <div class="empty-state story-note"><p class="empty-state-title">Article reader</p><p class="empty-state-body">Select an article from the sidebar.</p></div>
+</div>
+{{ end }}
+
 {{/* One story window, the same markup whether the page renders it for
      its address or /window/{key} returns it. */}}
 {{ define "window" }}
-<section class="win {{ if .App }}app-win app-win-{{ .App.Kind }}{{ else }}story-win{{ end }}{{ if .Active }} active{{ end }}" data-win="{{ .Key }}" data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
+<section class="win {{ if .App }}app-win app-win-{{ .App.Kind }}{{ else }}story-win{{ end }}{{ if .Active }} active{{ end }}" data-win="{{ .Key }}" data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="{{ if and (not .App) .Source }}win-{{ .Key }}-site {{ end }}win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
   <header class="win-head">
+    {{ if and (not .App) .Source }}<span class="reader-site" id="win-{{ .Key }}-site">{{ template "sourceicon" .Source }}<span class="visually-hidden">{{ if eq .Source "hn" }}HN{{ else if eq .Source "lobsters" }}Lobsters{{ else }}{{ .Source }}{{ end }}</span></span>{{ end }}
     <h2 class="win-title" id="win-{{ .Key }}-title">{{ .Title }}</h2>
     <nav class="win-chrome" aria-label="Window">
       <a class="win-btn" data-win-action="page" href="{{ .PageURL }}" aria-label="Open as a page"></a>
@@ -188,7 +206,7 @@
       <a class="win-btn" data-win-action="close" href="{{ .CloseHref }}" aria-label="Close"></a>
     </nav>
   </header>
-  {{ if .App }}<div class="win-body app-win-body">{{ template "appbody" .App }}</div>{{ else }}<div class="win-body story-win-body">{{ template "storybody" . }}</div>{{ end }}
+  {{ if .App }}<div class="win-body app-win-body">{{ template "appbody" .App }}</div>{{ else }}<div class="win-body story-win-body">{{ if .Reader }}{{ template "readerbody" . }}{{ else }}{{ template "storybody" . }}{{ end }}</div>{{ end }}
 </section>
 {{ end }}
 
@@ -223,8 +241,8 @@
       <h4>Keyboard</h4>
       <dl class="keys">
         <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Move down and up the story list. The arrow keys scroll whatever has focus.</dd>
-        <dt><kbd>Enter</kbd></dt><dd>Open the marked story in a window.</dd>
-        <dt><kbd>]</kbd></dt><dd>Open the next story in the list in place of the one in front. Back returns to it.</dd>
+        <dt><kbd>Enter</kbd></dt><dd>Read the marked story in the article reader.</dd>
+        <dt><kbd>]</kbd></dt><dd>Read the next story in the same article-reader applet. Back returns to the previous story.</dd>
         <dt><kbd>p</kbd></dt><dd>Pin or unpin the marked story, which keeps it in Pinned.</dd>
         <dt><kbd>n</kbd> / <kbd>N</kbd></dt><dd>Move to the next or previous top-level comment in the window in front.</dd>
         <dt><kbd>c</kbd></dt><dd>Collapse or expand that comment.</dd>
@@ -236,7 +254,7 @@
     </section>
     <section>
       <h4>Windows</h4>
-      <p>Each story opens in a window holding its article above its discussion; drag the bar between them to share the room differently. A window can be moved by its title bar, resized from any edge, snapped to a half or a corner by dragging it there, maximised, or minimised to the bar at the foot of the page. Open several stories to compare them, and switch between them from that bar. A window's Next story link reads on down the list in the same window.</p>
+      <p>Each story opens in a window holding its article above its discussion; drag the bar between them to share the room differently. A window can be moved by its title bar, resized from any edge, snapped to a half or a corner by dragging it there, maximised, or minimised to the bar at the foot of the page. Use Window &gt; New reader window to open an empty reader, or a story row's Open in new reader window button to compare articles. Docked and minimized readers keep their articles when you select another story from the sidebar. A window's Next story link reads on down the list in the same window.</p>
       <p>A link in a comment or an article to another Hacker News or Lobsters thread opens that thread in a window too. A link to a single HN comment opens the comment above its replies.</p>
       <p>While a story's window is in front, the Story and Discussion menus in the menu bar hold its commands: pinning, Next story, sorting, collapsing every thread, jumping to the first new comment. Each window also remembers where you were in its article and discussion, so a reload, or Back to a story that Next took you past, finds your place again. Closing a window forgets it.</p>
       <p>The whole arrangement lives in the address, so a bookmark or a shared link brings it back, and Back undoes the last change. Moving between Hacker News, Lobsters, their lists, Pinned and Find changes only the list, and leaves the windows open.</p>
@@ -279,6 +297,7 @@
 <script src="/static/desktop.js" defer></script>
 <script src="/static/continuity.js" defer></script>
 <script src="/static/applets/registry.js" defer></script>
+<script src="/static/readers.js" defer></script>
 <script src="/static/story.js" defer></script>
 <script src="/static/discussion.js" defer></script>
 <script src="/static/sort.js" defer></script>

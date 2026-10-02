@@ -66,6 +66,10 @@
     e.target.querySelectorAll('.story').forEach(visit);
     apply();
   });
+  document.addEventListener('yavchn:story-change', function (e) {
+    visit(e.target.closest('.story'));
+    apply();
+  });
 
   window.yavchn.onList(apply);
   document.addEventListener('yavchn:rows-appended', apply);

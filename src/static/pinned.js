@@ -73,7 +73,8 @@
     });
     var count = Object.keys(store).length;
     document.querySelectorAll('.source-seg a[data-source="pinned"]').forEach(function (a) {
-      a.textContent = count > 0 ? 'Pinned (' + count + ')' : 'Pinned';
+      var label = a.querySelector('.source-label') || a;
+      label.textContent = count > 0 ? 'Pinned (' + count + ')' : 'Pinned';
     });
   }
 
@@ -177,6 +178,7 @@
         '<span class="md-meta num">' + esc(host) + ' &middot; ' + (s.score || 0) + ' points' +
         (s.by ? ' &middot; ' + esc(s.by) : '') + ' &middot; pinned ' + relTime(s.pinned_at) +
         ' &middot; ' + (s.comments || 0) + ' comments</span></a>' +
+        '<a class="icon-btn story-new-reader" href="/hn/?open=reader-1&amp;top=reader-1&amp;r.reader-1=' + esc(key) + '" data-reader-new="' + esc(key) + '" aria-label="Open in new reader window"></a>' +
         '<button type="button" class="icon-btn story-hide" aria-label="Hide this story"></button></div>';
     }).join('');
     box.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));

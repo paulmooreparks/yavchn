@@ -468,13 +468,14 @@ func (t terms) match(text string) bool {
 // --- handlers ---
 
 type appPageVM struct {
-	Title      string
-	AllSources []sourceOptVM
-	Win        windowVM
+	NewReaderHref string
+	Title         string
+	AllSources    []sourceOptVM
+	Win           windowVM
 }
 
 func (s *Server) renderAppPage(w http.ResponseWriter, win windowVM) {
-	vm := appPageVM{Title: win.Title + " · YAVCHN", AllSources: s.buildSourceOpts(""), Win: win}
+	vm := appPageVM{NewReaderHref: "/hn/?open=reader-1&top=reader-1", Title: win.Title + " · YAVCHN", AllSources: s.buildSourceOpts(""), Win: win}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tpl.ExecuteTemplate(w, "applet.html.tmpl", vm); err != nil {
 		slog.Error("render applet page", "key", win.Key, "err", err)
@@ -568,6 +569,25 @@ func (s *Server) renderFragment(w http.ResponseWriter, name string, data any) {
 
 // window is the window for any key: a story's or an applet's.
 func (s *Server) window(ctx context.Context, r *http.Request, key string) (windowVM, bool) {
+	if readerKeyRE.MatchString(key) || r.URL.Query().Has("r."+key) {
+		article := r.URL.Query().Get("r." + key)
+		if article == "" {
+			w := readerWindow()
+			w.Key = key
+			return w, true
+		}
+		w, ok := s.storyWindow(ctx, article)
+		if !ok {
+			return windowVM{}, false
+		}
+		w.Key = key
+		w.Def = floatingAt(0.06, 0.05, 0.55, 0.75)
+		w.Mode, w.Style = w.Def.Mode, w.Def.Style
+		return w, true
+	}
+	if key == "story" {
+		return readerWindow(), true
+	}
 	if w, ok := s.appletWindow(ctx, r, key); ok {
 		return w, true
 	}

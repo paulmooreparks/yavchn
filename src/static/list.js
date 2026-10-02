@@ -32,6 +32,18 @@
   // Rows rendered by script, as Pinned's are, arrive after the list.
   document.addEventListener('yavchn:rows-appended', function () { if (!focused()) start(); });
 
+  /* A plain story choice goes to an available reader for its source. The applet changes its own story while its window and instance
+     stay alive. The first choice still opens the reader normally. */
+  document.addEventListener('click', function (e) {
+    if (!window.yavchn.plainClick(e) || !window.yavchn.readers) return;
+    var link = e.target.closest && e.target.closest('.story-list a[data-win-open], .story-next[data-win-open]');
+    if (!link) return;
+    if (link.matches('.story-next')) syncNext(link);
+    var key = link.getAttribute('data-win-open');
+    if (!key || !window.yavchn.readers.read(key, link, link.matches('.story-next') ? link.closest('.win') : null)) return;
+    e.preventDefault();
+  }, true);
+
   document.addEventListener('click', function (e) {
     if (e.button !== 0) return;
     var row = e.target.closest('.story-list .story-row');
@@ -46,8 +58,8 @@
   });
 
   /* === Next story =======================================================
-     A story window's Next link opens the story after it in the list in
-     its place, so the reader can go down a list in one window, and Back
+     A story window's Next link loads the story after it into the running
+     applet, so the reader can go down a list in one instance, and Back
      steps back up it. The list decides what is next: the following row
      that is not hidden or filtered out, even with the list itself hidden. */
   function nextLink(key) {
@@ -68,7 +80,7 @@
 
   function syncAllNext() { document.querySelectorAll('.story-next').forEach(syncNext); }
   window.yavchn.onList(syncAllNext);
-  ['yavchn:rows-appended', 'yavchn:list-change', 'pudl:window-open', 'pudl:windows-change'].forEach(function (name) {
+  ['yavchn:rows-appended', 'yavchn:list-change', 'yavchn:story-change', 'pudl:window-open', 'pudl:windows-change'].forEach(function (name) {
     document.addEventListener(name, syncAllNext);
   });
   /* Rows hide and pins change between those events, so the link is set

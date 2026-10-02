@@ -148,7 +148,7 @@ func (f *fakeSource) ValidTab(s string) bool                 { return s == "top"
 func (f *fakeSource) DefaultTab() string                     { return "top" }
 func (f *fakeSource) StartBackgroundRefresh(context.Context) {}
 func (f *fakeSource) StoryDiscussionURL(id string) string    { return "https://example.org/item?id=" + id }
-func (f *fakeSource) StoryIDs(context.Context, string, int) ([]string, bool, error) {
+func (f *fakeSource) StoryIDs(context.Context, string, int, bool) ([]string, bool, error) {
 	return []string{"1", "2"}, false, nil
 }
 func (f *fakeSource) Item(_ context.Context, id string) (*Item, error) {
@@ -239,6 +239,9 @@ func TestRender_WindowFragmentAndStoryPage(t *testing.T) {
 	}
 	if rec := get(t, mux, "/window/bad%20key"); rec.Code != http.StatusNotFound {
 		t.Errorf("bad key: %d", rec.Code)
+	}
+	if rec := get(t, mux, "/window/story"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `data-applet="story" data-state-key="story"`) {
+		t.Errorf("reader bootstrap: %d: %.200s", rec.Code, rec.Body)
 	}
 	if rec := get(t, mux, "/story/hn/1"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `class="story"`) {
 		t.Errorf("story page: %d", rec.Code)

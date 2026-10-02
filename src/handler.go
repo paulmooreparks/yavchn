@@ -54,28 +54,29 @@ func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
 // (a source's tab, search, Pinned and Find) renders it, so moving between
 // them swaps only the list and leaves the windows alone.
 type listVM struct {
-	Title       string        // the page's <title>
-	Source      string        // active view: "hn" / "lobsters" / "pinned" / "find"
-	SourceLabel string        // active source label: "Hacker News" / "Lobsters"
-	Tab         string        // active tab slug within the source
-	AllSources  []sourceOptVM // the topbar's source switcher
-	Query       string
-	Tabs        []tabVM
-	Stories     []storyVM
-	Page        int
-	HasPrev     bool
-	HasNext     bool
-	PrevURL     string
-	NextURL     string
-	ListError   string
-	RetryURL    string
-	ShowSearch  bool // false on Lobsters (no JSON search API) and Pinned views
-	Finder      bool // the /find view: the toolbar takes a URL, the list its submissions
-	FindURL     string
-	FindHost    string
-	FindNote    string       // why the finder's list is empty, when it is
-	Pin         *pinFilterVM // the Pinned view's filters, from its address
-	Win         windowsVM
+	NewReaderHref string
+	Title         string        // the page's <title>
+	Source        string        // active view: "hn" / "lobsters" / "pinned" / "find"
+	SourceLabel   string        // active source label: "Hacker News" / "Lobsters"
+	Tab           string        // active tab slug within the source
+	AllSources    []sourceOptVM // the topbar's source switcher
+	Query         string
+	Tabs          []tabVM
+	Stories       []storyVM
+	Page          int
+	HasPrev       bool
+	HasNext       bool
+	PrevURL       string
+	NextURL       string
+	ListError     string
+	RetryURL      string
+	ShowSearch    bool // false on Lobsters (no JSON search API) and Pinned views
+	Finder        bool // the /find view: the toolbar takes a URL, the list its submissions
+	FindURL       string
+	FindHost      string
+	FindNote      string       // why the finder's list is empty, when it is
+	Pin           *pinFilterVM // the Pinned view's filters, from its address
+	Win           windowsVM
 }
 
 // pinFilterVM is how the Pinned view is filtered and ordered. The pins
@@ -195,20 +196,21 @@ type tabVM struct {
 // storyVM is one row of the list. Its link is the story's own page, and
 // with script it opens the story's window instead.
 type storyVM struct {
-	Rank     int
-	Key      string // window key, "<source>-<id>"
-	ID       string
-	Source   string // "hn" or "lobsters", emitted as data-source for the pin/dismiss/visited stores
-	Title    string
-	URL      string
-	Host     string
-	Score    int
-	By       string
-	Age      string
-	Comments int
-	Where    string // the finder's subreddit and the like; "" for HN and Lobsters
-	PageURL  string
-	Section  string // set on the first row of a labelled section, as the finder's per-source groups
+	NewReaderHref string
+	Rank          int
+	Key           string // window key, "<source>-<id>"
+	ID            string
+	Source        string // "hn" or "lobsters", emitted as data-source for the pin/dismiss/visited stores
+	Title         string
+	URL           string
+	Host          string
+	Score         int
+	By            string
+	Age           string
+	Comments      int
+	Where         string // the finder's subreddit and the like; "" for HN and Lobsters
+	PageURL       string
+	Section       string // set on the first row of a labelled section, as the finder's per-source groups
 }
 
 func newStoryVM(rank int, src Source, item *Item) storyVM {
@@ -241,6 +243,14 @@ type threadVM struct {
 // are ready. status 0 means 200.
 func (s *Server) renderList(w http.ResponseWriter, vm *listVM, wins func() windowsVM, status int) {
 	vm.Win = wins()
+	vm.NewReaderHref = vm.Win.NewReaderHref
+	for i := range vm.Stories {
+		u, _ := url.Parse(vm.NewReaderHref)
+		q := u.Query()
+		q.Set("r."+q.Get("top"), vm.Stories[i].Key)
+		u.RawQuery = q.Encode()
+		vm.Stories[i].NewReaderHref = u.String()
+	}
 	if vm.Title == "" {
 		vm.Title = "YAVCHN"
 	}
@@ -273,8 +283,17 @@ func pageHref(r *http.Request, page int) string {
 	return winURL(r.URL.Path, rest, parseWinState(q))
 }
 
-// SourceIndex serves a list page for a specific source + tab. Routed by
-// main.go with paths like /hn/, /hn/{tab}/, /lobsters/{tab}/.
+// revalidateFeed honors an explicit request to revalidate cached feed data.
+func revalidateFeed(r *http.Request) bool {
+	for _, directive := range strings.Split(r.Header.Get("Cache-Control"), ",") {
+		if strings.EqualFold(strings.TrimSpace(directive), "no-cache") {
+			return true
+		}
+	}
+	return false
+}
+
+// SourceIndex serves a source's list page, such as /hn/ or /lobsters/newest/.
 func (s *Server) SourceIndex(source Source, tab string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		page := pageParam(r)
@@ -294,7 +313,7 @@ func (s *Server) SourceIndex(source Source, tab string) http.HandlerFunc {
 			ShowSearch:  source.Name() == "hn", // /lobsters has no JSON search; /pinned doesn't search
 		}
 
-		pageIDs, hasNext, idsErr := source.StoryIDs(ctx, tab, page)
+		pageIDs, hasNext, idsErr := source.StoryIDs(ctx, tab, page, revalidateFeed(r))
 		if idsErr != nil {
 			slog.Warn("storyids unavailable", "source", source.Name(), "tab", tab, "err", idsErr, "path", r.URL.Path)
 			vm.ListError = "The " + source.Label() + " / " + tabLabel(source, tab) + " feed couldn't be loaded right now."
@@ -378,10 +397,11 @@ func (s *Server) StoryPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := struct {
-		Title      string
-		AllSources []sourceOptVM
-		Story      windowVM
-	}{vm.Title + " · YAVCHN", s.buildSourceOpts(""), vm}
+		NewReaderHref string
+		Title         string
+		AllSources    []sourceOptVM
+		Story         windowVM
+	}{"/hn/?open=reader-1&top=reader-1", vm.Title + " · YAVCHN", s.buildSourceOpts(""), vm}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tpl.ExecuteTemplate(w, "story.html.tmpl", page); err != nil {
 		slog.Error("render story page", "key", vm.Key, "err", err)
@@ -394,8 +414,11 @@ func (s *Server) StoryPage(w http.ResponseWriter, r *http.Request) {
 var articleErrorTmpl = template.Must(template.New("articleError").Parse(
 	`<div class="empty-state story-note">
   <p class="empty-state-title">Reader-mode couldn't load this page</p>
-  <p class="empty-state-body">The source server didn't return readable HTML.</p>
-  {{ if . }}<div class="empty-state-actions"><a class="btn btn-sm" href="{{ . }}" target="_blank" rel="noopener">Open the article</a></div>{{ end }}
+  <p class="empty-state-body">{{ .Message }}</p>
+  <div class="empty-state-actions">
+    {{ if .OriginalURL }}<a class="btn btn-sm" href="{{ .OriginalURL }}" target="_blank" rel="noopener">Open the article</a>{{ end }}
+    {{ if .ArchiveURL }}<a class="btn btn-sm" href="{{ .ArchiveURL }}" target="_blank" rel="noopener noreferrer">Look for an archived copy</a>{{ end }}
+  </div>
 </div>`))
 
 var rateLimitedTmpl = template.Must(template.New("rateLimited").Parse(
@@ -409,9 +432,27 @@ const discussionErrorFragment = `<div class="empty-state story-note"><p class="e
 
 const discussionRateLimitedFragment = `<div class="empty-state story-note"><p class="empty-state-title">Too many discussion requests</p><p class="empty-state-body">You've hit the per-visitor rate limit for discussions. Wait a minute and try again, or use the link above to read it on the source's own site.</p></div>`
 
-func articleErrorHTML(rawURL string) string {
+func articleErrorHTML(rawURL string, err error) string {
+	data := struct {
+		OriginalURL string
+		ArchiveURL  string
+		Message     string
+	}{OriginalURL: rawURL, Message: "The source server didn't return readable HTML."}
+	var upstream *upstreamHTTPError
+	if errors.As(err, &upstream) {
+		data.Message = fmt.Sprintf("The source server returned HTTP %d (%s).", upstream.StatusCode, http.StatusText(upstream.StatusCode))
+		switch upstream.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusGone, http.StatusUnavailableForLegalReasons:
+			if u, parseErr := url.Parse(rawURL); parseErr == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" {
+				u.User = nil
+				u.Fragment = ""
+				// Wayback's calendar lists captures without promising one is available.
+				data.ArchiveURL = "https://web.archive.org/web/*/" + u.String()
+			}
+		}
+	}
 	var buf bytes.Buffer
-	_ = articleErrorTmpl.Execute(&buf, rawURL)
+	_ = articleErrorTmpl.Execute(&buf, data)
 	return buf.String()
 }
 
@@ -619,7 +660,7 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.Warn("article extract failed", "url", rawURL, "err", err)
-		writeFragment(w, http.StatusOK, articleErrorHTML(rawURL))
+		writeFragment(w, http.StatusOK, articleErrorHTML(rawURL, err))
 		return
 	}
 

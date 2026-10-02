@@ -5,7 +5,7 @@
 A desktop-style web reader for [Hacker News](https://news.ycombinator.com/) and [Lobsters](https://lobste.rs):
 
 - **Left:** The list of stories from the active source
-- **Right:** A window for each story you open, holding the linked article (reader-mode extracted) above its discussion thread
+- **Right:** An article-reader window holding the linked article (reader-mode extracted) above its discussion thread
 
 Why?
 
@@ -17,7 +17,7 @@ It seems that everybody has their own personalized Hacker-News reader these days
 
 Whenever I browse HN, I find myself opening the discussion in a new tab, then clicking through in that tab to view the article, then popping back to the discussion. It's all very annoying, when what I really want to do is get a quick overview of the article and see if there is any interesting discussion going on before I dive into either the article or the discussion.
 
-YAVCHN lets me quickly browse an article in scaled-down reader mode with the discussion right below it, in the same window. If I find either one compelling, I can click "Open original" to see the original article or "Open on HN" / "Open on Lobsters" to join the discussion on the source's own site. Each story gets its own window, so I can open several, flip between them from the bar at the bottom, or drag two side by side to compare threads. "Next story" (or the `]` key) reads on down the list in the same window. When a comment links to another HN or Lobsters thread, that thread opens in a window too, and a link to a single HN comment opens the comment with its replies.
+YAVCHN lets me quickly browse an article in scaled-down reader mode with the discussion right below it, in the same window. If I find either one compelling, I can click "Open original" to see the original article or "Open on HN" / "Open on Lobsters" to join the discussion on the source's own site. Clicking another story in the list loads it into the most recently active reader for that site that is neither docked nor minimized. HN and Lobsters use separate readers by default, and an empty reader takes its site from the first article loaded into it. If none is available, it opens a new reader. Window > New reader window opens an empty floating reader, and each story row has an Open in new reader window action. Docked and minimized readers keep their articles while you browse the list. "Next story" (or the `]` key) reads on down the list through that same instance. When a comment links to another HN or Lobsters thread, that thread opens in a window too, and a link to a single HN comment opens the comment with its replies.
 
 The same treatment works on [Lobsters](https://lobste.rs) (a smaller, computing-focused link aggregator) thanks to a tiny `Source` abstraction in the Go backend; pick the source from the segmented control at the right of the top bar. Switching sources or lists only swaps the list, so open windows stay put.
 
@@ -31,7 +31,7 @@ None of them needs a login. They read only what each site publishes for anyone t
 
 The UI is built with [PUDL](https://github.com/paulmooreparks/pudl), my design language, and it borrows the window view of [parkscomputing.com](https://parkscomputing.com/).
 
-![YAVCHN: the story list beside two story windows, each holding a reader-mode article above its threaded discussion](screenshot.png)
+![YAVCHN showing the HN story list beside separate HN and Lobsters reader windows, with the SvelteKit and Rust articles above their discussions](screenshot.png)
 
 ## Live Site
 
@@ -59,7 +59,7 @@ Serves on `http://localhost:8080`.
 
 ## Design notes
 
-- **The URL is king.** Every page in YAVCHN has its own URL. You can bookmark `/hn/show/`, `/lobsters/`, `/pinned/`, or a list with stories open, like `/hn/?open=hn-12345678,lobsters-abc123&top=hn-12345678`, and reopening that URL takes you straight back to what you were reading. The source, the tab, the page number, and every open window (which ones, which is in front, which are minimized, and where each one sits) all live in the URL, in PUDL's window grammar. Back undoes the last window you opened. Each story also has a page of its own at `/story/hn/12345678`, which is where its link goes without JavaScript. The older `/hn/s/12345678` addresses redirect to the story's window. Pinned's filters live in the URL too: `/pinned/?q=rust&source=lobsters&show=unread&sort=points` is Lobsters stories mentioning Rust that you haven't opened, by points. The pins themselves stay in your browser, so the server renders the filter controls from the URL and the browser applies them.
+- **The URL is king.** Every page in YAVCHN has its own URL. You can bookmark `/hn/show/`, `/lobsters/`, `/pinned/`, or a list with stories open, like `/hn/?open=hn-12345678,lobsters-abc123&top=hn-12345678`, and reopening that URL takes you straight back to what you were reading. The source, the tab, the page number, and every open window (which ones, which is in front, which are minimized, and where each one sits) all live in the URL, in PUDL's window grammar. Each reader has a stable window key, such as `reader-1`, and its article is recorded separately, as in `/hn/?open=reader-1,reader-2&r.reader-1=hn-12345678&r.reader-2=lobsters-abc123`. Back returns to the previous article without changing the reader's identity. Each story also has a page of its own at `/story/hn/12345678`, which is where its link goes without JavaScript. The older `/hn/s/12345678` addresses redirect to the story's window. Pinned's filters live in the URL too: `/pinned/?q=rust&source=lobsters&show=unread&sort=points` is Lobsters stories mentioning Rust that you haven't opened, by points. The pins themselves stay in your browser, so the server renders the filter controls from the URL and the browser applies them.
 
 - **No accounts, no per-user server state.** YAVCHN never sees your HN or Lobsters credentials. Comments are fetched from each site's public JSON API and rendered into the discussion pane. When you want to vote, reply, save, or hide a comment, click the upward arrow next to it (or the "Open on HN" / "Open on Lobsters" link at the top of the pane). That opens the item on the source's own site in a new tab, where your existing session does the work.
 
@@ -69,7 +69,7 @@ Serves on `http://localhost:8080`.
 
 - **Progressive enhancement.** The page renders fully server-side, so it works without JavaScript, and the server renders the windows the URL names along with the list. A window that opens later is fetched from `GET /window/{key}`, which returns that one window's markup. The article reader-mode pane and the comment thread are fetched separately after a window appears, via `GET /api/article` and `GET /api/discussion`. That keeps the first paint fast, and it lets the heavier requests fail without breaking the page. Visitors with JavaScript disabled see plainly-labeled "Open original" and "Open on HN" / "Open on Lobsters" fallback links instead.
 
-- **Each story is a PUDL applet.** PUDL's applet runtime starts a story's script when its window opens and stops it when the window closes, so every window runs on its own. While a story's window is in front, the story puts a Story menu and a Discussion menu in the menu bar. It also reports its scroll positions and the comment you'd reached as its state, which YAVCHN keeps per story so a reload finds your place again. Closing a window forgets it, but a story that Next replaced keeps its place, for when Back returns to it.
+- **The reader is a PUDL applet.** PUDL's applet runtime starts the reader script when its window opens and stops it when the window closes. A list click asks the running instance to load another story, then the applet replaces its story markup and restarts only the article and discussion requests. While the reader window is in front, the applet puts a Story menu and a Discussion menu in the menu bar. It reports its scroll positions and the comment you'd reached as its state, which YAVCHN keeps for each reader and article, so two readers can show the same article at different scroll positions.
 
 - **The applets are windows and pages both.** Each one in the Applets menu opens as a window like a story's, and has a page of its own that works without JavaScript: `/applets/replies?u=pg`, `/applets/hiring?q=remote+rust`, and `/user/hn/pg` for a profile. The server renders all of them from the sites' public APIs (HN's Firebase and Algolia APIs, and Lobsters' JSON). The replies watcher and the hiring filter are PUDL applets, which add the live checking and filtering; PUDL loads their scripts the first time one opens. Profiles are plain server-rendered windows, since there's nothing in them to run. The applets' state (the user you watch, the replies you've read, the hiring thread and words) is kept in your browser by `src/static/continuity.js`, the same host script that keeps each story's place.
 
@@ -89,3 +89,9 @@ YAVCHN is a single-binary distroless image. The SQLite article cache is in `/hom
 ## License
 
 [MIT](LICENSE). Feel free to use it, fork it, embed it, learn from it, whatever. Just keep the copyright notice intact.
+
+Reader-window behavior and URL assignments are described in [DESIGN.md](DESIGN.md).
+
+To run the optional browser regression test, install Playwright, set `YAVCHN_BROWSER_TEST=1`, and run `go test ./src -run TestReaderBrowser -v`. `YAVCHN_PLAYWRIGHT` can name an installed Playwright module; `YAVCHN_BROWSER_CHANNEL` selects the browser channel (the default is `msedge`).
+
+The looped-arrow button before the feed search box refreshes the current feed without reloading its readers. On Lobsters it appears before the list tabs. It preserves the current URL and open windows, and keeps the previous feed visible if refreshing fails.

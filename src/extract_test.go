@@ -81,6 +81,10 @@ func TestExtractor_Get_PropagatesNon200(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on upstream 500")
 	}
+	var upstream *upstreamHTTPError
+	if !errors.As(err, &upstream) || upstream.StatusCode != 500 {
+		t.Fatalf("expected typed upstream status 500, got %v", err)
+	}
 	if !strings.Contains(err.Error(), "500") {
 		t.Fatalf("expected error to mention upstream status, got %v", err)
 	}

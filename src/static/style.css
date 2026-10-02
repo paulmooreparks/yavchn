@@ -287,6 +287,58 @@ html.focus-mode .md-resize {
 }
 .story-hide { --yv-glyph: var(--glyph-close); margin-inline-start: 0; }
 
+.story-new-reader { margin-inline-start: 0; }
+
+.source-icon { width: 16px; height: 16px; flex: none; object-fit: contain; }
+.feed-refresh::before { content: ""; width: 16px; height: 16px; background: currentColor; -webkit-mask: var(--yv-glyph-refresh) center / contain no-repeat; mask: var(--yv-glyph-refresh) center / contain no-repeat; }
+.feed-refresh-status { font-size: var(--text-sm); }
+.source-glyph { display: inline-block; width: 16px; height: 16px; flex: none; background: currentColor; -webkit-mask: var(--source-glyph) center / contain no-repeat; mask: var(--source-glyph) center / contain no-repeat; }
+.source-glyph-pin { --source-glyph: var(--yv-glyph-pin); }
+.source-glyph-find { --source-glyph: var(--glyph-search); }
+.reader-site { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+.win-tab[data-reader-source]:not(.minimized)::before { display: none; }
+.reader-tab-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.source-seg a { display: inline-flex; align-items: center; gap: 6px; }
+.source-switch .menu-btn-label::before,
+.source-switch .seg-choice[href^="/hn/"]::before,
+.source-switch .seg-choice[href^="/lobsters/"]::before {
+  content: ""; display: inline-block; width: 16px; height: 16px;
+  margin-inline-end: 6px; vertical-align: middle;
+  background-size: contain; background-repeat: no-repeat;
+  background-color: transparent; -webkit-mask: none; mask: none;
+}
+.source-switch .seg-choice::before { visibility: visible; }
+.source-switch .seg-choice[aria-current]:not([aria-current="false"])::after {
+  content: ""; flex: none; width: 12px; height: 12px; margin-inline-start: auto;
+  background: currentColor; -webkit-mask: var(--glyph-tick) center / contain no-repeat; mask: var(--glyph-tick) center / contain no-repeat;
+}
+.source-switch .seg-choice[href^="/pinned/"]::before,
+.source-switch .seg-choice[href="/find"]::before {
+  content: ""; display: inline-block; width: 16px; height: 16px;
+  margin-inline-end: 6px; vertical-align: middle;
+}
+.source-switch:has(.source-seg [data-source="pinned"][aria-current]) .menu-btn-label::before,
+.source-switch .seg-choice[href^="/pinned/"]::before {
+  background: currentColor; -webkit-mask: var(--yv-glyph-pin) center / contain no-repeat; mask: var(--yv-glyph-pin) center / contain no-repeat;
+}
+.source-switch:has(.source-seg [data-source="find"][aria-current]) .menu-btn-label::before,
+.source-switch .seg-choice[href="/find"]::before {
+  background: currentColor; -webkit-mask: var(--glyph-search) center / contain no-repeat; mask: var(--glyph-search) center / contain no-repeat;
+}
+.source-switch:has(.source-seg [data-source="hn"][aria-current]) .menu-btn-label::before,
+.source-switch .seg-choice[href^="/hn/"]::before { background-image: url('/static/hn-favicon.svg'); }
+.source-switch:has(.source-seg [data-source="lobsters"][aria-current]) .menu-btn-label::before,
+.source-switch .seg-choice[href^="/lobsters/"]::before { background-image: url('/static/lobsters-favicon.png'); }
+.source-switch:not(:has(.source-seg [data-source][aria-current])) .menu-btn-label::before { display: none; }
+.story-new-reader::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: var(--glyph-open) center / contain no-repeat;
+  mask: var(--glyph-open) center / contain no-repeat;
+}
+
 /* The row's controls show in full on the row the pointer or the keyboard
    is on, and stay faint elsewhere so thirty rows of buttons do not crowd
    the headlines. A pinned story's pin always shows, since it states the

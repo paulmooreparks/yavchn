@@ -42,6 +42,15 @@ const (
 // this path -- the rate check fires only after cache miss + singleflight.
 var errRateLimited = errors.New("rate limited")
 
+// upstreamHTTPError preserves the source response status for reader fallbacks.
+type upstreamHTTPError struct {
+	StatusCode int
+}
+
+func (e *upstreamHTTPError) Error() string {
+	return fmt.Sprintf("source returned HTTP %d %s", e.StatusCode, http.StatusText(e.StatusCode))
+}
+
 type Extractor struct {
 	db     *sql.DB
 	sf     singleflight.Group
@@ -205,7 +214,7 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("fetch %s: %s", rawURL, resp.Status)
+		return nil, &upstreamHTTPError{StatusCode: resp.StatusCode}
 	}
 	ctype := resp.Header.Get("Content-Type")
 	if !strings.HasPrefix(ctype, "text/html") && !strings.HasPrefix(ctype, "application/xhtml") {

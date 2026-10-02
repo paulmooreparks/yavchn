@@ -10,18 +10,20 @@ import "context"
 // IDs are strings. HN's int64 IDs are stringified at the source boundary;
 // Lobsters uses base36 short IDs natively. This lets the rest of the
 // codebase work with one ID type without per-source generics.
+// StoryIDs with revalidate=true refetches the feed and refreshes or
+// invalidates its cached item summaries before ItemsParallel reads them.
 type Source interface {
-	Name() string                                                                               // "hn" / "lobsters"
-	Label() string                                                                              // "Hacker News" / "Lobsters"
-	Tabs() []TabDef                                                                             // per-source tab set for the source-tabs row
-	ValidTab(slug string) bool                                                                  // does this source have a tab with this slug?
-	DefaultTab() string                                                                         // the slug rendered when the visitor lands on /{source}/
-	StoryIDs(ctx context.Context, tab string, page int) (ids []string, hasNext bool, err error) // 1-based page; hasNext signals "more pages exist upstream"
-	Item(ctx context.Context, id string) (*Item, error)                                         // a single story
-	ItemsParallel(ctx context.Context, ids []string) []*Item                                    // bulk fetch for a list page
-	StoryThread(ctx context.Context, id, requesterIP string) (*StoryThread, error)              // the comment tree for one story
-	StoryDiscussionURL(id string) string                                                        // the canonical discussion URL on the source's own site
-	StartBackgroundRefresh(ctx context.Context)                                                 // keep the default tab warm
+	Name() string                                                                                                // "hn" / "lobsters"
+	Label() string                                                                                               // "Hacker News" / "Lobsters"
+	Tabs() []TabDef                                                                                              // per-source tab set for the source-tabs row
+	ValidTab(slug string) bool                                                                                   // does this source have a tab with this slug?
+	DefaultTab() string                                                                                          // the slug rendered when the visitor lands on /{source}/
+	StoryIDs(ctx context.Context, tab string, page int, revalidate bool) (ids []string, hasNext bool, err error) // 1-based page; hasNext signals "more pages exist upstream"
+	Item(ctx context.Context, id string) (*Item, error)                                                          // a single story
+	ItemsParallel(ctx context.Context, ids []string) []*Item                                                     // bulk fetch for a list page
+	StoryThread(ctx context.Context, id, requesterIP string) (*StoryThread, error)                               // the comment tree for one story
+	StoryDiscussionURL(id string) string                                                                         // the canonical discussion URL on the source's own site
+	StartBackgroundRefresh(ctx context.Context)                                                                  // keep the default tab warm
 }
 
 // TabDef defines one entry in the source-tabs row.

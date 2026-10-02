@@ -40,6 +40,26 @@ const storyWinMode = "maximized"
 
 var storyWinFloat = []float64{0.06, 0.05, 0.55, 0.75}
 
+var readerKeyRE = regexp.MustCompile(`^reader-[1-9][0-9]*$`)
+
+func newReaderURL(path string, rest url.Values, st winState, article string) string {
+	c := st.clone()
+	c.named = true
+	var key string
+	for n := 1; ; n++ {
+		key = "reader-" + strconv.Itoa(n)
+		if !c.has(key) {
+			break
+		}
+	}
+	c.open = append(c.open, key)
+	c.top = key
+	if article != "" {
+		c.reader[key] = article
+	}
+	return winURL(path, rest, c)
+}
+
 type placement struct {
 	Mode string
 	N    []float64
@@ -82,11 +102,12 @@ func (p placement) String() string {
 // address carries no open parameter at all, which PUDL reads as "the
 // page's default windows"; YAVCHN has none, so that means no windows.
 type winState struct {
-	named bool
-	open  []string
-	top   string
-	min   map[string]bool
-	place map[string]placement
+	named  bool
+	open   []string
+	top    string
+	min    map[string]bool
+	place  map[string]placement
+	reader map[string]string
 }
 
 func keyList(v string) []string {
@@ -102,11 +123,11 @@ func keyList(v string) []string {
 }
 
 func isWinParam(name string) bool {
-	return name == "open" || name == "top" || name == "min" || strings.HasPrefix(name, "p.")
+	return name == "open" || name == "top" || name == "min" || strings.HasPrefix(name, "p.") || strings.HasPrefix(name, "r.")
 }
 
 func parseWinState(q url.Values) winState {
-	st := winState{min: map[string]bool{}, place: map[string]placement{}}
+	st := winState{min: map[string]bool{}, place: map[string]placement{}, reader: map[string]string{}}
 	if _, ok := q["open"]; !ok {
 		return st
 	}
@@ -121,6 +142,11 @@ func parseWinState(q url.Values) winState {
 		st.top = t
 	}
 	for name, v := range q {
+		if k, ok := strings.CutPrefix(name, "r."); ok && st.has(k) {
+			if _, _, valid := splitWinKey(q.Get(name)); valid {
+				st.reader[k] = q.Get(name)
+			}
+		}
 		if k, ok := strings.CutPrefix(name, "p."); ok && st.has(k) && len(v) > 0 {
 			if p, ok := parsePlacement(v[0]); ok {
 				st.place[k] = p
@@ -153,7 +179,10 @@ func (st winState) has(k string) bool {
 
 func (st winState) clone() winState {
 	c := winState{named: st.named, open: append([]string(nil), st.open...), top: st.top,
-		min: map[string]bool{}, place: map[string]placement{}}
+		min: map[string]bool{}, place: map[string]placement{}, reader: map[string]string{}}
+	for k, v := range st.reader {
+		c.reader[k] = v
+	}
 	for k, v := range st.min {
 		c.min[k] = v
 	}
@@ -215,6 +244,7 @@ func (st winState) closed(k string) winState {
 	}
 	delete(c.min, k)
 	delete(c.place, k)
+	delete(c.reader, k)
 	if c.top == k {
 		c.top = ""
 	}
@@ -291,6 +321,9 @@ func (st winState) params() []string {
 		out = append(out, "min="+strings.Join(mins, ","))
 	}
 	for _, k := range st.open {
+		if article := st.reader[k]; article != "" {
+			out = append(out, "r."+k+"="+article)
+		}
 		if p, ok := st.place[k]; ok {
 			out = append(out, "p."+k+"="+p.String())
 		}
@@ -382,9 +415,12 @@ func (st winState) layerStyle(attrs map[string]winAttrs) template.CSS {
 
 // windowVM is one window, a story's or an applet's: the same markup
 // whether the page renders it or /window/{key} returns it. App is set for
-// an applet's window, and the story fields for a story's.
+// a tool applet's window, Reader for the article reader's bootstrap, and
+// the story fields for a loaded story.
 type windowVM struct {
+	StoryKey         string
 	App              *appVM
+	Reader           bool
 	Def              winAttrs // the placement the window's markup gives it
 	Key, Source, ID  string
 	Title, URL, Host string
@@ -405,8 +441,19 @@ type windowVM struct {
 	CloseHref        string
 }
 
+func readerWindow() windowVM {
+	return windowVM{
+		Reader: true,
+		Key:    "story", Title: "Article reader", PageURL: "/",
+		Def: floatingAt(0.06, 0.05, 0.55, 0.75), Mode: "floating",
+		Style:   floatingAt(0.06, 0.05, 0.55, 0.75).Style,
+		MinHref: "?", MaxHref: "?", CloseHref: "?",
+	}
+}
+
 // windowsVM is everything the page shell renders for the windows.
 type windowsVM struct {
+	NewReaderHref  string
 	List           []windowVM
 	LayerStyle     template.CSS
 	Shown          bool // some window is not minimised, so a narrow layout shows them
@@ -433,7 +480,7 @@ func (s *Server) storyWindow(ctx context.Context, key string) (windowVM, bool) {
 		return windowVM{}, false
 	}
 	w := windowVM{
-		Key: key, Source: srcName, ID: id,
+		Key: key, StoryKey: key, Source: srcName, ID: id,
 		PageURL:     storyPageURL(srcName, id),
 		SourceURL:   src.StoryDiscussionURL(id),
 		SourceLabel: externalLabelForSource(srcName),
@@ -483,7 +530,11 @@ func (s *Server) startWindows(ctx context.Context, r *http.Request) func() windo
 	// list's, so an applet such as the hiring filter starts as its markup
 	// says rather than from the list's ?q=.
 	bare := r.Clone(ctx)
-	bare.URL = &url.URL{Path: path}
+	readerQuery := url.Values{}
+	for k, article := range st.reader {
+		readerQuery.Set("r."+k, article)
+	}
+	bare.URL = &url.URL{Path: path, RawQuery: readerQuery.Encode()}
 	go func() { done <- s.windowsParallel(ctx, bare, st.open) }()
 	return func() windowsVM {
 		got := <-done
@@ -499,6 +550,7 @@ func (s *Server) startWindows(ctx context.Context, r *http.Request) func() windo
 			attrs[k] = st.attrs(k, got[k].Def)
 		}
 		vm := windowsVM{
+			NewReaderHref:  newReaderURL(path, rest, st, ""),
 			LayerStyle:     st.layerStyle(attrs),
 			Shown:          st.shown(),
 			Open:           len(st.open) > 0,

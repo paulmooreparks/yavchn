@@ -77,7 +77,7 @@ func TestHN_Item_NullBodyReturnsNotFound(t *testing.T) {
 
 func TestHN_StoryIDs_RejectsUnknownTab(t *testing.T) {
 	h := NewHN()
-	if _, _, err := h.StoryIDs(context.Background(), "made-up-tab", 1); err == nil {
+	if _, _, err := h.StoryIDs(context.Background(), "made-up-tab", 1, false); err == nil {
 		t.Fatal("expected error for unknown tab")
 	}
 }
@@ -91,7 +91,7 @@ func TestHN_StoryIDs_CachesIDList(t *testing.T) {
 
 	ctx := context.Background()
 	for i := 0; i < 3; i++ {
-		ids, _, err := h.StoryIDs(ctx, hnTabTop, 1)
+		ids, _, err := h.StoryIDs(ctx, hnTabTop, 1, false)
 		if err != nil {
 			t.Fatalf("StoryIDs %d: %v", i, err)
 		}

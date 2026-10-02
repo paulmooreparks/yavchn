@@ -51,7 +51,7 @@
   var LINKS = '[data-region] a[href], [data-region-link] a[href], a[data-region-link][href]';
 
   function isWinParam(name) {
-    return name === 'open' || name === 'top' || name === 'min' || name.indexOf('p.') === 0;
+    return name === 'open' || name === 'top' || name === 'min' || name.indexOf('p.') === 0 || name.indexOf('r.') === 0;
   }
 
   /* The parameters that belong to what stays on screen rather than to what
@@ -121,7 +121,7 @@
      the live windows, since that is the page it names; on another path it
      is fetched as named, and if it proves compatible the pushed address
      carries the live windows, because they stay on screen. */
-  function swap(target, push) {
+  function swap(target, push, reload) {
     var current = regionsIn(document);
     var names = Object.keys(current);
     var parsed = new URL(target, location.href);
@@ -137,7 +137,7 @@
        refuses another origin, a redirect to one included; the page then
        loads as an ordinary navigation, where the browser keeps origins
        apart. */
-    fetch(url, { mode: 'same-origin', credentials: 'same-origin', headers: { Accept: 'text/html' }, signal: ctl.signal })
+    return fetch(url, { mode: 'same-origin', credentials: 'same-origin', cache: reload ? 'no-cache' : 'default', headers: reload ? { Accept: 'text/html', 'Cache-Control': 'no-cache' } : { Accept: 'text/html' }, signal: ctl.signal })
       .then(function (r) {
         var type = r.headers.get('content-type') || '';
         if (!r.ok || type.indexOf('text/html') < 0) throw new Error('not a page');
@@ -145,11 +145,15 @@
       })
       .then(function (html) {
         if (ctl !== busy) return;
-        busy = null;
         var doc = new DOMParser().parseFromString(html, 'text/html');
         var next = regionsIn(doc);
         var fits = names.every(function (n) { return next[n]; }) && layerSrc(doc) === layerSrc(document);
-        if (!fits) { location.assign(url); return; }
+        if (!fits) {
+          if (reload) throw new Error('The refreshed page does not have matching regions.');
+          busy = null;
+          location.assign(url); return;
+        }
+        busy = null;
 
         var active = document.activeElement;
         var focusIn = null;
@@ -168,11 +172,13 @@
         if (focusIn) restoreFocus(regionsIn(document)[focusIn], focusId, focusHref);
         refreshLinks();
         document.dispatchEvent(new CustomEvent('pudl:regions-swap', { detail: { url: url, regions: names } }));
+        return true;
       })
       .catch(function (err) {
         if (err && err.name === 'AbortError') return;
         busy = null;
         names.forEach(function (n) { if (current[n].isConnected) current[n].removeAttribute('aria-busy'); });
+        if (reload) throw err;
         location.assign(url);
       });
   }
@@ -285,7 +291,10 @@
 
   /* A page that renders a region's links by script, after a swap or at
      any other time, asks for them to carry the live windows again. */
-  window.pudlRegions = { refresh: refreshLinks };
+  // reload refetches the current regions without navigation or new history.
+  // It resolves true after replacement and rejects on failure, leaving the
+  // current regions intact. A superseding navigation cancels it.
+  window.pudlRegions = { refresh: refreshLinks, reload: function () { return swap(location.href, false, true); } };
 
   function init() {
     listPart = withoutWindows(new URL(location.href));

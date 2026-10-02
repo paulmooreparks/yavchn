@@ -350,6 +350,7 @@
       if (!seg) return false;
       var k = seg.split('=')[0];
       try { k = decodeURIComponent(k.replace(/\+/g, ' ')); } catch (e) { /* leave as is */ }
+      if (k.indexOf('r.') === 0 && st.open.indexOf(k.slice(2)) < 0) return false;
       return !(k === 'open' || k === 'top' || k === 'min' || k.indexOf('p.') === 0);
     });
     var mine = windowParams(st);
@@ -1315,6 +1316,54 @@
     });
   }
 
+  /* Gives an open window a new key without replacing its element. The
+     window keeps its placement, focus and running content. The URL records
+     the new key as a fresh history entry unless push is false. */
+  function rekey(oldKey, key, push) {
+    if (!wins[oldKey]) return false;
+    if (oldKey === key) {
+      commit(raised(state, key), false);
+      focusWindow(key);
+      return true;
+    }
+    if (wins[key] || pending[key]) return false;
+
+    var el = wins[oldKey];
+    var st = copy(state);
+    var index = st.open.indexOf(oldKey);
+    if (index < 0) return false;
+
+    st.open[index] = key;
+    if (st.top === oldKey) st.top = key;
+    if (Object.prototype.hasOwnProperty.call(st.min, oldKey)) {
+      st.min[key] = st.min[oldKey];
+      delete st.min[oldKey];
+    }
+    if (Object.prototype.hasOwnProperty.call(st.place, oldKey)) {
+      st.place[key] = st.place[oldKey];
+      delete st.place[oldKey];
+    }
+
+    Array.prototype.forEach.call(layer.querySelectorAll('.win[data-win-parent="' + oldKey + '"]'), function (child) {
+      child.setAttribute('data-win-parent', key);
+    });
+    el.setAttribute('data-win', key);
+    wins[key] = el;
+    delete wins[oldKey];
+    if (Object.prototype.hasOwnProperty.call(lastFocus, oldKey)) {
+      lastFocus[key] = lastFocus[oldKey];
+      delete lastFocus[oldKey];
+    }
+    if (Object.prototype.hasOwnProperty.call(openers, oldKey)) {
+      openers[key] = openers[oldKey];
+      delete openers[oldKey];
+    }
+
+    commit(st, push !== false);
+    el.dispatchEvent(new CustomEvent('pudl:window-rekey', { bubbles: true, detail: { oldKey: oldKey, key: key } }));
+    return true;
+  }
+
   /* Notes why a window and its children are about to close, which
      pudl:window-close reports. */
   function markClosing(key, reason) {
@@ -1821,6 +1870,7 @@
     window.pudlWindows = {
       open: function (key, opener) { if (KEY_RE.test(key)) open(key, opener || null); },
       replace: function (oldKey, key) { if (KEY_RE.test(key)) replaceWith(oldKey, key, null); },
+      rekey: function (oldKey, key, push) { return KEY_RE.test(key) && rekey(oldKey, key, push); },
       raise: function (key) {
         if (!wins[key]) return;
         commit(raised(state, key), false);

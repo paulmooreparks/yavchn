@@ -4,6 +4,7 @@
    and loads with it. */
 (function () {
   'use strict';
+  window.pudlApplets.define('story', {});
   window.pudlApplets.define('replies', { src: '/static/applets/replies.js', page: '/applets/replies', ver: '1' });
   window.pudlApplets.define('hiring', { src: '/static/applets/hiring.js', page: '/applets/hiring', ver: '1' });
 })();

@@ -265,7 +265,7 @@ func (u *uaTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 // StoryIDs returns the page-th slice of the cached id list for an HN tab.
 // HN's firebaseio endpoints return the full ranked list in one call, so we
 // keep the full list cached and just slice for pagination here.
-func (h *HN) StoryIDs(ctx context.Context, tab string, page int) ([]string, bool, error) {
+func (h *HN) StoryIDs(ctx context.Context, tab string, page int, revalidate bool) ([]string, bool, error) {
 	if !h.ValidTab(tab) {
 		return nil, false, fmt.Errorf("unknown HN tab %q", tab)
 	}
@@ -276,7 +276,7 @@ func (h *HN) StoryIDs(ctx context.Context, tab string, page int) ([]string, bool
 	fetched := h.listFetched[tab]
 	ids := h.listIDs[tab]
 	h.mu.RUnlock()
-	if fetched.IsZero() || time.Since(fetched) >= topStoriesTTL {
+	if revalidate || fetched.IsZero() || time.Since(fetched) >= topStoriesTTL {
 		var err error
 		ids, err = h.refreshStoryIDs(ctx, tab)
 		if err != nil {
@@ -290,6 +290,11 @@ func (h *HN) StoryIDs(ctx context.Context, tab string, page int) ([]string, bool
 	end := start + pageSize
 	if end > len(ids) {
 		end = len(ids)
+	}
+	if revalidate {
+		for _, id := range ids[start:end] {
+			h.items.Remove(id)
+		}
 	}
 	return ids[start:end], end < len(ids), nil
 }

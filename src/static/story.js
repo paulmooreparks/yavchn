@@ -1,7 +1,7 @@
 /* The story applet: a story's article above its discussion, in a window or
-   on the story's own page. PUDL's applet runtime starts an instance for
-   each story mount as its window opens (or with the page), and destroys it
-   as the window closes, so each window has a life of its own.
+   on the story's own page. A window's instance stays alive as the reader
+   chooses other stories from the list. The instance replaces its mount's
+   story markup and restarts the two story-specific fetches itself.
 
    An instance:
    - fetches the reader view from /api/article and the thread from
@@ -46,11 +46,12 @@
 
   function init(root, opts) {
     var ctl = new AbortController();
-    var signal = ctl.signal;
-    var article = root.querySelector('.story-article-body');
-    var discussion = root.querySelector('.story-discussion-body');
-    var refreshBtn = root.querySelector('.story-refresh');
-    var wanted = parseState(opts.state);
+    var contentCtl = null;
+    var storyCtl = null;
+    var article = null;
+    var discussion = null;
+    var refreshBtn = null;
+    var wanted = null;
     var timer = 0;
     var d = root.dataset;
     var lib = window.yavchn;
@@ -81,39 +82,142 @@
 
     function refresh() {
       if (!refreshBtn || !article || !d.readerUrl || refreshBtn.disabled) return;
-      refreshBtn.disabled = true;
-      refreshBtn.setAttribute('aria-busy', 'true');
-      fill(article, articleSrc(true), signal).then(function () {
-        refreshBtn.disabled = false;
-        refreshBtn.removeAttribute('aria-busy');
+      var button = refreshBtn;
+      var body = article;
+      var signal = contentCtl.signal;
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      fill(body, articleSrc(true), signal).then(function () {
+        if (signal.aborted) return;
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
       });
     }
 
-    if (article && d.readerUrl) {
-      fill(article, articleSrc(false), signal).then(function () { restore(article, wanted.a); });
-    } else if (article) {
-      restore(article, wanted.a);
-    }
-    if (discussion) {
-      fill(discussion, '/api/discussion?id=' + encodeURIComponent(d.storyId) +
-        '&source=' + encodeURIComponent(d.storySource || 'hn'), signal).then(function () {
-        if (wanted.c && lib.discussion) lib.discussion.focusId(root, wanted.c, false);
-        restore(discussion, wanted.d);
+    function wire(stateText) {
+      if (contentCtl) contentCtl.abort();
+      contentCtl = new AbortController();
+      var signal = contentCtl.signal;
+      article = root.querySelector('.story-article-body');
+      discussion = root.querySelector('.story-discussion-body');
+      refreshBtn = root.querySelector('.story-refresh');
+      wanted = parseState(stateText);
+      var wantedState = wanted;
+
+      if (article && d.readerUrl) {
+        var articleBody = article;
+        fill(articleBody, articleSrc(false), signal).then(function () {
+          if (!signal.aborted) restore(articleBody, wantedState.a);
+        });
+      } else if (article) {
+        restore(article, wantedState.a);
+      }
+      if (discussion) {
+        var discussionBody = discussion;
+        fill(discussionBody, '/api/discussion?id=' + encodeURIComponent(d.storyId) +
+          '&source=' + encodeURIComponent(d.storySource || 'hn'), signal).then(function () {
+          if (signal.aborted) return;
+          if (wantedState.c && lib.discussion) lib.discussion.focusId(root, wantedState.c, false);
+          restore(discussionBody, wantedState.d);
+        });
+      }
+
+      [article, discussion].forEach(function (el) {
+        if (el) el.addEventListener('scroll', changedSoon, { passive: true, signal: signal });
       });
+      if (refreshBtn) refreshBtn.addEventListener('click', refresh, { signal: signal });
     }
 
-    [article, discussion].forEach(function (el) {
-      if (el) el.addEventListener('scroll', changedSoon, { passive: true, signal: signal });
-    });
-    root.addEventListener('yavchn:comment-focus', changedSoon, { signal: signal });
-    if (refreshBtn) refreshBtn.addEventListener('click', refresh, { signal: signal });
+    function rememberedState() {
+      var detail = { name: 'story', instance: d.storyKey, host: opts.host, fit: opts.fit, param: null, state: null };
+      root.dispatchEvent(new CustomEvent('pudl:applet-state', { bubbles: true, detail: detail }));
+      return detail.state;
+    }
+
+    function replaceMount(next) {
+      var runtime = {};
+      ['data-applet-state', 'data-applet-fit'].forEach(function (name) {
+        if (root.hasAttribute(name)) runtime[name] = root.getAttribute(name);
+      });
+      Array.prototype.slice.call(root.attributes).forEach(function (attr) { root.removeAttribute(attr.name); });
+      Array.prototype.slice.call(next.attributes).forEach(function (attr) { root.setAttribute(attr.name, attr.value); });
+      Object.keys(runtime).forEach(function (name) { root.setAttribute(name, runtime[name]); });
+      root.innerHTML = next.innerHTML;
+    }
+
+    function loadStory(key, push) {
+      var win = root.closest('.win[data-win]');
+      if (!win || !window.pudlWindows) return;
+      if (storyCtl) storyCtl.abort();
+      if (key === (d.storyKey || '')) {
+        root.removeAttribute('aria-busy');
+        if (push) window.pudlWindows.raise(win.getAttribute('data-win'));
+        return;
+      }
+      if (!key) {
+        clearTimeout(timer);
+        opts.changed(state());
+        if (contentCtl) contentCtl.abort();
+        root.removeAttribute('aria-busy');
+        Array.from(root.attributes).forEach(function (attr) {
+          if (attr.name.indexOf('data-story-') === 0 || attr.name === 'data-reader-url' || attr.name === 'data-applet-page') root.removeAttribute(attr.name);
+        });
+        root.setAttribute('data-state-key', win.getAttribute('data-win'));
+        root.innerHTML = '<div class="empty-state story-note"><p class="empty-state-title">Article reader</p><p class="empty-state-body">Select an article from the sidebar.</p></div>';
+        article = discussion = refreshBtn = null;
+        window.pudlWindows.retitle(win.getAttribute('data-win'), 'Article reader');
+        root.dispatchEvent(new CustomEvent('yavchn:story-change', { bubbles: true }));
+        return;
+      }
+      storyCtl = new AbortController();
+      var signal = storyCtl.signal;
+      root.setAttribute('aria-busy', 'true');
+
+      fetch('/window/' + encodeURIComponent(key), { credentials: 'same-origin', signal: signal })
+        .then(function (r) { if (!r.ok) throw new Error('story ' + r.status); return r.text(); })
+        .then(function (html) {
+          if (signal.aborted || !root.isConnected) return;
+          var doc = new DOMParser().parseFromString(html, 'text/html');
+          var nextWin = doc.querySelector('.win[data-win]');
+          var next = nextWin && nextWin.querySelector('.story[data-applet="story"]');
+          if (!next) throw new Error('story markup missing');
+
+          clearTimeout(timer);
+          opts.changed(state());
+          var oldKey = win.getAttribute('data-win');
+          window.yavchn.readers.assign(oldKey, key, push);
+
+          var title = nextWin.querySelector('.win-title');
+          var currentTitle = win.querySelector('.win-title');
+          if (title && currentTitle) window.pudlWindows.retitle(oldKey, title.textContent);
+          var page = nextWin.querySelector('[data-win-action="page"]');
+          var currentPage = win.querySelector('[data-win-action="page"]');
+          if (page && currentPage) currentPage.href = page.href;
+          replaceMount(next);
+          root.setAttribute('data-state-key', oldKey + ':' + key);
+          wire(rememberedState());
+          if (push) window.pudlWindows.raise(oldKey);
+          root.dispatchEvent(new CustomEvent('yavchn:story-change', { bubbles: true, detail: { key: key } }));
+        })
+        .catch(function (err) {
+          if (!err || err.name !== 'AbortError') {
+            root.removeAttribute('aria-busy');
+            if (window.console) console.warn('story:', err.message);
+          }
+        });
+    }
+
+    root.addEventListener('yavchn:comment-focus', changedSoon, { signal: ctl.signal });
+    wire(opts.state);
+    var unmountReader = lib.readers.mount(root, loadStory);
 
     function win() { return root.closest('.win'); }
 
     function menus() {
+      if (!d.storyKey) return { titles: [] };
       var pins = lib.pins, disc = lib.discussion, sort = lib.sort;
       var next = win() && lib.nextStory ? lib.nextStory(win()) : null;
-      var page = new URL(opts.pageUrl, location.href).href;
+      var page = new URL(root.getAttribute('data-applet-page') || opts.pageUrl, location.href).href;
       var original = d.readerUrl || '';
       var source = root.querySelector('.story-discussion .story-bar a[target="_blank"]');
       var story = [
@@ -156,9 +260,16 @@
 
     return {
       state: state,
+      setState: function (s) {
+        var key = new URLSearchParams(s || '').get('story');
+        if (key) loadStory(key, true);
+      },
       menus: menus,
       destroy: function () {
+        unmountReader();
         clearTimeout(timer);
+        if (storyCtl) storyCtl.abort();
+        if (contentCtl) contentCtl.abort();
         ctl.abort();
       }
     };

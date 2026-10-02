@@ -234,7 +234,7 @@ const lobstersPageSize = 25
 // StoryIDs fetches the requested page from Lobsters. Page 1 uses the tab's
 // base endpoint (/hottest.json etc); page > 1 uses /{tab-prefix}/page/N.json
 // (with hottest's prefix being the empty string -- /page/N.json).
-func (l *Lobsters) StoryIDs(ctx context.Context, tab string, page int) ([]string, bool, error) {
+func (l *Lobsters) StoryIDs(ctx context.Context, tab string, page int, revalidate bool) ([]string, bool, error) {
 	if !l.ValidTab(tab) {
 		return nil, false, fmt.Errorf("unknown Lobsters tab %q", tab)
 	}
@@ -247,7 +247,7 @@ func (l *Lobsters) StoryIDs(ctx context.Context, tab string, page int) ([]string
 	fetched := l.listFetched[cacheKey]
 	ids := l.listIDs[cacheKey]
 	l.mu.RUnlock()
-	if !fetched.IsZero() && time.Since(fetched) < topStoriesTTL {
+	if !revalidate && !fetched.IsZero() && time.Since(fetched) < topStoriesTTL {
 		return ids, len(ids) >= lobstersPageSize, nil
 	}
 	got, err := l.refreshPage(ctx, tab, page)
