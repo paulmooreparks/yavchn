@@ -52,12 +52,7 @@
       <ul data-menubar-source data-region-link hidden>
         <li><img src="/static/logo-24x24.png" alt=""> YAVCHN
           <ul>
-            {{ if .HasList }}<li><a href="/hn/">Hacker News</a></li>
-            <li><a href="/lobsters/">Lobsters</a></li>
-            <li><a href="/pinned/">Pinned stories</a></li>
-            <li><a href="/find">Find the discussions of a link</a></li>
-            <li>-</li>
-            {{ end }}<li><a href="/settings" data-win-open="settings">Settings&hellip;</a></li>
+            <li><a href="/settings" data-win-open="settings">Settings&hellip;</a></li>
             <li>-</li>
             <li><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN on GitHub</a></li>
           </ul>
@@ -82,6 +77,11 @@
         </li>
         {{ if .HasList }}<li>Feed
           <ul>
+            <li><a href="/hn/">Hacker News</a></li>
+            <li><a href="/lobsters/">Lobsters</a></li>
+            <li><a href="/pinned/">Pinned stories</a></li>
+            <li><a href="/find">Find the discussions of a link</a></li>
+            <li>-</li>
             <li><button type="button" data-feed-refresh disabled>Refresh feed</button></li>
           </ul>
         </li>
