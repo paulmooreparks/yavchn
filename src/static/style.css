@@ -1224,9 +1224,8 @@ html.focus-mode .classic-list .md-sidebar { display: block; }
 .story-win, .story-page-main { container-type: inline-size; container-name: reader; }
 .reader-toolbar { display: flex; flex: none; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
 .reader-toolbar[hidden] { display: none; }
-.reader-panes { flex: none; }
-.reader-panes button { min-height: 32px; padding-inline: 12px; }
-.reader-toolbar .story-next { margin-left: auto; white-space: nowrap; min-height: 32px; }
+.reader-panes { flex: none; box-sizing: border-box; height: 30px; align-items: center; }
+.reader-toolbar .story-next { margin-left: auto; white-space: nowrap; align-self: stretch; }
 .story-next[aria-disabled="true"] { opacity: .45; cursor: default; }
 .story[data-reader-pane] .story-bar-label { display: none; }
 .story-split:not(.split) { display: flex; flex-direction: column; }
@@ -1247,8 +1246,7 @@ body.desktop, body.story-page { height: 100dvh; }
 @container reader (max-width: 600px) {
   .reader-toolbar { padding: 6px; gap: 6px; }
   .reader-panes { flex: 1; min-width: 0; display: flex; }
-  .reader-panes button { flex: 1; padding-inline: 6px; min-height: 40px; font-size: 12px; }
-  .reader-toolbar .story-next { font-size: 12px; padding-inline: 8px; min-height: 40px; }
+  .reader-panes button { flex: 1; }
   .article-info, .discussion-info { padding: 10px 14px; }
   .discussion-info .story-bar-meta { flex-basis: 100%; }
   .discussion-info .story-bar-spacer { display: none; }
@@ -1263,7 +1261,7 @@ body.desktop, body.story-page { height: 100dvh; }
 .story-split.split.stacked > .split-handle { height: 18px; margin: 0; background: var(--surface-alt); }
 .story-split.split.stacked > .split-handle::before { inset: 7px 0; }
 @media (pointer: coarse) {
-  .reader-toolbar button, .reader-toolbar .story-next, .story-sort button { min-height: 44px; }
+  .story-sort button { min-height: 44px; }
   .article-info .icon-btn { width: 44px; height: 44px; }
   .story-row .story-pin, .story-row-actions .icon-btn { width: 44px; height: 44px; }
 }
