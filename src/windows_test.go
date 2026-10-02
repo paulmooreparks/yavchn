@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -170,7 +169,7 @@ func (f *fakeSource) StoryThread(context.Context, string, string) (*StoryThread,
 
 func testServer(t *testing.T) (*Server, *http.ServeMux) {
 	t.Helper()
-	tpl, err := template.ParseFS(assets, "templates/*.tmpl")
+	tpl, err := parseTemplates()
 	if err != nil {
 		t.Fatal(err)
 	}

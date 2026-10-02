@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"embed"
-	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -36,7 +35,7 @@ func main() {
 		Level: slog.LevelInfo,
 	})))
 
-	tpl, err := template.ParseFS(assets, "templates/*.tmpl")
+	tpl, err := parseTemplates()
 	if err != nil {
 		slog.Error("parse templates", "err", err)
 		os.Exit(1)

@@ -39,10 +39,10 @@
   } catch (e) { /* storage blocked: the defaults serve */ }
 })();
 </script>
-<script src="/static/pudl/pudl-theme.js"></script>
-<link rel="stylesheet" href="/static/pudl/pudl.css">
-<link rel="stylesheet" href="/static/pudl/pudl-windows.css">
-<link rel="stylesheet" href="/static/style.css">
+<script src="{{ asset "/static/pudl/pudl-theme.js" }}"></script>
+<link rel="stylesheet" href="{{ asset "/static/pudl/pudl.css" }}">
+<link rel="stylesheet" href="{{ asset "/static/pudl/pudl-windows.css" }}">
+<link rel="stylesheet" href="{{ asset "/static/style.css" }}">
 {{ end }}
 
 {{ define "topbar" }}
@@ -303,29 +303,29 @@
 {{ end }}
 
 {{ define "scripts" }}
-<script src="/static/pudl/pudl-windows.js" defer></script>
-<script src="/static/pudl/pudl-menu.js" defer></script>
-<script src="/static/pudl/pudl-applets.js" defer></script>
-<script src="/static/pudl/pudl-menubar.js" defer></script>
-<script src="/static/pudl/pudl-regions.js" defer></script>
-<script src="/static/pudl/pudl-md.js" defer></script>
-<script src="/static/pudl/pudl-split.js" defer></script>
-<script src="/static/pudl/pudl-dialog.js" defer></script>
-<script src="/static/pudl/pudl-tooltip.js" defer></script>
-<script src="/static/desktop.js" defer></script>
-<script src="/static/views.js" defer></script>
-<script src="/static/continuity.js" defer></script>
-<script src="/static/applets/registry.js" defer></script>
-<script src="/static/readers.js" defer></script>
-<script src="/static/story.js" defer></script>
-<script src="/static/discussion.js" defer></script>
-<script src="/static/sort.js" defer></script>
-<script src="/static/list.js" defer></script>
-<script src="/static/visited.js" defer></script>
-<script src="/static/pinned.js" defer></script>
-<script src="/static/dismissed.js" defer></script>
-<script src="/static/filters.js" defer></script>
-<script src="/static/settings.js" defer></script>
-<script src="/static/infinite.js" defer></script>
-<script src="/static/prefetch.js" defer></script>
+<script src="{{ asset "/static/pudl/pudl-windows.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/pudl-menu.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/pudl-applets.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/pudl-menubar.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/pudl-regions.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/pudl-md.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/pudl-split.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/pudl-dialog.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/pudl-tooltip.js" }}" defer></script>
+<script src="{{ asset "/static/desktop.js" }}" defer></script>
+<script src="{{ asset "/static/views.js" }}" defer></script>
+<script src="{{ asset "/static/continuity.js" }}" defer></script>
+<script data-asset-version="{{ assetVersion }}" src="{{ asset "/static/applets/registry.js" }}" defer></script>
+<script src="{{ asset "/static/readers.js" }}" defer></script>
+<script src="{{ asset "/static/story.js" }}" defer></script>
+<script src="{{ asset "/static/discussion.js" }}" defer></script>
+<script src="{{ asset "/static/sort.js" }}" defer></script>
+<script src="{{ asset "/static/list.js" }}" defer></script>
+<script src="{{ asset "/static/visited.js" }}" defer></script>
+<script src="{{ asset "/static/pinned.js" }}" defer></script>
+<script src="{{ asset "/static/dismissed.js" }}" defer></script>
+<script src="{{ asset "/static/filters.js" }}" defer></script>
+<script src="{{ asset "/static/settings.js" }}" defer></script>
+<script src="{{ asset "/static/infinite.js" }}" defer></script>
+<script src="{{ asset "/static/prefetch.js" }}" defer></script>
 {{ end }}
