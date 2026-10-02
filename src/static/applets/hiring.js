@@ -119,7 +119,7 @@
           return { label: o.textContent, radio: 'thread', checked: o.selected,
             run: function () { select.value = o.value; load(); save(); } };
         });
-        return { titles: [{ label: 'Hiring', items: threads.concat(['-',
+        return { titles: [{ label: 'Hiring', items: window.yavchn.identityMenu(root, 'Copy hiring search link') }, { label: 'Search', items: threads.concat(['-',
           { label: 'Clear the filter', disabled: !input.value, run: function () { input.value = ''; filter(); save(); } }]) }] };
       },
       destroy: function () {

@@ -114,7 +114,7 @@
       state: state,
       menus: function () {
         var n = unread();
-        return { titles: [{ label: 'Replies', items: [
+        return { titles: [{ label: 'Replies', items: window.yavchn.identityMenu(root, 'Copy replies link') }, { label: 'Watch', items: [
           { label: 'Check now', disabled: !user, run: check },
           { label: 'Mark all as read', disabled: !n, run: markRead },
           '-',

@@ -4,6 +4,26 @@
    and loads with it. */
 (function () {
   'use strict';
+  window.yavchn = window.yavchn || {};
+  // Explicit applet menus share the same supported identity operations.
+  window.yavchn.identityMenu = function (root, label, pageURL) {
+    var win = root.closest('.win');
+    var items = [];
+    if (win) {
+      var commands = window.pudlWindows.menuCommands(win.getAttribute('data-win'));
+      var page = commands.find(function (c) { return c.id === 'page'; });
+      var copy = commands.find(function (c) { return c.id === 'copy-link'; });
+      var close = commands.find(function (c) { return c.id === 'close'; });
+      if (page) items.push(Object.assign({}, page, { label: 'Open as a page' }));
+      if (copy) items.push(Object.assign({}, copy, { label: label }));
+      if (close) items.push('-', Object.assign({}, close, { label: 'Close window' }));
+    } else {
+      items.push({ label: label, run: function () {
+        if (navigator.clipboard) navigator.clipboard.writeText(new URL(pageURL || location.href, location.href).href).catch(function () {});
+      } });
+    }
+    return items;
+  };
   window.pudlApplets.define('story', {});
   window.pudlApplets.define('replies', { src: '/static/applets/replies.js', page: '/applets/replies', ver: '1' });
   window.pudlApplets.define('hiring', { src: '/static/applets/hiring.js', page: '/applets/hiring', ver: '1' });

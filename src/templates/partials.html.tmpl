@@ -50,32 +50,29 @@
   <div class="topbar">
     <nav class="site-menubar" data-menubar aria-label="YAVCHN">
       <ul data-menubar-source data-region-link hidden>
-        <li><img src="/static/logo-24x24.png" alt=""> YAVCHN
+        <li data-menubar-id="site"><img src="/static/logo-24x24.png" alt=""> YAVCHN
           <ul>
+            <li><a href="/">Home</a></li>
+            <li><button type="button" commandfor="about-dialog" command="show-modal">About YAVCHN</button></li>
+            <li>-</li>
             <li><a href="/settings" data-win-open="settings">Settings&hellip;</a></li>
-            <li>-</li>
-            <li><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN on GitHub</a></li>
           </ul>
         </li>
-        <li>View
+        <li data-menubar-id="go">Go
           <ul>
-            <li><button type="submit" form="view-window-form" aria-checked="{{ .WindowView }}">Windowed</button></li>
-            <li><button type="submit" form="view-classic-form" aria-checked="{{ not .WindowView }}">Classic</button></li>
-            <li>-</li>
-            {{ if .WindowView }}<li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>{{ end }}
-            {{ if not .HasList }}<li><a href="{{ .WindowURL }}">Open in a window</a></li>{{ end }}
-            <li><button type="button" commandfor="filters-dialog" command="show-modal">Domain filters&hellip;</button></li>
-            <li>-</li>
-            <li>Theme
-              <ul>
-                <li><button type="button" data-theme-choice="light" aria-checked="false">Light</button></li>
-                <li><button type="button" data-theme-choice="dark" aria-checked="false">Dark</button></li>
-                <li><button type="button" data-theme-choice="system" aria-checked="false">Follow the system</button></li>
-              </ul>
-            </li>
+            <li><a href="https://news.ycombinator.com/" target="_blank" rel="noopener">Go to Hacker News website</a></li>
+            <li><a href="https://lobste.rs/" target="_blank" rel="noopener">Go to Lobsters website</a></li>
           </ul>
         </li>
-        {{ if .HasList }}<li>Feed
+        <li data-menubar-id="applets">Applets
+          <ul>
+            {{ if .WindowView }}<li><a href="{{ .NewReaderHref }}" data-reader-new>New reader window</a></li><li>-</li>{{ end }}
+            <li><a href="/applets/replies" data-win-open="replies">Replies to me</a></li>
+            <li><a href="/user" data-win-open="user">Look up a user&hellip;</a></li>
+            <li><a href="/applets/hiring" data-win-open="hiring">Who is hiring?</a></li>
+          </ul>
+        </li>
+        {{ if .HasList }}<li data-menubar-id="feed">Feed
           <ul>
             <li><a href="/hn/">Hacker News</a></li>
             <li><a href="/lobsters/">Lobsters</a></li>
@@ -86,29 +83,28 @@
           </ul>
         </li>
         {{ end }}
-        {{ if .WindowView }}<li>Window
+        <li data-menubar-id="view">View
           <ul>
-            <li><a href="{{ .NewReaderHref }}" data-reader-new>New reader window</a></li>
+            <li><button type="submit" form="view-window-form" aria-checked="{{ .WindowView }}">Windowed</button></li>
+            <li><button type="submit" form="view-classic-form" aria-checked="{{ not .WindowView }}">Classic</button></li>
             <li>-</li>
-            <li><a href="?" data-win-back>Minimize all</a></li>
-            <li><a href="?" data-win-restore>Restore all</a></li>
-            <li><a href="?" data-close-all>Close all</a></li>
+            {{ if .WindowView }}<li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>{{ end }}
+            {{ if not .HasList }}<li><a href="{{ .WindowURL }}">Open in a window</a></li>{{ end }}
+            <li><button type="button" commandfor="filters-dialog" command="show-modal">Blocked domains across feeds&hellip;</button></li>
+            <li>-</li>
+            <li>Theme
+              <ul>
+                <li><button type="button" data-theme-choice="light" aria-checked="false">Light</button></li>
+                <li><button type="button" data-theme-choice="dark" aria-checked="false">Dark</button></li>
+                <li><button type="button" data-theme-choice="system" aria-checked="false">Follow the system</button></li>
+              </ul>
+            </li>
           </ul>
         </li>
-        {{ end }}
-        <li>Applets
-          <ul>
-            <li><a href="/applets/replies" data-win-open="replies">Replies to me</a></li>
-            <li><a href="/user" data-win-open="user">Look up a user&hellip;</a></li>
-            <li><a href="/applets/hiring" data-win-open="hiring">Who is hiring?</a></li>
-          </ul>
-        </li>
-        <li>Help
+        {{ if .WindowView }}<li data-menubar-id="window" data-menubar-windows>Window<ul></ul></li>{{ end }}
+        <li data-menubar-id="help">Help
           <ul>
             <li><button type="button" commandfor="help-dialog" command="show-modal">Keyboard and help&hellip;</button></li>
-            <li>-</li>
-            <li><a href="https://news.ycombinator.com/" target="_blank" rel="noopener">Go to Hacker News</a></li>
-            <li><a href="https://lobste.rs/" target="_blank" rel="noopener">Go to Lobsters</a></li>
           </ul>
         </li>
       </ul>
@@ -238,6 +234,16 @@
   <form class="dialog-actions" method="dialog">
     <button class="btn" value="close">Close</button>
   </form>
+</dialog>
+
+<dialog class="dialog" id="about-dialog" aria-labelledby="about-dialog-title">
+  <h3 class="dialog-title" id="about-dialog-title">About YAVCHN</h3>
+  <div class="dialog-body">
+    <p>YAVCHN is a reader for Hacker News and Lobsters, with articles and discussions in separate windows or Classic pages.</p>
+    <p>Created by Paul Parks and built with PUDL.</p>
+    <p><a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">YAVCHN source code on GitHub</a></p>
+  </div>
+  <form class="dialog-actions" method="dialog"><button class="btn" value="close">Close</button></form>
 </dialog>
 
 <dialog class="dialog wide-dialog" id="help-dialog" aria-labelledby="help-dialog-title">

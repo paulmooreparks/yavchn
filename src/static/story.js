@@ -8,7 +8,7 @@
      /api/discussion into its panes, and dispatches yavchn:loaded on each
      pane as its content arrives, for the discussion's collapse, sort and
      new-comment marks (discussion.js, sort.js);
-   - gives the menu bar a Story and a Discussion menu while its window is
+   - gives the menu bar Reader, Story, and Discussion menus while its window is
      in front (menus(), asked afresh as each menu opens);
    - keeps its place, the two panes' scroll positions and the comment the
      keyboard reached, as its state, which continuity.js remembers per
@@ -207,6 +207,10 @@
         });
     }
 
+    // The same reader instance can change its menu inventory as articles load.
+    root.addEventListener('yavchn:story-change', function () {
+      if (window.pudlMenubar) window.pudlMenubar.refresh();
+    }, { signal: ctl.signal });
     root.addEventListener('yavchn:comment-focus', changedSoon, { signal: ctl.signal });
     wire(opts.state);
     var unmountReader = lib.readers.mount(root, loadStory);
@@ -222,25 +226,19 @@
       var source = root.querySelector('.story-discussion .story-bar a[target="_blank"]');
       var story = [
         { label: 'Pin this story', checked: !!(pins && pins.isPinned(d.storyId)), run: function () { pins.toggleStory(root); } },
-        ...(win() ? [{ label: 'Next story', disabled: !next, run: function () { if (next) next.click(); } }] : []),
         '-',
         { label: 'Open the original', disabled: !original, run: function () { window.open(original, '_blank', 'noopener'); } },
         { label: source ? source.textContent.trim() : 'Open on the source site', disabled: !source,
           run: function () { window.open(source.href, '_blank', 'noopener'); } },
-        { label: 'Copy the link to this story', run: function () { if (navigator.clipboard) navigator.clipboard.writeText(page).catch(function () {}); } },
         { label: 'Fetch the article again', disabled: !original || !!(refreshBtn && refreshBtn.disabled), run: refresh }
       ];
       if (lib.hiding) {
         story.push('-', { label: 'Hide this story', run: function () { lib.hiding.hide(d.storyId); } });
         // A text post's host is the source itself, which is no site to block.
         if (original && d.host) {
-          story.push({ label: 'Hide stories from ' + d.host, run: function () { lib.hiding.blockDomain(d.host); } });
+          story.push({ label: 'Block ' + d.host + ' across all feeds', run: function () { lib.hiding.blockDomain(d.host); } });
         }
       }
-      if (win()) {
-        story.push('-', { label: 'Close', run: function () { window.pudlWindows.close(win().getAttribute('data-win')); } });
-      }
-
       var mode = sort ? sort.get() : 'best';
       var hasNew = !!root.querySelector('.comment-new');
       var hasComments = !!root.querySelector('.discussion-content .comment');
@@ -249,14 +247,23 @@
         { label: 'Newest first', disabled: !hasComments, radio: 'sort', checked: mode === 'newest', run: function () { sort.set('newest'); } },
         { label: 'Oldest first', disabled: !hasComments, radio: 'sort', checked: mode === 'oldest', run: function () { sort.set('oldest'); } },
         '-',
-        { label: 'Next comment', disabled: !hasComments, run: function () { disc.step(root, 1); } },
-        { label: 'Previous comment', disabled: !hasComments, run: function () { disc.step(root, -1); } },
-        { label: 'First new comment', disabled: !hasNew, run: function () { disc.firstNew(root); } },
-        '-',
         { label: 'Collapse every thread', disabled: !hasComments, run: function () { disc.collapseAll(root, true); } },
         { label: 'Expand every thread', disabled: !hasComments, run: function () { disc.collapseAll(root, false); } }
       ];
-      return { titles: [{ label: 'Story', items: story }, { label: 'Discussion', items: discussionMenu }] };
+      var navigation = [
+        ...(win() ? [{ label: 'Next story', disabled: !next, run: function () { if (next) next.click(); } }, '-'] : []),
+        { label: 'Next comment', disabled: !hasComments, run: function () { disc.step(root, 1); } },
+        { label: 'Previous comment', disabled: !hasComments, run: function () { disc.step(root, -1); } },
+        { label: 'First new comment', disabled: !hasNew, run: function () { disc.firstNew(root); } },
+      ];
+      return {
+        titles: [
+          { label: 'Reader', items: lib.identityMenu(root, 'Copy story link', page) },
+          { label: 'Story', items: story },
+          { label: 'Discussion', items: discussionMenu }
+        ],
+        into: { go: navigation }
+      };
     }
 
     return {

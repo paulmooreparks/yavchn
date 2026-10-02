@@ -29,8 +29,13 @@ func TestReaderInstancesRenderAndLink(t *testing.T) {
 	if strings.Count(body, `data-story-key="hn-1"`) != 2 {
 		t.Error("duplicate article should render in two independent readers")
 	}
-	if !(strings.Index(body, ">Window") < strings.Index(body, ">Applets") && strings.Index(body, ">Applets") < strings.Index(body, ">Help")) {
-		t.Error("menu order must be Window, Applets, Help")
+	previous := -1
+	for _, id := range []string{"site", "go", "applets", "feed", "view", "window", "help"} {
+		index := strings.Index(body, `data-menubar-id="`+id+`"`)
+		if index <= previous {
+			t.Fatalf("menu %s missing or out of order", id)
+		}
+		previous = index
 	}
 	rec = get(t, mux, "/hn/?open=reader-1")
 	if !strings.Contains(rec.Body.String(), "Select an article from the sidebar.") {

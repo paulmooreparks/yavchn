@@ -2,7 +2,7 @@
 
 Reader windows have stable instance keys such as `reader-1`. The `r.<window-key>` query parameter names the article displayed in that instance. PUDL continues to own placement, minimization and stacking. Reload and browser history restore both the arrangement and each instance's article. Existing article-key URLs remain supported.
 
-The Window menu starts with New reader window, which opens an empty floating reader. Applets follows Window and precedes Help. An article row offers Open in new reader window, which creates a floating reader containing that article.
+The Applets menu starts with New reader window, which opens an empty floating reader. Applets follows Go and precedes Feed. An article row offers Open in new reader window, which creates a floating reader containing that article.
 
 Sidebar navigation uses the most recently active undocked reader for the article's source, preferring a visible reader and otherwise restoring a minimized reader. An empty reader can take any source and acquires that source when an article is selected. Navigation creates a reader when none qualifies. Switching between HN and Lobsters therefore preserves a reader for each site by default. Docking protects an article from sidebar navigation. Minimizing a reader does not prevent reuse; the mobile Stories action minimizes readers to reveal the feed. Next story remains an explicit action on its own reader, including docked readers; it can change the reader's source when navigating a mixed list.
 
@@ -16,7 +16,7 @@ Reader title bars show the source favicon before the article title. The source n
 
 ## Feed refresh
 
-The Feed menu sits between View and Window. Its Refresh feed command uses the same action as the looped-arrow toolbar button and is disabled when no feed is available or a refresh is running. The looped-arrow button at the start of the feed toolbar refreshes the current HN or Lobsters list, including the current list tab, page, or HN search. PUDL's host extension `pudlRegions.reload()` revalidates and replaces the current regions without replacing reader windows or adding history. Navigation cancels an outstanding refresh. Failure leaves the previous feed in place and exposes a retry message. The request uses `Cache-Control: no-cache`; source feeds refetch their IDs and refresh or invalidate their item summaries. A refresh replaces any pages appended by infinite scrolling with the page named in the URL.
+The Feed menu sits between Applets and View. Its Refresh feed command uses the same action as the looped-arrow toolbar button and is disabled when no feed is available or a refresh is running. The looped-arrow button at the start of the feed toolbar refreshes the current HN or Lobsters list, including the current list tab, page, or HN search. PUDL's host extension `pudlRegions.reload()` revalidates and replaces the current regions without replacing reader windows or adding history. Navigation cancels an outstanding refresh. Failure leaves the previous feed in place and exposes a retry message. The request uses `Cache-Control: no-cache`; source feeds refetch their IDs and refresh or invalidate their item summaries. A refresh replaces any pages appended by infinite scrolling with the page named in the URL.
 
 ## Archive lookup after reader failures
 
@@ -34,7 +34,7 @@ View menu choices submit to `POST /settings/view`, save the preference in the br
 
 Menu visibility uses a server-rendered page context, borrowing Parks Computing's server-side `when` filtering approach without introducing its configuration format. Standalone pages omit Feed, Window, and the story-list visibility command. Classic feeds retain Feed controls. Theme and Domain filters apply across views; Applets links open standalone pages outside the desktop. Story pages omit Next story and Close. Discussion commands are disabled without comments, and article refresh is disabled while fetching. Keyboard shortcuts use the same contextual restrictions as menu commands. No window or classic mode is inferred from screen width.
 
-The feed selector and its matching YAVCHN menu entries appear only on stories views, including Classic feeds, Pinned, and Find. Standalone Classic article and applet pages omit both the selector and its divider. Articles retain their Back to stories link.
+The feed selector and its matching Feed menu entries appear only on stories views, including Classic feeds, Pinned, and Find. Standalone Classic article and applet pages omit both the selector and its divider. Articles retain their Back to stories link.
 
 The top bar exposes a Windowed / Classic segmented selector immediately before the feed selector. It remains available on standalone pages and submits the same preference forms as the View menu. At narrow widths it uses the existing segmented-control dropdown. The visible mode name is Windowed; URL and cookie values remain `window`.
 
@@ -47,3 +47,13 @@ YAVCHN > Settings opens the `settings` window on the desktop and navigates to `/
 Default browsing view, comment order, and theme use PUDL segmented buttons with `aria-pressed` selection state. All choices remain visible at narrow widths. Changes apply immediately. Updating the default browsing view saves the cookie through the existing POST endpoint without navigating away or changing the current workspace. The view selector and View menu continue to switch the current view and save the default together. A failed default-view save restores the prior selection and displays a retry message. Without JavaScript, the default-view form still submits normally; controls requiring browser storage are disabled with an explanation. Settings does not expose automatically saved window placement or reading progress as preferences.
 
 The Settings window uses PUDL's `data-win-size="content"` behavior. Its dimensions follow its content, its title bar remains draggable, and resizing, maximizing, snapping, and docking are unavailable. Content scrolls when it reaches the workspace bounds.
+
+## Menu adoption in PUDL 0.40.0
+
+The site menu order is YAVCHN, Go, Applets, Feed, View, Window, Help. Each menu declares a stable PUDL ID. Feed remains a separate site menu by user decision, overriding the adoption guide's suggestion to move its destinations into Go. It retains Hacker News, Lobsters, Pinned stories, Find discussions, and Refresh feed, with the existing stories-view visibility rules. Go contains clearly labeled external source-site links and the active reader's navigation contribution.
+
+The identity menu provides Home, About YAVCHN, and Settings. About contains the repository link. New reader window moves from Window to Applets. The Window menu uses PUDL's generated active-window controls, bulk actions, and open-window list; the handwritten management entries are removed. Content-sized Settings receives only supported controls. Help contains site and keyboard help; external navigation moves to Go.
+
+Reader provides Open as a page, Copy story link, and Close window where supported. Story keeps pinning, original/source links, article refresh, hiding, and blocking a domain across all feeds. Discussion keeps sorting and thread expansion. Next story and comment navigation move into Go under Reader. Sharing and closing are removed from Story. Replies separates identity commands from Watch operations. Hiring separates identity commands from its Search operations. The server-rendered profile and lookup views have no existing working menus to reorganize.
+
+Explicit applet identity menus use the documented window command API for supported page, sharing, and close operations. Standalone pages offer sharing without window-close commands. PUDL owns contribution routing and target lifetime. A reader calls the documented menu refresh API after replacing its article because its menu inventory changes within the same applet instance. No new menu-runtime patches are introduced; the existing reader URL and feed-refresh integrations remain in the bundled regions and windows scripts.
