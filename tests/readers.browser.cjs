@@ -12,6 +12,21 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.route('**/api/discussion?*', route => route.fulfill({ contentType: 'text/html', body: '<div class="discussion-content" style="height:3000px">Discussion fixture</div>' }));
     await page.goto(process.argv[2] + '/hn/');
     await page.waitForFunction(() => window.yavchn.readers && window.pudlWindows);
+    // PUDL 0.39.2 makes both menu titles and hamburger buttons toggle closed.
+    const toggleMenu = async (control, touch) => {
+      for (const expanded of ['true', 'false', 'true', 'false']) {
+        if (touch) await control.tap(); else await control.click();
+        await control.page().waitForFunction(([el, value]) => el.getAttribute('aria-expanded') === value, [await control.elementHandle(), expanded]);
+      }
+    };
+    await toggleMenu(page.locator('.menubar-menu:not(.menubar-one) > button.menubar-glyph').first(), false);
+    await toggleMenu(page.getByRole('menuitem', { name: 'View', exact: true }), false);
+    const touchContext = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    const touchPage = await touchContext.newPage();
+    await touchPage.goto(process.argv[2] + '/hn/');
+    await touchPage.locator('.menubar-one > button').waitFor();
+    await toggleMenu(touchPage.locator('.menubar-one > button'), true);
+    await touchContext.close();
     const story = (key, article) => page.waitForFunction(([k, a]) => document.querySelector(`.win[data-win="${k}"] .story`)?.dataset.storyKey === a, [key, article]);
     const siteBadge = async (key, source, label) => {
       await page.waitForFunction(([k, s]) => document.querySelector(`[data-win-tab="${k}"]`)?.getAttribute('data-reader-source') === s, [key, source]);
@@ -197,7 +212,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     assert.equal(await page.locator('body').getAttribute('data-view'), 'classic');
     assert.equal(await page.locator('[data-win-layer], [data-focus-toggle]').count(), 0);
     assert.equal(await page.getByRole('menuitem', { name: 'Feed', exact: true }).count(), 0);
-    await page.getByRole('menuitem', { name: 'Story', exact: true }).click();
+    await page.locator('.menubar-title').filter({ hasText: /^Story$/ }).click();
     assert.equal(await page.getByRole('menuitem', { name: 'Next story', exact: true }).count(), 0);
     await page.keyboard.press('Escape');
     const focusPreference = await page.evaluate(() => localStorage.getItem('yavchn-focus'));

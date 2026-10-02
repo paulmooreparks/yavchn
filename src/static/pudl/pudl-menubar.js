@@ -187,10 +187,16 @@
     var win = key ? src.scope.scope : null;
     var page = win && win.querySelector('.win-head a[data-win-action="page"]');
     if (page) items.push({ label: text('page', 'Open as a page'), run: function () { page.click(); } });
-    items.push({ label: text('copy-link', 'Copy the link'), run: function () {
-      var href = page ? page.href : location.href;
-      if (navigator.clipboard) navigator.clipboard.writeText(href).catch(function () {});
-    } });
+    if (win && window.pudlWindows && window.pudlWindows.shareURL) {
+      if (window.pudlWindows.shareURL(key)) items.push({ label: text('copy-link', 'Copy the link'), run: function () {
+        window.pudlWindows.copyLink(key);
+      } });
+    } else {
+      items.push({ label: text('copy-link', 'Copy the link'), run: function () {
+        var href = page ? page.href : location.href;
+        if (navigator.clipboard) navigator.clipboard.writeText(href).catch(function () {});
+      } });
+    }
     items.push({ label: text('print', 'Print'), run: function () { window.print(); } });
     if (key) items.push('-', { label: text('close', 'Close'), run: function () { window.pudlWindows.close(key); } });
     return items;
@@ -346,8 +352,10 @@
     /* The full bar: each menu a raised group, its glyph first. */
     menus.forEach(function (m, mi) {
       var g = el('div', 'menubar-menu' + (mi ? ' menubar-front' : ''), { role: 'group', 'aria-label': m.name });
-      var glyph = el('span', 'menubar-glyph', { 'aria-hidden': 'true' });
-      glyph.addEventListener('pointerdown', function (e) {
+      var glyph = el('button', 'menubar-glyph', { type: 'button', tabindex: '-1', role: 'menuitem', 'aria-label': m.name, 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
+      /* Open after the pointer gesture, so popover light dismiss cannot
+         close a panel that was opened during the same pointer-down. */
+      glyph.addEventListener('click', function (e) {
         e.preventDefault();
         var first = g.querySelector('.menubar-title');
         if (first) toggle(first, true);
@@ -401,7 +409,7 @@
     panel = el('div', 'menu-panel menubar-panel', { popover: '', role: 'menu', id: 'menubar-panel' });
     panel.addEventListener('toggle', function (e) {
       if (e.newState === 'closed' && openTitle) {
-        openTitle.setAttribute('aria-expanded', 'false');
+        associate(openTitle, false);
         openTitle = null;
       }
     });
@@ -476,10 +484,23 @@
     });
   }
 
+  /* The group glyph is another native invoker for its first title. */
+  function associate(title, expanded) {
+    var glyph = title.previousElementSibling;
+    var controls = glyph && glyph.classList.contains('menubar-glyph') ? [title, glyph] : [title];
+    controls.forEach(function (control) {
+      control.setAttribute('aria-expanded', String(expanded));
+      if (expanded) control.setAttribute('popovertarget', panel.id);
+      else control.removeAttribute('popovertarget');
+    });
+  }
+
   function open(title, focusWhere) {
     ensurePanel();
     closeSub();
-    if (openTitle && openTitle !== title) openTitle.setAttribute('aria-expanded', 'false');
+    if (openTitle && openTitle !== title) {
+      associate(openTitle, false);
+    }
     menus = assemble();
     var info = title._menu;
     if (info.all) fillAll(panel);
@@ -490,7 +511,10 @@
     panel.setAttribute('aria-labelledby', title.id);
     panel.setAttribute('data-menu-anchor', title.id);
     openTitle = title;
-    title.setAttribute('aria-expanded', 'true');
+    /* Native light dismiss treats the active title as part of its popup.
+       Move the association on hover too, so clicking that title toggles
+       the still-open panel instead of dismissing it before click runs. */
+    associate(title, true);
     titles().forEach(function (t) { t.tabIndex = t === title ? 0 : -1; });
     /* The panel is placed and focus moved at once, not on the toggle event,
        which a quick close and reopen can merge away. */
@@ -611,7 +635,12 @@
   function onBarPointer(e) {
     var t = e.target.closest('.menubar-title');
     if (!t || !built.contains(t)) return;
-    if (e.type === 'click') { toggle(t, e.detail === 0); return; }
+    if (e.type === 'click') {
+      /* This handler owns the toggle; suppress the button's native one. */
+      e.preventDefault();
+      toggle(t, e.detail === 0);
+      return;
+    }
     /* With a panel open, moving to another title opens its panel. */
     if (e.type === 'pointerover' && openTitle && openTitle !== t && panel.matches(':popover-open') && !t._menu.all && !openTitle._menu.all) open(t, null);
   }
