@@ -61,7 +61,8 @@
   background: var(--tb-border, var(--border));
 }
 
-.source-switch {
+.source-switch,
+.view-switch {
   flex: none;
   display: flex;
   align-items: center;
@@ -69,7 +70,8 @@
 
 /* On the top bar the switcher's track is the bar's chip. Its segments keep
    PUDL's own colours. */
-.topbar .source-seg {
+.topbar .source-seg,
+.topbar .view-seg {
   background: var(--tb-chip);
   border-color: var(--tb-border);
   box-shadow: var(--tb-chip-shadow);
@@ -78,11 +80,13 @@
 /* The choices not taken sit on the bar's dark chip in both themes, so
    they take the bar's foreground; the chosen one is raised in PUDL's own
    colours. */
-.topbar .source-seg a:not([aria-current]) {
+.topbar .source-seg a:not([aria-current]),
+.topbar .view-seg button[aria-pressed="false"] {
   color: var(--tb-chrome-fg);
 }
 
-.topbar .source-seg a:not([aria-current]):hover {
+.topbar .source-seg a:not([aria-current]):hover,
+.topbar .view-seg button[aria-pressed="false"]:hover {
   color: var(--tb-fg);
   background: color-mix(in srgb, var(--tb-fg) 12%, transparent);
 }

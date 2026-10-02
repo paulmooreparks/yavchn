@@ -62,7 +62,7 @@
         </li>
         <li>View
           <ul>
-            <li><button type="submit" form="view-window-form" aria-checked="{{ .WindowView }}">Window</button></li>
+            <li><button type="submit" form="view-window-form" aria-checked="{{ .WindowView }}">Windowed</button></li>
             <li><button type="submit" form="view-classic-form" aria-checked="{{ not .WindowView }}">Classic</button></li>
             <li>-</li>
             {{ if .WindowView }}<li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>{{ end }}
@@ -112,8 +112,15 @@
       </ul>
       <a class="brand" href="/"><img src="/static/logo-24x24.png" alt=""> YAVCHN</a>
     </nav>
-    <noscript><button type="submit" form="view-window-form">Window view</button><button type="submit" form="view-classic-form">Classic view</button>{{ if .WindowView }}<a class="btn btn-sm" href="{{ .NewReaderHref }}">New reader window</a>{{ end }}</noscript>
-    {{ if .HasList }}<span class="topbar-rule" aria-hidden="true"></span>
+    <noscript>{{ if .WindowView }}<a class="btn btn-sm" href="{{ .NewReaderHref }}">New reader window</a>{{ end }}</noscript>
+    <span class="topbar-rule" aria-hidden="true"></span>
+    <div class="view-switch">
+      <nav class="seg view-seg" data-seg-menu aria-label="Browsing view">
+        <button type="submit" form="view-window-form" aria-pressed="{{ .WindowView }}">Windowed</button>
+        <button type="submit" form="view-classic-form" aria-pressed="{{ not .WindowView }}">Classic</button>
+      </nav>
+    </div>
+    {{ if .HasList }}
     <div class="source-switch" data-region="sources">
       <nav class="seg source-seg" data-seg-menu aria-label="Source">
         {{ range .AllSources }}<a href="{{ .URL }}" data-source="{{ .Name }}"{{ if .Active }} aria-current="page"{{ end }}>{{ template "sourceicon" .Name }}<span class="source-label">{{ .Label }}</span></a>{{ end }}
@@ -277,7 +284,7 @@
     </section>
     <section>
       <h4>Browsing view</h4>
-      <p>View &gt; Window and View &gt; Classic select the browsing view and save your default in this browser. Window view reuses a reader for each feed. Classic view opens stories and applets as pages. Open as a page and Open in a window are one-off actions that do not change your saved default. Direct page links always open as pages.</p>
+      <p>View &gt; Windowed and View &gt; Classic select the browsing view and save your default in this browser. Window view reuses a reader for each feed. Classic view opens stories and applets as pages. Open as a page and Open in a window are one-off actions that do not change your saved default. Direct page links always open as pages.</p>
     </section>
     <section>
       <h4>Applets</h4>
