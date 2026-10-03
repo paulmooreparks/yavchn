@@ -34,6 +34,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     assert.equal(backup.storage['yavchn-roundtrip'], 'A Unicode value: 日本語');
     assert.equal(await page.evaluate(() => localStorage.getItem('yavchn-roundtrip')), backup.storage['yavchn-roundtrip']);
     await page.getByRole('link', { name: 'Continue to yavchn.com' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-migration]')?.dataset.migrationReady === 'true');
     assert.equal(new URL(page.url()).hostname, 'yavchn.com');
     assert.equal(await page.getByRole('link', { name: 'Start migration' }).count(), 0);
     await page.evaluate(() => {
@@ -71,6 +72,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     assert.equal(await page.evaluate(() => localStorage.getItem('destination-only')), 'preserved');
     assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
     await page.goto('https://www.yavchn.com/settings');
+    await page.waitForFunction(() => document.querySelector('[data-migration]')?.dataset.migrationReady === 'true');
     await choose(text);
     await page.waitForFunction(() => !document.querySelector('[data-migration-apply]').disabled);
     await apply.click();
