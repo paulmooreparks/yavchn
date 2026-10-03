@@ -6,6 +6,11 @@
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
+$branch = git branch --show-current
+if ($LASTEXITCODE -ne 0 -or $branch -ne 'main') {
+    throw 'Production deployments require the main branch.'
+}
+
 $image     = 'yavchn:latest'
 $container = 'yavchn'
 $hostPort  = 8086

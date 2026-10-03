@@ -1,6 +1,21 @@
 {{ define "settings" }}
 <div class="settings-panel" data-settings>
   <p class="settings-intro">These preferences apply only to this browser. Changes save immediately.</p>
+  <section class="settings-section" id="browser-data" data-migration>
+    <h2>Move your browser data</h2>
+    <p>YAVCHN is now available on <a href="https://yavchn.com/">yavchn.com</a>. Each domain has its own browser storage. You can carry your pinned stories, reading history, blocked domains, theme, and saved applet state across with a backup file.</p>
+    <p>First save a backup here, then open yavchn.com and choose that file to import it. The file stays on your device and is never uploaded. Your data on this domain stays intact. Browsing view and new-window placement preferences use cookies and must be set again.</p>
+    <button class="btn" type="button" data-migration-export disabled>Save browser data to a file</button>
+    <p><a class="btn primary" href="https://yavchn.com/settings?migration=1#browser-data">Continue to yavchn.com</a></p>
+    <div data-migration-import>
+      <p>Import replaces entries with matching names, including whole lists of pinned and visited stories. Other entries remain. Save a backup of this browser first if you want to keep its current data.</p>
+      <label class="form-label">Choose a YAVCHN backup file <input class="form-input" type="file" accept="application/json,.json" data-migration-file disabled></label>
+      <p data-migration-preview></p>
+      <button class="btn primary" type="button" data-migration-apply disabled>Import browser data</button>
+    </div>
+    <p role="status" aria-live="polite" data-migration-status></p>
+    <noscript><p>Saving and importing browser data requires JavaScript.</p></noscript>
+  </section>
   <section class="settings-section">
     <h2>Reading</h2>
     <form action="/settings/view" method="post" class="settings-view-form" data-saved-view="{{ .SettingsView }}">

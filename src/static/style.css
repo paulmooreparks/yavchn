@@ -1261,3 +1261,5 @@ body.desktop, body.story-page { height: 100dvh; }
 
 .stories-button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .stories-button svg { width: 16px; height: 16px; flex: none; }
+/* Keep the migration action within the toast on narrow screens. */
+.migration-toast-action { display: block; width: fit-content; margin-top: var(--space-3); }

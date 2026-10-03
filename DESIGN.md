@@ -1,3 +1,11 @@
+# Domain migration
+
+The production site is https://yavchn.com, with https://www.yavchn.com also available. The legacy https://yavchn.parkscomputing.com origin remains accessible so visitors can retrieve their browser data. Beta development uses a separate branch and deployment.
+
+Visitors on the legacy hostname receive a dismissible sticky toast offering Start migration. It links to Settings, where visitors can download a versioned JSON snapshot of all localStorage entries before continuing to the import section on yavchn.com. Settings also exposes backup and import on the new domains. The import processes the file locally, validates its format and string values, and reports how many existing entries it will replace before the visitor chooses Import browser data. Matching keys are replaced as whole values; other keys remain. Failed writes restore the previous values where browser storage permits, and the interface reports any restoration failure. A successful import navigates immediately to the feed so mounted applets cannot overwrite restored state from memory.
+
+The original browser storage is preserved. Backups include their origin and export time, contain no cookies, and never leave the visitor's device through this flow. The two HttpOnly preferences for browsing view and reader placement must be set again. Each hostname has separate browser storage, so the migration links consistently use yavchn.com. This feature follows the cross-project principles in `C:\Users\paul\OneDrive\Documents\Architectural Principles.md`.
+
 # Reader windows
 
 Reader windows have stable instance keys such as `reader-1`. The `r.<window-key>` query parameter names the article displayed in that instance. PUDL continues to own placement, minimization and stacking. Reload and browser history restore both the arrangement and each instance's article. Existing article-key URLs remain supported.

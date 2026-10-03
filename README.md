@@ -39,7 +39,7 @@ Choose **View > Windowed** for the desktop or **View > Classic** for page-based 
 
 ## Live Site
 
-The site is live at https://yavchn.parkscomputing.com/ if you'd like to try it out.
+The site is live at https://yavchn.com/ if you'd like to try it out. Visitors to https://yavchn.parkscomputing.com/ can choose **Start migration**, save their browser data to a file, and import it into yavchn.com through **YAVCHN > Settings > Move your browser data**. Backups stay on your device. Import replaces matching storage entries and preserves other entries; browsing view and new-window placement preferences must be set again.
 
 ## Running Locally
 
