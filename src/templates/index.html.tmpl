@@ -6,7 +6,7 @@
 <body class="{{ if .WindowView }}desktop{{ else }}classic-list{{ end }}" data-view="{{ .View }}">
 {{ template "topbar" . }}
 
-<div class="md-layout" data-md-pane="{{ if and .WindowView .Win.Shown }}detail{{ else }}list{{ end }}">
+<div class="md-layout"{{ if .WindowView }} data-md-persistent data-md-default-width="380"{{ end }} data-md-pane="{{ if and .WindowView .Win.Shown }}detail{{ else }}list{{ end }}">
   <script>
     /* The list's width is the reader's, applied as the layout is parsed so
        the page never draws at the default first, and saved whenever
@@ -15,9 +15,12 @@
       try {
         var w = localStorage.getItem('yavchn-sidebar-w');
         if (w) layout.style.setProperty('--md-sidebar-w', w);
-        layout.addEventListener('pudl:md-resize', function (e) {
-          if (e.detail.reset) localStorage.removeItem('yavchn-sidebar-w');
-          else localStorage.setItem('yavchn-sidebar-w', e.detail.width + 'px');
+        if (layout.hasAttribute('data-md-persistent') && localStorage.getItem('yavchn-focus') === '1') layout.setAttribute('data-md-collapsed', '');
+        layout.addEventListener('pudl:md-change', function (e) {
+          try {
+            if (e.detail.kind === 'width' || e.detail.kind === 'reset') localStorage.setItem('yavchn-sidebar-w', e.detail.state.width + 'px');
+            if (e.detail.kind === 'collapse' || e.detail.kind === 'reset') localStorage.setItem('yavchn-focus', e.detail.state.collapsed ? '1' : '0');
+          } catch (err) { /* storage blocked */ }
         });
       } catch (e) { /* storage blocked: the default width serves */ }
     })(document.currentScript.parentElement);
@@ -114,7 +117,6 @@
       {{ end }}
     </nav>
     {{ if .WindowView }}<div class="md-resize" role="separator" aria-orientation="vertical" aria-label="Resize the story list"></div>
-    <div class="sidebar-reopen" role="separator" aria-orientation="vertical" aria-label="Drag to open the sidebar" aria-controls="story-list" aria-valuemin="0" aria-valuenow="0" tabindex="0" title="Drag to open the sidebar"></div>
     <div class="md-detail reader-stage" tabindex="0">
       <div class="reader-col">
         <main class="win-host">

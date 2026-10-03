@@ -16,21 +16,23 @@
   function status(root, text) { root.querySelector('.settings-status').textContent = text; }
   async function saveView(form, value) {
     var root = form.closest('[data-settings]');
-    var buttons = form.querySelectorAll('button[name="view"]');
+    var placement = form.matches('.settings-placement-form');
+    var name = placement ? 'placement' : 'view';
+    var buttons = form.querySelectorAll('button[name="' + name + '"]');
     if (buttons[0].disabled) return;
-    var body = new URLSearchParams({ view: value, target: '/settings' });
+    var body = new URLSearchParams({ [name]: value, target: '/settings' });
     buttons.forEach(function (button) { button.disabled = true; });
-    status(root, 'Saving default view…');
+    status(root, 'Saving preference…');
     try {
-      var response = await fetch('/settings/view', { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' }, body: body });
+      var response = await fetch(form.action, { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' }, body: body });
       if (!response.ok) throw new Error('Save failed');
-      document.querySelectorAll('.settings-view-form').forEach(function (other) {
+      document.querySelectorAll(placement ? '.settings-placement-form' : '.settings-view-form').forEach(function (other) {
         other.dataset.savedView = value;
-        mark(other, 'button[name="view"]', value);
+        mark(other, 'button[name="' + name + '"]', value);
       });
-      status(root, 'Default view saved.');
+      status(root, placement ? 'Article window preference saved.' : 'Default view saved.');
     } catch (err) {
-      status(root, 'The default view could not be saved. Try again.');
+      status(root, placement ? 'The preference could not be saved. Try again.' : 'The default view could not be saved. Try again.');
     } finally { buttons.forEach(function (button) { button.disabled = false; }); }
   }
   document.addEventListener('click', function (e) {
@@ -42,7 +44,7 @@
     if (button.dataset.setting === 'sort') { window.yavchn.sort.set(button.value); status(root, 'Comment order saved.'); }
   });
   document.addEventListener('submit', function (e) {
-    if (!e.target.matches('.settings-view-form')) return;
+    if (!e.target.matches('.settings-view-form, .settings-placement-form')) return;
     e.preventDefault();
     if (e.submitter) saveView(e.target, e.submitter.value);
   });

@@ -14,6 +14,7 @@ type menuContext struct {
 	HasFeed    bool
 	WindowURL  string
 	ClassicURL string
+	StoriesURL string
 }
 
 func viewURL(raw, view string) string {
@@ -92,4 +93,31 @@ func (s *Server) ViewSetting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// savedReaderPlacement applies only when the URL supplies no placement.
+func savedReaderPlacement(r *http.Request) string {
+	if c, err := r.Cookie("yavchn-reader-placement"); err == nil && c.Value == "maximized" {
+		return "maximized"
+	}
+	return "floating"
+}
+
+func (s *Server) ReaderPlacementSetting(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid settings", http.StatusBadRequest)
+		return
+	}
+	value := r.PostForm.Get("placement")
+	if value != "floating" && value != "maximized" {
+		http.Error(w, "Invalid placement", http.StatusBadRequest)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: "yavchn-reader-placement", Value: value, Path: "/", MaxAge: 31536000, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Header.Get("Accept") == "application/json" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }

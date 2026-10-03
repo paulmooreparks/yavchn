@@ -57,12 +57,11 @@
   syncTheme();
 
   /* === Hiding the story list =========================================== */
-  var FOCUS_KEY = 'yavchn-focus';
   var layout = document.querySelector('.md-layout');
   var mobileWindows = null;
   function narrowLayout() { return layout && layout.getBoundingClientRect().width <= 640; }
   function listHidden() {
-    return narrowLayout() ? layout.dataset.mdPane === 'detail' : document.documentElement.classList.contains('focus-mode');
+    return narrowLayout() ? layout.dataset.mdPane === 'detail' : layout && layout.hasAttribute('data-md-collapsed');
   }
   function syncFocus() {
     var hidden = listHidden();
@@ -93,74 +92,20 @@
         window.pudlWindows.minimizeAll();
       }
     } else {
-      document.documentElement.classList.toggle('focus-mode', !!on);
-      try { localStorage.setItem(FOCUS_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked */ }
+      if (window.pudlMd) window.pudlMd.command(layout, on ? 'collapse' : 'expand');
     }
     syncFocus();
   }
   if (layout) {
-    new MutationObserver(syncFocus).observe(layout, { attributes: true, attributeFilter: ['data-md-pane'] });
+    new MutationObserver(syncFocus).observe(layout, { attributes: true, attributeFilter: ['data-md-pane', 'data-md-collapsed'] });
     new ResizeObserver(syncFocus).observe(layout);
   }
-  var reopen = document.querySelector('.sidebar-reopen');
-  if (reopen && layout) {
-    function syncReopen() {
-      reopen.setAttribute('aria-valuemax', String(Math.round(layout.clientWidth / 2)));
-    }
-    new ResizeObserver(syncReopen).observe(layout);
-    syncReopen();
-    reopen.addEventListener('keydown', function (e) {
-      var outward = getComputedStyle(layout).direction === 'rtl' ? 'ArrowLeft' : 'ArrowRight';
-      if (e.key !== outward && e.key !== 'Enter' && e.key !== ' ') return;
-      e.preventDefault();
-      e.stopPropagation();
-      setListHidden(false);
-      var target = narrowLayout() ? layout.querySelector('.story-list') : layout.querySelector('.md-resize');
-      if (target) target.focus();
+  if (layout) {
+    layout.addEventListener('pudl:md-request', function (e) {
+      // The window manager owns narrow pane selection and its URL state.
+      setListHidden(e.detail.pane === 'detail');
     });
-    reopen.addEventListener('dblclick', function () { setListHidden(false); });
-    reopen.addEventListener('pointerdown', function (e) {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      var start = e.clientX, opened = false, narrow = narrowLayout();
-      var direction = getComputedStyle(layout).direction === 'rtl' ? -1 : 1;
-      var previous = layout.style.getPropertyValue('--md-sidebar-w');
-      reopen.setPointerCapture(e.pointerId);
-      function move(ev) {
-        var distance = (ev.clientX - start) * direction;
-        if (!opened && distance < 8) return;
-        if (!opened) {
-          layout.classList.add('sidebar-opening');
-          setListHidden(false);
-          opened = true;
-        }
-        if (!narrow) {
-          var minimum = parseFloat(getComputedStyle(layout).getPropertyValue('--md-sidebar-min')) || 180;
-          var width = Math.round(Math.max(minimum, Math.min(layout.clientWidth / 2, distance)));
-          layout.style.setProperty('--md-sidebar-w', width + 'px');
-          reopen.setAttribute('aria-valuenow', String(width));
-        }
-      }
-      function end(ev) {
-        reopen.removeEventListener('pointermove', move);
-        reopen.removeEventListener('pointerup', end);
-        reopen.removeEventListener('pointercancel', end);
-        if (opened && !narrow) {
-          if (ev.type === 'pointercancel') {
-            if (previous) layout.style.setProperty('--md-sidebar-w', previous);
-            else layout.style.removeProperty('--md-sidebar-w');
-            setListHidden(true);
-          } else {
-            try { localStorage.setItem('yavchn-sidebar-w', layout.style.getPropertyValue('--md-sidebar-w')); } catch (err) { /* storage blocked */ }
-          }
-        }
-        layout.classList.remove('sidebar-opening');
-        reopen.setAttribute('aria-valuenow', '0');
-      }
-      reopen.addEventListener('pointermove', move);
-      reopen.addEventListener('pointerup', end);
-      reopen.addEventListener('pointercancel', end);
-    });
+    layout.addEventListener('pudl:md-change', syncFocus);
   }
   document.addEventListener('pudl:windows-change', syncFocus);
   syncFocus();

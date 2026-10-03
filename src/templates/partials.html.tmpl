@@ -6,6 +6,12 @@
 <title>{{ .Title }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/app-icon-180.png">
+<meta name="theme-color" content="#20252b" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfc" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-title" content="YAVCHN">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="description" content="A desktop for reading Hacker News and Lobsters: the story list beside windows that show each story's article and discussion together.">
 <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 <meta property="og:title" content="YAVCHN">
@@ -35,7 +41,6 @@
       s.textContent = '.story-split { --split-a: ' + h + '; }';
       document.head.appendChild(s);
     }
-    if (localStorage.getItem('yavchn-focus') === '1') document.documentElement.classList.add('focus-mode');
   } catch (e) { /* storage blocked: the defaults serve */ }
 })();
 </script>
@@ -88,7 +93,6 @@
             <li><button type="submit" form="view-classic-form" aria-checked="{{ not .WindowView }}">Classic</button></li>
             <li>-</li>
             {{ if .WindowView }}<li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>{{ end }}
-            {{ if not .HasList }}<li><a href="{{ .WindowURL }}">Open in a window</a></li>{{ end }}
             <li><button type="button" commandfor="filters-dialog" command="show-modal">Blocked domains across feeds&hellip;</button></li>
             <li>-</li>
             <li>Theme
@@ -117,6 +121,7 @@
         <button type="submit" form="view-classic-form" aria-pressed="{{ not .WindowView }}">Classic</button>
       </nav>
     </div>
+    {{ if .StoriesURL }}<a class="btn btn-sm stories-button" href="{{ .StoriesURL }}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path d="M2 3h3v10H2z" fill="currentColor" stroke="none"/><path d="M5.5 2v12"/></svg>Stories</a>{{ end }}
     {{ if .HasList }}
     <div class="source-switch" data-region="sources">
       <nav class="seg source-seg" data-seg-menu aria-label="Source">
@@ -285,7 +290,7 @@
     </section>
     <section>
       <h4>Browsing view</h4>
-      <p>View &gt; Windowed and View &gt; Classic select the browsing view and save your default in this browser. Window view reuses a reader for each feed. Classic view opens stories and applets as pages. Open as a page and Open in a window are one-off actions that do not change your saved default. Direct page links always open as pages.</p>
+      <p>View &gt; Windowed and View &gt; Classic select the browsing view and save your default in this browser. Window view reuses a reader for each feed. Classic view opens stories and applets as pages. Open as a page is a one-off action that does not change your saved default. Use the Windowed selector to return an article to a window. Direct page links always open as pages.</p>
     </section>
     <section>
       <h4>Applets</h4>

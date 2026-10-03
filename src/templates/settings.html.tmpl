@@ -14,6 +14,16 @@
       </fieldset>
       <p class="settings-hint">Used when a link does not specify a view. Your current page stays open.</p>
     </form>
+    <form action="/settings/reader-placement" method="post" class="settings-placement-form">
+      <fieldset>
+        <legend class="form-label">New article windows</legend>
+        <div class="seg">
+          <button type="submit" name="placement" value="floating" aria-pressed="{{ eq .SettingsPlacement "floating" }}">Floating</button>
+          <button type="submit" name="placement" value="maximized" aria-pressed="{{ eq .SettingsPlacement "maximized" }}">Maximized</button>
+        </div>
+      </fieldset>
+      <p class="settings-hint">Applies to new readers. Existing windows keep their placement. Narrow screens always maximize readers.</p>
+    </form>
     <fieldset data-settings-js disabled>
       <legend class="form-label">Default comment order</legend>
       <div class="seg">

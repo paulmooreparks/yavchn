@@ -58,7 +58,7 @@ Serves on `http://localhost:8080`.
 - `github.com/microcosm-cc/bluemonday`: HTML sanitisation for extracted articles and comment bodies.
 - `golang.org/x/net/html`: rewriting links to other threads so they open as windows, and the text excerpts in profiles and the replies watcher.
 - `modernc.org/sqlite`: pure-Go SQLite for the article-extraction cache.
-- [PUDL](https://github.com/paulmooreparks/pudl) v0.42.0 for the stylesheet, floating windows, menu bar, applet runtime, regions and splitters, copied from its release into `src/static/pudl/`.
+- [PUDL](https://github.com/paulmooreparks/pudl) v0.43.0 for the stylesheet, floating windows, menu bar, applet runtime, regions and splitters, copied from its release into `src/static/pudl/`.
 - Vanilla JS for YAVCHN's own behaviour. No SPA framework.
 
 ## Design notes
@@ -99,3 +99,7 @@ Reader-window behavior and URL assignments are described in [DESIGN.md](DESIGN.m
 To run the optional browser regression test, install Playwright, set `YAVCHN_BROWSER_TEST=1`, and run `go test ./src -run TestReaderBrowser -v`. `YAVCHN_PLAYWRIGHT` can name an installed Playwright module; `YAVCHN_BROWSER_CHANNEL` selects the browser channel (the default is `msedge`).
 
 The looped-arrow button before the feed search box refreshes the current feed without reloading its readers. On Lobsters it appears before the list tabs. It preserves the current URL and open windows, and keeps the previous feed visible if refreshing fails.
+
+## Install the app
+
+Use your browser's Install app command to add YAVCHN to your desktop or home screen. On iPhone or iPad, open the site in Safari and choose Share, then Add to Home Screen. The installed app opens in its own window and uses your saved browsing preference. Reading feeds and articles requires a network connection.

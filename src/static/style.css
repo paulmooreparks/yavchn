@@ -171,10 +171,7 @@ body.desktop .md-layout {
 /* Hiding the story list gives the windows the whole width. The f key and
    the View menu toggle it, and the choice is applied before the first
    paint. */
-html.focus-mode .md-sidebar,
-html.focus-mode .md-resize {
-  display: none;
-}
+
 
 /* === The window bar =======================================================
    At the foot of the window area, on its own surface below the windows, so
@@ -1145,7 +1142,7 @@ kbd {
 /* Classic feeds use the full page without a window workspace. */
 .classic-list .md-sidebar { width: 100%; max-width: none; flex: 1; display: block; }
 .classic-list .md-layout { --md-sidebar-w: 100%; }
-html.focus-mode .classic-list .md-sidebar { display: block; }
+
 
 /* Browsing-view glyphs share the selector text color in both themes. */
 :root {
@@ -1244,7 +1241,7 @@ body.desktop, body.story-page { height: 100dvh; }
   .site-listbar .md-tabs { flex-basis: 100%; }
 }
 @media (max-width: 420px) {
-  .view-switch, .topbar-rule { display: none; }
+  .topbar-rule { display: none; }
   .win-bar-dock .win-tab { max-width: 145px; }
 }
 @media print {
@@ -1254,29 +1251,13 @@ body.desktop, body.story-page { height: 100dvh; }
 
 .sidebar-toggle .sidebar-glyph-pane { fill: currentColor; }
 .sidebar-toggle[aria-expanded="false"] .sidebar-glyph-pane { fill: none; }
-@container md (max-width: 640px) {
-  html.focus-mode .md-layout:not([data-md-pane="detail"]) .md-sidebar { display: block; }
-}
 
 @media (max-width: 640px) {
   :root { --yv-edge-inset: 8px; }
 }
 
-/* The collapsed sidebar retains a visible divider as a reopening target. */
-.md-resize, .sidebar-reopen { flex: none; width: 18px; margin: 0; background: var(--surface-alt); }
-.md-resize::before { inset: 0 7px; }
-.sidebar-reopen { display: none; position: relative; cursor: col-resize; touch-action: none; }
-.sidebar-reopen::after {
-  content: ""; position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; margin: -8px;
-  background: var(--text-muted); pointer-events: none;
-  -webkit-mask: var(--glyph-grip) center / contain no-repeat; mask: var(--glyph-grip) center / contain no-repeat;
-}
-.sidebar-reopen:hover::after, .sidebar-reopen:focus-visible::after { background: var(--accent); }
-.sidebar-reopen:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-html.focus-mode .sidebar-reopen, .md-layout.sidebar-opening .sidebar-reopen { display: block; }
-.md-layout.sidebar-opening .md-resize { display: none; }
-@container md (max-width: 640px) {
-  html.focus-mode .md-layout:not([data-md-pane="detail"]) .sidebar-reopen { display: none; }
-  .md-layout[data-md-pane="detail"] .sidebar-reopen { display: block; }
-}
-@media print { .sidebar-reopen { display: none !important; } }
+/* PUDL owns persistent divider geometry and interaction. */
+.md-layout[data-md-persistent] > .md-body > .md-resize { background: var(--surface-alt); }
+
+.stories-button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.stories-button svg { width: 16px; height: 16px; flex: none; }

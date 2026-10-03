@@ -6,11 +6,7 @@
 <body class="story-page" data-view="classic">
 {{ template "topbar" . }}
 <main class="story-page-main">
-  <header class="story-page-head">
-    <h1 class="story-page-title">{{ .Story.Title }}</h1>
-    <a class="story-page-back" href="/{{ .Story.Source }}/?view=classic">Back to stories</a>
-    <a class="story-page-back" href="{{ .WindowURL }}">Open in a window</a>
-  </header>
+  <h1 class="visually-hidden">{{ .Story.Title }}</h1>
   {{ template "storybody" .Story }}
 </main>
 {{ template "dialogs" . }}

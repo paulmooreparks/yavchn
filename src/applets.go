@@ -38,12 +38,13 @@ const whoIsHiringUser = "whoishiring"
 
 // appVM is the body of an applet's window or page.
 type appVM struct {
-	SettingsView string
-	Kind         string    // "replies", "hiring", "lookup" or "profile"
-	Lookup       *lookupVM // the lookup bar, above a profile and alone in the lookup
-	Profile      *profileVM
-	Replies      *repliesVM
-	Hiring       *hiringVM
+	SettingsView      string
+	SettingsPlacement string
+	Kind              string    // "replies", "hiring", "lookup" or "profile"
+	Lookup            *lookupVM // the lookup bar, above a profile and alone in the lookup
+	Profile           *profileVM
+	Replies           *repliesVM
+	Hiring            *hiringVM
 }
 
 // lookupVM is the lookup bar: a user name and a site. In a window,
@@ -144,7 +145,7 @@ func (s *Server) appletWindow(ctx context.Context, r *http.Request, key string) 
 	case key == "settings":
 		w.ContentSized = true
 		w.Title, w.PageURL, w.Def = "Settings", "/settings", floatingAt(0.12, 0.05, 0.48, 0.86)
-		w.App = &appVM{Kind: "settings", SettingsView: savedView(r)}
+		w.App = &appVM{Kind: "settings", SettingsView: savedView(r), SettingsPlacement: savedReaderPlacement(r)}
 	case key == "replies":
 		// A watcher stands beside the reading, so it docks at the right.
 		w.Title, w.PageURL, w.Def = "Replies to me", "/applets/replies", dockedAt("right", 0.3)
@@ -578,7 +579,13 @@ func (s *Server) renderFragment(w http.ResponseWriter, name string, data any) {
 // --- shared ---
 
 // window is the window for any key: a story's or an applet's.
-func (s *Server) window(ctx context.Context, r *http.Request, key string) (windowVM, bool) {
+func (s *Server) window(ctx context.Context, r *http.Request, key string) (result windowVM, found bool) {
+	defer func() {
+		if found && result.App == nil && savedReaderPlacement(r) == "maximized" {
+			result.Def.Mode = "maximized"
+			result.Mode = "maximized"
+		}
+	}()
 	if readerKeyRE.MatchString(key) || r.URL.Query().Has("r."+key) {
 		article := r.URL.Query().Get("r." + key)
 		if article == "" {

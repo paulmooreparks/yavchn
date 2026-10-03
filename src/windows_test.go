@@ -180,6 +180,7 @@ func testServer(t *testing.T) (*Server, *http.ServeMux) {
 	s := NewServer(map[string]Source{"hn": src}, nil, "hn", nil, tpl, nil, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /settings/view", s.ViewSetting)
+	mux.HandleFunc("POST /settings/reader-placement", s.ReaderPlacementSetting)
 	mux.HandleFunc("GET /user", s.UserLookup)
 	mux.HandleFunc("GET /settings", s.appletPage("settings"))
 	mux.HandleFunc("GET /hn/{$}", s.SourceIndex(src, "top"))

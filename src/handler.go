@@ -443,6 +443,7 @@ func (s *Server) StoryPage(w http.ResponseWriter, r *http.Request) {
 		AllSources    []sourceOptVM
 		Story         windowVM
 	}{pageMenu(r, vm.Key, vm.Source), "/hn/?view=window&open=reader-1&top=reader-1", vm.Title + " · YAVCHN", s.buildSourceOpts(""), vm}
+	page.StoriesURL = "/" + vm.Source + "/?view=classic"
 	for i := range page.AllSources {
 		page.AllSources[i].URL = viewURL(page.AllSources[i].URL, "classic")
 	}

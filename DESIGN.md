@@ -143,3 +143,15 @@ The vendored distribution is updated from tag v0.41.0, retaining existing host p
 ## PUDL 0.42.0 menu styling
 
 PUDL supplies the raised menu groups and light-theme topbar surface. YAVCHN no longer overrides those styles. The responsive workspace adoption and existing host patches remain in place.
+
+New article windows default to floating. Settings offers Floating and Maximized as a browser preference stored in a cookie so server-rendered readers and JavaScript-created readers agree. Explicit URL placement takes precedence, existing readers retain their placement, and narrow-screen maximization remains a presentation policy.
+
+## PUDL 0.43.0 persistent sidebar
+
+Windowed layouts use PUDL's persistent master-detail handle, including its default 24px target, keyboard controls, focus transfer, and canceled-drag rollback. The former separate reopen rail and host drag handlers are removed. Requested width and desktop collapse retain their existing browser preferences. Narrow pane requests go through the existing window-manager policy and URL state; PUDL's sidebar does not independently change the pane. Classic view keeps its full-width list.
+
+The browsing-view selector remains visible at phone widths. Classic articles place a Stories button with the sidebar glyph in the topbar. The separate article navigation row and Open in a window command are removed; selecting Windowed opens the current article in the window workspace and saves that browsing preference.
+
+## Installable web app
+
+The shared page head links a web app manifest with a stable root identity, root scope, and standalone display. Launching at the root respects the existing browsing preference. PNG install icons derive from the existing logo, with a separate Apple touch icon. Installation uses the browser's native controls. No service worker intercepts requests or caches user-specific HTML; feeds and articles continue using the existing network and server-cache behavior. The app does not promise offline reading. This follows the current [installation requirements](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).
