@@ -26,6 +26,7 @@ type Server struct {
 	tpl           *template.Template
 	extract       *Extractor
 	db            *sql.DB
+	accounts      *accountService
 	appletRate    *rateLimiter // caps the replies watcher's checks per visitor
 }
 

@@ -76,7 +76,18 @@ func main() {
 	extract.StartGC(ctx)
 
 	srv := NewServer(sources, finders, "hn", hn, tpl, extract, db)
+	accountCfg, err := loadAccountConfig()
+	if err != nil {
+		slog.Error("account configuration", "err", err)
+		os.Exit(1)
+	}
+	srv.accounts, err = newAccountService(srv, accountCfg)
+	if err != nil {
+		slog.Error("account storage initialization failed")
+		os.Exit(1)
+	}
 	mux := http.NewServeMux()
+	srv.accounts.register(mux)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	mux.HandleFunc("GET /api/article", srv.ArticleAPI)
 	mux.HandleFunc("GET /api/discussion", srv.DiscussionAPI)
@@ -145,7 +156,7 @@ func main() {
 
 	httpSrv := &http.Server{
 		Addr:              ":8080",
-		Handler:           withSecurityHeaders(mux),
+		Handler:           withSecurityHeaders(srv.accounts.middleware(mux)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {

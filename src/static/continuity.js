@@ -17,7 +17,7 @@
   var CAP = 100;
 
   function kept() {
-    try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; }
+    try { return JSON.parse(window.yavchnStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; }
   }
 
   function keep(all) {
@@ -26,7 +26,7 @@
       keys.sort(function (a, b) { return (all[a].t || 0) - (all[b].t || 0); });
       keys.slice(0, keys.length - CAP).forEach(function (k) { delete all[k]; });
     }
-    try { localStorage.setItem(KEY, JSON.stringify(all)); } catch (e) { /* not kept, then */ }
+    try { window.yavchnStorage.setItem(KEY, JSON.stringify(all)); } catch (e) { /* not kept, then */ }
   }
 
   function keyOf(mount) { return mount && mount.getAttribute && mount.getAttribute('data-state-key'); }

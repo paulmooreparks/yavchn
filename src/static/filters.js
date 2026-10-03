@@ -8,13 +8,13 @@
 
   function load() {
     try {
-      var arr = JSON.parse(localStorage.getItem(KEY) || '[]');
+      var arr = JSON.parse(window.yavchnStorage.getItem(KEY) || '[]');
       return Array.isArray(arr) ? arr.filter(function (s) { return typeof s === 'string' && s; }) : [];
     } catch (e) { return []; }
   }
 
   function save(arr) {
-    try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch (e) {}
+    try { window.yavchnStorage.setItem(KEY, JSON.stringify(arr)); } catch (e) {}
   }
 
   // Normalize user input: strip protocol/path/whitespace, lowercase, drop a

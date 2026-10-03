@@ -1,0 +1,657 @@
+package main
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const accountSchema = `
+CREATE TABLE IF NOT EXISTS accounts (
+ id TEXT PRIMARY KEY, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS account_identities (
+ provider TEXT NOT NULL, subject TEXT NOT NULL,
+ account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+ username TEXT NOT NULL, PRIMARY KEY(provider, subject)
+);
+CREATE TABLE IF NOT EXISTS account_sessions (
+ token_hash TEXT PRIMARY KEY,
+ account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+ csrf TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+ agent TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS account_sessions_owner ON account_sessions(account_id);
+CREATE TABLE IF NOT EXISTS account_login_flows (
+ state_hash TEXT PRIMARY KEY, verifier TEXT NOT NULL,
+ return_to TEXT NOT NULL, expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS account_data (
+ account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+ revision INTEGER NOT NULL DEFAULT 0,
+ document TEXT NOT NULL DEFAULT '{"pins":{},"domains":[],"progress":{}}'
+);`
+
+const sessionCookie = "__Host-yavchn-session"
+const flowCookie = "__Host-yavchn-flow"
+const loginCookie = "__Host-yavchn-login"
+const accountBodyLimit = 1024 * 1024
+
+type accountConfig struct {
+	Origin, ClientID, ClientSecret string
+}
+
+func loadAccountConfig() (accountConfig, error) {
+	c := accountConfig{Origin: os.Getenv("YAVCHN_PUBLIC_ORIGIN"), ClientID: os.Getenv("YAVCHN_GITHUB_CLIENT_ID"), ClientSecret: os.Getenv("YAVCHN_GITHUB_CLIENT_SECRET")}
+	if path := os.Getenv("YAVCHN_GITHUB_CLIENT_SECRET_FILE"); path != "" {
+		if c.ClientSecret != "" {
+			return c, errors.New("configure one GitHub secret source")
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return c, fmt.Errorf("read GitHub secret file: %w", err)
+		}
+		c.ClientSecret = strings.TrimSpace(string(b))
+	}
+	if (c.ClientID == "") != (c.ClientSecret == "") {
+		return c, errors.New("GitHub client ID and secret must both be configured")
+	}
+	if c.Origin == "" && c.ClientID != "" {
+		return c, errors.New("YAVCHN_PUBLIC_ORIGIN is required for GitHub login")
+	}
+	if c.Origin != "" {
+		u, err := url.Parse(c.Origin)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+			return c, errors.New("public origin must be an HTTPS origin")
+		}
+		c.Origin = strings.TrimSuffix(c.Origin, "/")
+	}
+	return c, nil
+}
+
+type pinEntry struct {
+	Source   string `json:"source"`
+	Title    string `json:"title"`
+	URL      string `json:"url"`
+	Host     string `json:"host"`
+	By       string `json:"by"`
+	Score    int    `json:"score"`
+	Comments int    `json:"comments"`
+	PinnedAt int64  `json:"pinned_at"`
+}
+type accountDocument struct {
+	Pins     map[string]pinEntry        `json:"pins"`
+	Domains  []string                   `json:"domains"`
+	Progress map[string]json.RawMessage `json:"progress"`
+}
+
+func emptyAccountDocument() accountDocument {
+	return accountDocument{Pins: map[string]pinEntry{}, Domains: []string{}, Progress: map[string]json.RawMessage{}}
+}
+
+var accountEntryKey = regexp.MustCompile(`^[a-zA-Z0-9._:-]{1,100}$`)
+var accountDomain = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\.[a-z]{2,63}$`)
+
+func validAccountEntryKey(key string) bool {
+	return accountEntryKey.MatchString(key) && key != "__proto__" && key != "constructor" && key != "prototype"
+}
+
+func (d accountDocument) validate() error {
+	if d.Pins == nil || d.Domains == nil || d.Progress == nil || len(d.Pins) > 500 || len(d.Domains) > 500 || len(d.Progress) > 100 {
+		return errors.New("invalid account data size")
+	}
+	for k, p := range d.Pins {
+		if !validAccountEntryKey(k) || (p.Source != "hn" && p.Source != "lobsters") || len(p.Title) > 4096 || len(p.URL) > 8192 || len(p.Host) > 253 || len(p.By) > 100 || p.Score < 0 || p.Comments < 0 || p.PinnedAt < 0 {
+			return errors.New("invalid pinned story")
+		}
+		if p.URL != "" {
+			u, err := url.Parse(p.URL)
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+				return errors.New("invalid story URL")
+			}
+		}
+	}
+	seen := map[string]bool{}
+	for _, v := range d.Domains {
+		if !accountDomain.MatchString(v) || strings.Contains(v, "..") || seen[v] {
+			return errors.New("invalid blocked domain")
+		}
+		seen[v] = true
+	}
+	for k, v := range d.Progress {
+		if !validAccountEntryKey(k) || len(v) > 65536 || !json.Valid(v) || len(v) == 0 || v[0] != '{' {
+			return errors.New("invalid reading state")
+		}
+	}
+	return nil
+}
+
+type accountSession struct {
+	ID        string                 `json:"id"`
+	Username  string                 `json:"username"`
+	CSRF      string                 `json:"-"`
+	TokenHash string                 `json:"-"`
+	CreatedAt int64                  `json:"-"`
+	Revision  int64                  `json:"revision"`
+	Data      accountDocument        `json:"data"`
+	Links     map[string]accountLink `json:"links"`
+}
+
+type accountLink struct {
+	Href   string `json:"href"`
+	Method string `json:"method"`
+}
+
+func (u *accountSession) setLinks() {
+	u.Links = map[string]accountLink{
+		"self":    {Href: "/account/data", Method: "GET"},
+		"replace": {Href: "/account/data", Method: "PUT"},
+		"account": {Href: "/account", Method: "GET"},
+		"export":  {Href: "/account/export", Method: "GET"},
+		"signout": {Href: "/account/session", Method: "POST"},
+	}
+	if time.Now().Unix()-u.CreatedAt < 600 {
+		u.Links["delete"] = accountLink{Href: "/account", Method: "POST"}
+	}
+}
+
+type accountContextKey struct{}
+
+func currentAccount(r *http.Request) *accountSession {
+	a, _ := r.Context().Value(accountContextKey{}).(*accountSession)
+	return a
+}
+
+type accountService struct {
+	server *Server
+	config accountConfig
+	client *http.Client
+	rate   *rateLimiter
+	writes *rateLimiter
+}
+
+func newAccountService(s *Server, cfg accountConfig) (*accountService, error) {
+	if _, err := s.db.Exec(accountSchema); err != nil {
+		return nil, err
+	}
+	return &accountService{server: s, config: cfg, client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, rate: newRateLimiter(10, 5*time.Minute), writes: newRateLimiter(120, time.Minute)}, nil
+}
+func accountToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+func tokenHash(v string) string { sum := sha256.Sum256([]byte(v)); return hex.EncodeToString(sum[:]) }
+func sameToken(a, b string) bool {
+	return a != "" && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+func accountCookie(w http.ResponseWriter, name, value string, age int) {
+	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: age})
+}
+func accountError(w http.ResponseWriter, code int, message string) {
+	w.Header().Set("Cache-Control", "no-store")
+	http.Error(w, message, code)
+}
+
+func (a *accountService) register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /account", a.page)
+	mux.HandleFunc("POST /auth/github", a.start)
+	mux.HandleFunc("GET /auth/github/callback", a.callback)
+	mux.HandleFunc("POST /account/session", a.logout)
+	mux.HandleFunc("POST /account/sessions", a.revokeOthers)
+	mux.HandleFunc("POST /account", a.remove)
+	mux.HandleFunc("GET /account/export", a.export)
+	mux.HandleFunc("GET /account/data", a.getData)
+	mux.HandleFunc("PUT /account/data", a.putData)
+}
+func (a *accountService) middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/static/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		private := strings.HasPrefix(r.URL.Path, "/account") || strings.HasPrefix(r.URL.Path, "/auth/")
+		if private {
+			w.Header().Set("Cache-Control", "no-store")
+			// A no-referrer policy can make a form POST's Origin null.
+			// Suppress callback URL leakage without breaking account form checks.
+			if r.URL.Path == "/auth/github/callback" {
+				w.Header().Set("Referrer-Policy", "no-referrer")
+			} else {
+				w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			}
+			if a.config.Origin != "" {
+				origin, _ := url.Parse(a.config.Origin)
+				if !strings.EqualFold(r.Host, origin.Host) {
+					if origin.Host == "yavchn.com" && strings.EqualFold(r.Host, "www.yavchn.com") && r.Method == "GET" && r.URL.Path == "/account" {
+						http.Redirect(w, r, a.config.Origin+"/account", http.StatusFound)
+						return
+					}
+					accountError(w, 421, "Use "+a.config.Origin+"/account for your account.")
+					return
+				}
+			}
+		}
+		if c, err := r.Cookie(sessionCookie); err == nil && len(c.Value) == 43 {
+			user := &accountSession{}
+			err = a.server.db.QueryRowContext(r.Context(), `SELECT a.id,i.username,s.csrf,s.token_hash,s.created_at,d.revision,d.document FROM account_sessions s JOIN accounts a ON a.id=s.account_id JOIN account_identities i ON i.account_id=a.id AND i.provider='github' JOIN account_data d ON d.account_id=a.id WHERE s.token_hash=? AND s.expires_at>?`, tokenHash(c.Value), time.Now().Unix()).Scan(&user.ID, &user.Username, &user.CSRF, &user.TokenHash, &user.CreatedAt, &user.Revision, newAccountScan(&user.Data))
+			if err == nil {
+				user.setLinks()
+				r = r.WithContext(context.WithValue(r.Context(), accountContextKey{}, user))
+				w.Header().Set("Cache-Control", "private, no-store")
+				w.Header().Add("Vary", "Cookie")
+			} else if err != sql.ErrNoRows {
+				slog.Error("account session lookup failed")
+				accountError(w, 503, "Account storage is unavailable. Please try again.")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+type accountScanner struct{ data *accountDocument }
+
+func newAccountScan(d *accountDocument) *accountScanner { return &accountScanner{data: d} }
+func (s *accountScanner) Scan(v any) error {
+	switch x := v.(type) {
+	case string:
+		return json.Unmarshal([]byte(x), s.data)
+	case []byte:
+		return json.Unmarshal(x, s.data)
+	default:
+		return errors.New("invalid account document")
+	}
+}
+
+type accountPageVM struct {
+	menuContext
+	Title, NewReaderHref, Message, LoginCSRF string
+	AllSources                               []sourceOptVM
+	LoginAvailable                           bool
+	OtherSessions                            int
+	RecentLogin                              bool
+}
+
+func (a *accountService) page(w http.ResponseWriter, r *http.Request) {
+	vm := accountPageVM{menuContext: menuContext{Account: currentAccount(r), View: "classic", WindowURL: "/hn/?view=window", ClassicURL: "/account"}, Title: "Account · YAVCHN", NewReaderHref: "/hn/?open=reader-1&top=reader-1", AllSources: a.server.buildSourceOpts(""), LoginAvailable: a.config.ClientID != ""}
+	if r.URL.Query().Get("message") == "signed-out" {
+		vm.Message = "You are signed out. Your anonymous browser data is available again."
+	}
+	if r.URL.Query().Get("message") == "deleted" {
+		vm.Message = "Your account and synchronized data have been deleted."
+	}
+	if user := currentAccount(r); user != nil {
+		if err := a.server.db.QueryRowContext(r.Context(), `SELECT count(*) FROM account_sessions WHERE account_id=? AND token_hash<>? AND expires_at>?`, user.ID, user.TokenHash, time.Now().Unix()).Scan(&vm.OtherSessions); err != nil {
+			accountError(w, 503, "Account storage is unavailable.")
+			return
+		}
+		vm.RecentLogin = time.Now().Unix()-user.CreatedAt < 600
+	} else if vm.LoginAvailable {
+		csrf, err := accountToken()
+		if err != nil {
+			accountError(w, 500, "Cannot start sign-in.")
+			return
+		}
+		vm.LoginCSRF = csrf
+		accountCookie(w, loginCookie, csrf, 600)
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := a.server.tpl.ExecuteTemplate(w, "account.html.tmpl", vm); err != nil {
+		slog.Error("render account page failed")
+	}
+}
+func (a *accountService) sameOrigin(r *http.Request) bool {
+	return a.config.Origin != "" && r.Header.Get("Origin") == a.config.Origin
+}
+func (a *accountService) start(w http.ResponseWriter, r *http.Request) {
+	if a.config.ClientID == "" {
+		accountError(w, 503, "GitHub sign-in is not configured yet.")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if !a.sameOrigin(r) || r.ParseForm() != nil {
+		accountError(w, 403, "Invalid sign-in request.")
+		return
+	}
+	csrf := ""
+	if user := currentAccount(r); user != nil {
+		csrf = user.CSRF
+	} else if c, err := r.Cookie(loginCookie); err == nil {
+		csrf = c.Value
+	}
+	if !sameToken(csrf, r.PostForm.Get("csrf")) {
+		accountError(w, 403, "Reload the account page before signing in.")
+		return
+	}
+	if !a.rate.Allow(clientIP(r)) {
+		w.Header().Set("Retry-After", "300")
+		accountError(w, 429, "Too many sign-in attempts. Please try again later.")
+		return
+	}
+	state, err := accountToken()
+	if err != nil {
+		accountError(w, 500, "Cannot start sign-in.")
+		return
+	}
+	verifier, err := accountToken()
+	if err != nil {
+		accountError(w, 500, "Cannot start sign-in.")
+		return
+	}
+	// The account page is the fixed return destination. No request host or return URL is trusted.
+	_, err = a.server.db.ExecContext(r.Context(), `DELETE FROM account_login_flows WHERE expires_at<=?`, time.Now().Unix())
+	if err == nil {
+		_, err = a.server.db.ExecContext(r.Context(), `INSERT INTO account_login_flows(state_hash,verifier,return_to,expires_at)VALUES(?,?,?,?)`, tokenHash(state), verifier, "/account", time.Now().Add(10*time.Minute).Unix())
+	}
+	if err != nil {
+		accountError(w, 503, "Cannot start sign-in right now.")
+		return
+	}
+	accountCookie(w, flowCookie, state, 600)
+	challenge := sha256.Sum256([]byte(verifier))
+	query := url.Values{"client_id": {a.config.ClientID}, "redirect_uri": {a.config.Origin + "/auth/github/callback"}, "scope": {""}, "state": {state}, "code_challenge": {base64.RawURLEncoding.EncodeToString(challenge[:])}, "code_challenge_method": {"S256"}, "prompt": {"select_account"}}
+	http.Redirect(w, r, "https://github.com/login/oauth/authorize?"+query.Encode(), http.StatusSeeOther)
+}
+func (a *accountService) callback(w http.ResponseWriter, r *http.Request) {
+	if a.config.ClientID == "" {
+		accountError(w, 503, "GitHub sign-in is not configured yet.")
+		return
+	}
+	state := r.URL.Query().Get("state")
+	cookie, err := r.Cookie(flowCookie)
+	if err != nil || len(state) != 43 || !sameToken(cookie.Value, state) {
+		accountError(w, 400, "Sign-in did not match this browser. Please start again.")
+		return
+	}
+	var verifier, target string
+	err = a.server.db.QueryRowContext(r.Context(), `DELETE FROM account_login_flows WHERE state_hash=? AND expires_at>? RETURNING verifier,return_to`, tokenHash(state), time.Now().Unix()).Scan(&verifier, &target)
+	accountCookie(w, flowCookie, "", -1)
+	if err != nil {
+		accountError(w, 400, "Sign-in expired or was already used. Please start again.")
+		return
+	}
+	code := r.URL.Query().Get("code")
+	if code == "" || len(code) > 1024 {
+		accountError(w, 400, "GitHub sign-in was cancelled. Return to /account to try again.")
+		return
+	}
+	form := url.Values{"client_id": {a.config.ClientID}, "client_secret": {a.config.ClientSecret}, "code": {code}, "redirect_uri": {a.config.Origin + "/auth/github/callback"}, "code_verifier": {verifier}}
+	req, err := http.NewRequestWithContext(r.Context(), "POST", "https://github.com/login/oauth/access_token", strings.NewReader(form.Encode()))
+	if err != nil {
+		accountError(w, 500, "Cannot complete sign-in.")
+		return
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	var token struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+		Error       string `json:"error"`
+	}
+	if err = a.providerJSON(req, &token); err != nil || token.Error != "" || token.AccessToken == "" || !strings.EqualFold(token.TokenType, "bearer") {
+		accountError(w, 502, "GitHub could not complete sign-in. Please try again.")
+		return
+	}
+	req, err = http.NewRequestWithContext(r.Context(), "GET", "https://api.github.com/user", nil)
+	if err != nil {
+		accountError(w, 500, "Cannot complete sign-in.")
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	req.Header.Set("User-Agent", "YAVCHN")
+	var identity struct {
+		ID    int64  `json:"id"`
+		Login string `json:"login"`
+	}
+	if err = a.providerJSON(req, &identity); err != nil || identity.ID <= 0 || identity.Login == "" || len(identity.Login) > 100 {
+		accountError(w, 502, "GitHub identity could not be verified. Please try again.")
+		return
+	}
+	// Provider tokens are used for this request only and are never persisted.
+	session, err := accountToken()
+	if err != nil {
+		accountError(w, 500, "Cannot complete sign-in.")
+		return
+	}
+	csrf, err := accountToken()
+	if err != nil {
+		accountError(w, 500, "Cannot complete sign-in.")
+		return
+	}
+	id, err := accountToken()
+	if err != nil {
+		accountError(w, 500, "Cannot complete sign-in.")
+		return
+	}
+	tx, err := a.server.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		accountError(w, 503, "Account storage is unavailable.")
+		return
+	}
+	defer tx.Rollback()
+	subject := strconv.FormatInt(identity.ID, 10)
+	err = tx.QueryRowContext(r.Context(), `SELECT account_id FROM account_identities WHERE provider='github' AND subject=?`, subject).Scan(&id)
+	if err == sql.ErrNoRows {
+		_, err = tx.ExecContext(r.Context(), `INSERT INTO accounts(id,created_at)VALUES(?,?)`, id, time.Now().Unix())
+		if err == nil {
+			_, err = tx.ExecContext(r.Context(), `INSERT INTO account_identities(provider,subject,account_id,username)VALUES('github',?,?,?)`, subject, id, identity.Login)
+		}
+		if err == nil {
+			_, err = tx.ExecContext(r.Context(), `INSERT INTO account_data(account_id)VALUES(?)`, id)
+		}
+	} else if err == nil {
+		_, err = tx.ExecContext(r.Context(), `UPDATE account_identities SET username=? WHERE provider='github' AND subject=?`, identity.Login, subject)
+	}
+	if err == nil {
+		if c, e := r.Cookie(sessionCookie); e == nil {
+			_, err = tx.ExecContext(r.Context(), `DELETE FROM account_sessions WHERE token_hash=?`, tokenHash(c.Value))
+		}
+	}
+	if err == nil {
+		_, err = tx.ExecContext(r.Context(), `DELETE FROM account_sessions WHERE expires_at<=?`, time.Now().Unix())
+	}
+	if err == nil {
+		_, err = tx.ExecContext(r.Context(), `INSERT INTO account_sessions(token_hash,account_id,csrf,created_at,expires_at,agent)VALUES(?,?,?,?,?,?)`, tokenHash(session), id, csrf, time.Now().Unix(), time.Now().Add(30*24*time.Hour).Unix(), limitedString(r.UserAgent(), 512))
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		slog.Error("account sign-in storage failed")
+		accountError(w, 503, "Cannot save your sign-in. Please try again.")
+		return
+	}
+	accountCookie(w, sessionCookie, session, 30*24*3600)
+	accountCookie(w, loginCookie, "", -1)
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+func limitedString(s string, n int) string {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
+}
+func (a *accountService) providerJSON(req *http.Request, out any) error {
+	res, err := a.client.Do(req)
+	if err != nil {
+		return errors.New("provider unavailable")
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return errors.New("provider rejected request")
+	}
+	b, err := io.ReadAll(io.LimitReader(res.Body, 65537))
+	if err != nil || len(b) > 65536 {
+		return errors.New("invalid provider response")
+	}
+	return json.Unmarshal(b, out)
+}
+func (a *accountService) authorizedWrite(w http.ResponseWriter, r *http.Request) *accountSession {
+	u := currentAccount(r)
+	if u == nil {
+		accountError(w, 401, "Sign in to your account first.")
+		return nil
+	}
+	if !a.sameOrigin(r) {
+		accountError(w, 403, "This request must come from your account's site.")
+		return nil
+	}
+	csrf := r.Header.Get("X-CSRF-Token")
+	if r.Method == "POST" {
+		r.Body = http.MaxBytesReader(w, r.Body, 4096)
+		if r.ParseForm() != nil {
+			accountError(w, 400, "Invalid account request.")
+			return nil
+		}
+		csrf = r.PostForm.Get("csrf")
+	}
+	if !sameToken(u.CSRF, csrf) {
+		accountError(w, 403, "Your session changed. Reload this page before trying again.")
+		return nil
+	}
+	if !a.writes.Allow(u.ID) {
+		accountError(w, 429, "Too many account changes. Please try again shortly.")
+		return nil
+	}
+	return u
+}
+func (a *accountService) logout(w http.ResponseWriter, r *http.Request) {
+	u := a.authorizedWrite(w, r)
+	if u == nil {
+		return
+	}
+	if _, err := a.server.db.ExecContext(r.Context(), `DELETE FROM account_sessions WHERE token_hash=?`, u.TokenHash); err != nil {
+		accountError(w, 503, "Cannot sign out right now.")
+		return
+	}
+	accountCookie(w, sessionCookie, "", -1)
+	http.Redirect(w, r, "/account?message=signed-out", http.StatusSeeOther)
+}
+func (a *accountService) revokeOthers(w http.ResponseWriter, r *http.Request) {
+	u := a.authorizedWrite(w, r)
+	if u == nil {
+		return
+	}
+	if _, err := a.server.db.ExecContext(r.Context(), `DELETE FROM account_sessions WHERE account_id=? AND token_hash<>?`, u.ID, u.TokenHash); err != nil {
+		accountError(w, 503, "Cannot revoke other sessions right now.")
+		return
+	}
+	http.Redirect(w, r, "/account", http.StatusSeeOther)
+}
+func (a *accountService) remove(w http.ResponseWriter, r *http.Request) {
+	u := a.authorizedWrite(w, r)
+	if u == nil {
+		return
+	}
+	if r.PostForm.Get("confirm") != "delete" {
+		accountError(w, 400, "Confirm account deletion first.")
+		return
+	}
+	if time.Now().Unix()-u.CreatedAt >= 600 {
+		accountError(w, 403, "Sign in again before deleting your account.")
+		return
+	}
+	if _, err := a.server.db.ExecContext(r.Context(), `DELETE FROM accounts WHERE id=?`, u.ID); err != nil {
+		accountError(w, 503, "Cannot delete your account right now.")
+		return
+	}
+	accountCookie(w, sessionCookie, "", -1)
+	http.Redirect(w, r, "/account?message=deleted", http.StatusSeeOther)
+}
+func (a *accountService) export(w http.ResponseWriter, r *http.Request) {
+	u := currentAccount(r)
+	if u == nil {
+		accountError(w, 401, "Sign in to export your data.")
+		return
+	}
+	w.Header().Set("Content-Disposition", `attachment; filename="yavchn-account.json"`)
+	a.writeData(w, u, http.StatusOK)
+}
+func accountETag(revision int64) string { return fmt.Sprintf(`"%d"`, revision) }
+func (a *accountService) writeData(w http.ResponseWriter, u *accountSession, status int) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("ETag", accountETag(u.Revision))
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(u)
+}
+func (a *accountService) getData(w http.ResponseWriter, r *http.Request) {
+	u := currentAccount(r)
+	if u == nil {
+		accountError(w, 401, "Sign in to synchronize your data.")
+		return
+	}
+	a.writeData(w, u, 200)
+}
+func (a *accountService) putData(w http.ResponseWriter, r *http.Request) {
+	u := a.authorizedWrite(w, r)
+	if u == nil {
+		return
+	}
+	if r.Header.Get("If-Match") == "" {
+		accountError(w, 428, "The current data revision is required.")
+		return
+	}
+	if r.Header.Get("If-Match") != accountETag(u.Revision) {
+		a.writeData(w, u, http.StatusPreconditionFailed)
+		return
+	}
+	if strings.Split(r.Header.Get("Content-Type"), ";")[0] != "application/json" {
+		accountError(w, 415, "Send account data as JSON.")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, accountBodyLimit)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	var d accountDocument
+	if err := decoder.Decode(&d); err != nil {
+		accountError(w, 400, "Invalid account data.")
+		return
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF || d.validate() != nil {
+		accountError(w, 400, "Invalid account data.")
+		return
+	}
+	b, err := json.Marshal(d)
+	if err != nil {
+		accountError(w, 400, "Invalid account data.")
+		return
+	}
+	result, err := a.server.db.ExecContext(r.Context(), `UPDATE account_data SET document=?,revision=revision+1 WHERE account_id=? AND revision=? AND EXISTS(SELECT 1 FROM account_sessions WHERE token_hash=? AND account_id=? AND expires_at>?)`, string(b), u.ID, u.Revision, u.TokenHash, u.ID, time.Now().Unix())
+	if err != nil {
+		accountError(w, 503, "Cannot synchronize right now.")
+		return
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		accountError(w, 503, "Cannot synchronize right now.")
+		return
+	}
+	if n == 0 {
+		accountError(w, http.StatusPreconditionFailed, "Your account data or session changed. Refresh before saving.")
+		return
+	}
+	u.Data = d
+	u.Revision++
+	a.writeData(w, u, 200)
+}

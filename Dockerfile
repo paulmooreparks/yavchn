@@ -6,9 +6,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/yavchn ./src
+RUN mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=builder /out/yavchn /yavchn
+COPY --from=builder --chown=nonroot:nonroot /out/data /data
 ENV YAVCHN_DB_PATH=/home/nonroot/yavchn.db
 EXPOSE 8080
 USER nonroot

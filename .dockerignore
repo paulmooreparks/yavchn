@@ -1,5 +1,6 @@
 .git
 .gitignore
+.env*
 .gitattributes
 README.md
 Dockerfile

@@ -1263,3 +1263,8 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .stories-button svg { width: 16px; height: 16px; flex: none; }
 /* Keep the migration action within the toast on narrow screens. */
 .migration-toast-action { display: block; width: fit-content; margin-top: var(--space-3); }
+/* Account pages use the existing PUDL controls and normal page navigation. */
+.account-page { max-width: 48rem; margin-inline: auto; padding: 1.5rem; }
+.account-section { margin-block: 1.5rem; padding-block-start: 1rem; border-top: 1px solid var(--border); }
+.account-section form { margin-block: .75rem; }
+.account-section label { display: block; margin-block-end: .75rem; }

@@ -1,7 +1,4 @@
-/* Pinned stories, kept in this browser under yavchn-pinned and never sent
-   to the server. A row's pin, the p key on the marked row, and a story
-   window's menu pin and unpin; the Pinned view's list is rendered here
-   from the store, since the server keeps no per-reader state. */
+/* Pinned stories use account storage when signed in and browser storage otherwise. */
 (function () {
   'use strict';
   var KEY = 'yavchn-pinned';
@@ -11,14 +8,14 @@
   // Legacy entries (pre-multi-source) have no `source` field; load() backfills 'hn'.
   function load() {
     try {
-      var obj = JSON.parse(localStorage.getItem(KEY) || '{}');
+      var obj = JSON.parse(window.yavchnStorage.getItem(KEY) || '{}');
       if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
       var migrated = false;
       for (var k in obj) {
         if (!obj[k] || typeof obj[k] !== 'object') continue;
         if (!obj[k].source) { obj[k].source = 'hn'; migrated = true; }
       }
-      if (migrated) { try { localStorage.setItem(KEY, JSON.stringify(obj)); } catch (e) {} }
+      if (migrated) { try { window.yavchnStorage.setItem(KEY, JSON.stringify(obj)); } catch (e) {} }
       return obj;
     } catch (e) { return {}; }
   }
@@ -30,7 +27,7 @@
       keys.sort(function (a, b) { return (obj[a].pinned_at || 0) - (obj[b].pinned_at || 0); });
       while (keys.length > CAP) delete obj[keys.shift()];
     }
-    try { localStorage.setItem(KEY, JSON.stringify(obj)); } catch (e) {}
+    try { window.yavchnStorage.setItem(KEY, JSON.stringify(obj)); } catch (e) {}
   }
 
   function isPinned(id) { return !!id && !!load()[String(id)]; }

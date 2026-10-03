@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>{{ template "head" . }}</head>
+<body class="app-page" data-view="classic">
+{{ template "topbar" . }}
+<main class="app-page-main account-page">
+  <h1>Your YAVCHN account</h1>
+  {{ if .Message }}<p role="status">{{ .Message }}</p>{{ end }}
+  {{ if .Account }}
+  <p>You are signed in as <strong>{{ .Account.Username }}</strong> through GitHub.</p>
+  <p>Your pins, blocked domains, and reading progress synchronize with this account. Window positions and appearance stay in this browser.</p>
+  <p role="status" data-account-sync-status>Account data loaded.</p>
+  <section class="account-section">
+    <h2>Browser data</h2>
+    <p>Your anonymous pins and preferences are kept separately. You can merge them into this account when you choose.</p>
+    <button type="button" class="btn" data-account-import hidden>Import this browser's anonymous data</button>
+    <noscript><p>Importing existing browser data and live reading synchronization require JavaScript. Account export and management work without it.</p></noscript>
+  </section>
+  <section class="account-section">
+    <h2>Account data</h2>
+    <p><a class="btn" href="/account/export">Export your account data</a></p>
+    <p>YAVCHN does not receive your GitHub password, and it does not retain the GitHub access token. It does not connect to your HN or Lobsters account.</p>
+  </section>
+  <section class="account-section">
+    <h2>Sign-in sessions</h2>
+    <p>You have {{ .OtherSessions }} other active sign-in sessions. Sessions expire after 30 days.</p>
+    {{ if .OtherSessions }}<form method="post" action="/account/sessions">
+      <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
+      <button class="btn" type="submit">Sign out other devices</button>
+    </form>{{ end }}
+    <form method="post" action="/account/session">
+      <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
+      <button class="btn" type="submit">Sign out this browser</button>
+    </form>
+  </section>
+  <section class="account-section">
+    <h2>Delete your account</h2>
+    <p>This permanently deletes your account, synchronized data, and active sessions. Your anonymous browser data remains available.</p>
+    {{ if .RecentLogin }}<form method="post" action="/account">
+      <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
+      <label><input type="checkbox" name="confirm" value="delete" required> I want to delete my account and its data.</label>
+      <button class="btn danger" type="submit">Delete my account</button>
+    </form>{{ else }}<p>Sign in again to confirm your identity before deleting your account.</p>
+    {{ if .LoginAvailable }}<form method="post" action="/auth/github">
+      <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
+      <button class="btn" type="submit">Sign in again with GitHub</button>
+    </form>{{ end }}{{ end }}
+  </section>
+  {{ else }}
+  <p>Sign in to keep your pinned stories, blocked domains, and reading progress across devices. You can continue reading without an account.</p>
+  {{ if .LoginAvailable }}<form method="post" action="/auth/github">
+    <input type="hidden" name="csrf" value="{{ .LoginCSRF }}">
+    <button class="btn primary" type="submit">Sign in with GitHub</button>
+  </form>{{ else }}<p role="status">GitHub sign-in is not available yet. You can continue using YAVCHN without signing in.</p>{{ end }}
+  <p>YAVCHN uses your GitHub identity for sign-in. It does not ask for access to your repositories or connect to your HN or Lobsters account.</p>
+  {{ end }}
+  <p><a href="/hn/">Return to stories</a></p>
+</main>
+{{ template "dialogs" . }}
+{{ template "scripts" . }}
+</body>
+</html>

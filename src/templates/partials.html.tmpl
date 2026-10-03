@@ -6,6 +6,11 @@
 <title>{{ .Title }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+{{ if .Account }}
+<meta name="yavchn-account" content="{{ .Account.ID }}">
+<meta name="yavchn-csrf" content="{{ .Account.CSRF }}">
+<script type="application/json" id="yavchn-account-data">{{ .Account }}</script>
+{{ end }}
 <link rel="manifest" href="/static/manifest.webmanifest">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/app-icon-180.png">
 <meta name="theme-color" content="#20252b" media="(prefers-color-scheme: dark)">
@@ -61,6 +66,7 @@
             <li><button type="button" commandfor="about-dialog" command="show-modal">About YAVCHN</button></li>
             <li>-</li>
             <li><a href="/settings" data-win-open="settings">Settings&hellip;</a></li>
+            <li><a href="/account" data-account-link>{{ if .Account }}Account ({{ .Account.Username }}){{ else }}Sign in / Account{{ end }}</a></li>
           </ul>
         </li>
         <li data-menubar-id="go">Go
@@ -295,7 +301,7 @@
     <section>
       <h4>Applets</h4>
       <p>The Applets menu in the menu bar holds three tools, each a window of its own. <strong>Replies to me</strong> takes your Hacker News user name and lists the replies to your last thirty comments and stories, checking again every three minutes while it is open, and marking what is new since you last marked them read. <strong>Look up a user</strong> opens a profile on Hacker News or Lobsters, with their submissions and recent comments, as a commenter's name in any discussion does; the bar at the top of a profile looks up someone else in the same window, and Back returns to the one before. <strong>Who is hiring?</strong> filters the posts of HN's monthly hiring threads by the words you type.</p>
-      <p>They read only what the sites publish to everyone, so none of them asks for a login, and your user name stays in this browser.</p>
+      <p>They read only what the sites publish to everyone, so none of them asks for a login, and your user name stays in this browser anonymously and is included in retained applet state when signed in.</p>
     </section>
     <section>
       <h4>Find</h4>
@@ -303,7 +309,7 @@
     </section>
     <section>
       <h4>About</h4>
-      <p>YAVCHN never sees your Hacker News or Lobsters login. The discussion is fetched from each site's public API; to vote or reply, follow the link above the discussion, or the arrow beside a comment, to the source's own site. Pins, hidden stories, filters and layout are kept in this browser only.</p>
+      <p>YAVCHN never sees your Hacker News or Lobsters login. The discussion is fetched from each site's public API; to vote or reply, follow the link above the discussion, or the arrow beside a comment, to the source's own site. Without a YAVCHN account, your data stays in this browser. When signed in, pins, blocked domains, and retained reading state are stored with your account and synchronized across devices. Hidden stories and layout stay in this browser.</p>
       <p>Open source: <a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">github.com/paulmooreparks/yavchn</a>. Built with <a href="https://github.com/paulmooreparks/pudl" target="_blank" rel="noopener">PUDL</a>.</p>
     </section>
   </div>
@@ -314,6 +320,7 @@
 {{ end }}
 
 {{ define "scripts" }}
+<script src="{{ asset "/static/accounts.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/pudl-windows.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/pudl-menu.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/pudl-applets.js" }}" defer></script>
