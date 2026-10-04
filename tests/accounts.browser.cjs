@@ -24,6 +24,12 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     const imported = await page.evaluate(async () => (await (await fetch('/account/data')).json()));
     assert.ok(imported.revision > 0 && imported.data.pins['hn-99'], JSON.stringify(imported));
 
+    // A backup imported while signed in points to the account's explicit import.
+    await page.goto(origin + '/hn/?view=window&migration=complete');
+    await page.getByRole('link', { name: 'Add it to your account', exact: true }).click();
+    await page.locator('[data-win="account"] [data-account-import]:not([hidden])').waitFor();
+    assert.equal(new URL(page.url()).searchParams.get('migration'), null);
+
     await page.goto(origin + '/hn/?view=window&open=reader-1,settings&top=reader-1');
     await page.locator('[data-win="reader-1"]').waitFor();
     await page.evaluate(() => { window.accountTestReader = document.querySelector('[data-win="reader-1"]'); });
