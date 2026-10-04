@@ -70,9 +70,8 @@
       }
     });
     var count = Object.keys(store).length;
-    document.querySelectorAll('.source-seg a[data-source="pinned"]').forEach(function (a) {
-      var label = a.querySelector('.source-label') || a;
-      label.textContent = count > 0 ? 'Pinned (' + count + ')' : 'Pinned';
+    document.querySelectorAll('.list-tabs a[href^="/pinned/"]').forEach(function (a) {
+      a.textContent = count > 0 ? 'Pinned (' + count + ')' : 'Pinned';
     });
   }
 
@@ -107,9 +106,9 @@
   }
 
   /* The filters and order come from the list's attributes, which the
-     server renders from the address, so a filtered Pinned view is an
-     address like any other. The words box overrides the words as the
-     reader types, before Enter puts them in the address. */
+     server renders from the address, so a filtered view is an address like
+     any other. The words box overrides the words as the reader types,
+     before Enter puts them in the address. */
   function filtersOf(view) {
     var input = document.querySelector('.pin-filter input[name="q"]');
     return {
@@ -120,66 +119,77 @@
     };
   }
 
-  var ORDERS = {
-    '': function (a, b) { return (b.pinned_at || 0) - (a.pinned_at || 0); },
-    oldest: function (a, b) { return (a.pinned_at || 0) - (b.pinned_at || 0); },
-    points: function (a, b) { return (b.score || 0) - (a.score || 0); },
-    comments: function (a, b) { return (b.comments || 0) - (a.comments || 0); }
-  };
-
-  /* The Pinned view's rows, the same markup the server renders for every
-     other list, filtered and ordered as the address says. */
-  function renderPinnedList() {
-    var view = pinnedView();
+  /* A stored list's rows, the same markup the server renders for every
+     other list, filtered and ordered as the address says. Each entry is a
+     copy of a story's listing with its id, source and time; cfg says what
+     the list calls its stories and what each row adds:
+       noun, time ("pinned", "added", "edited"), emptyTitle, emptyBody,
+       text(entry) for words beyond the title, site and author,
+       extra(entry) for markup after the meta line,
+       rowClass, and remove: the label of a button replacing Hide. */
+  function renderStored(view, entries, cfg) {
     var box = view && view.querySelector('.stories');
     if (!box) return;
-    var store = load();
-    var all = Object.keys(store);
-    if (!all.length) {
-      box.innerHTML = '<div class="empty-state list-empty"><p class="empty-state-title">No pinned stories</p>' +
-        '<p class="empty-state-body">The pin at the start of a story\'s row, or the p key, keeps the story here.</p></div>';
+    if (!entries.length) {
+      box.innerHTML = '<div class="empty-state list-empty"><p class="empty-state-title">' + esc(cfg.emptyTitle) + '</p>' +
+        '<p class="empty-state-body">' + esc(cfg.emptyBody) + '</p></div>';
+      box.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));
       return;
     }
     var f = filtersOf(view);
     var visited = window.yavchn.visited;
-    var ids = all.filter(function (id) {
-      var s = store[id];
-      if (f.source && (s.source || 'hn') !== f.source) return false;
-      if (f.unread && visited && visited.has(id)) return false;
-      var text = ((s.title || '') + ' ' + (s.host || '') + ' ' + (s.by || '')).toLowerCase();
+    var orders = {
+      '': function (a, b) { return (b.at || 0) - (a.at || 0); },
+      oldest: function (a, b) { return (a.at || 0) - (b.at || 0); },
+      points: function (a, b) { return (b.score || 0) - (a.score || 0); },
+      comments: function (a, b) { return (b.comments || 0) - (a.comments || 0); }
+    };
+    var shown = entries.filter(function (s) {
+      if (f.source && s.source !== f.source) return false;
+      if (f.unread && visited && visited.has(s.id)) return false;
+      var text = ((s.title || '') + ' ' + (s.host || '') + ' ' + (s.by || '') + ' ' + (cfg.text ? cfg.text(s) : '')).toLowerCase();
       return f.terms.want.every(function (w) { return text.indexOf(w) >= 0; }) &&
         !f.terms.not.some(function (n) { return text.indexOf(n) >= 0; });
-    }).sort(function (a, b) { return (ORDERS[f.sort] || ORDERS[''])(store[a], store[b]); });
+    }).sort(orders[f.sort] || orders['']);
 
-    var filtered = ids.length !== all.length;
-    var count = filtered ? '<p class="pin-count num">' + ids.length + ' of ' + all.length + ' pinned stories</p>' : '';
-    if (!ids.length) {
-      box.innerHTML = count + '<div class="empty-state list-empty"><p class="empty-state-title">No pinned story matches</p>' +
-        '<p class="empty-state-body">None of your ' + all.length + ' pinned stories passes these filters.</p></div>';
+    var count = shown.length !== entries.length ? '<p class="pin-count num">' + shown.length + ' of ' + entries.length + ' ' + esc(cfg.noun) + '</p>' : '';
+    if (!shown.length) {
+      box.innerHTML = count + '<div class="empty-state list-empty"><p class="empty-state-title">Nothing matches</p>' +
+        '<p class="empty-state-body">None of your ' + entries.length + ' ' + esc(cfg.noun) + ' passes these filters.</p></div>';
       box.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));
       return;
     }
     var front = window.pudlWindows ? window.pudlWindows.state() : null;
-    box.innerHTML = count + ids.map(function (id) {
-      var s = store[id];
-      var source = s.source || 'hn';
-      var key = source + '-' + id;
+    var pins = load();
+    box.innerHTML = count + shown.map(function (s) {
+      var key = s.source + '-' + s.id;
       var current = front && front.top === key && !front.min[key];
-      var host = s.host || (source === 'lobsters' ? 'lobste.rs' : 'news.ycombinator.com');
-      return '<div class="md-row story-row pinned' + (current ? ' active' : '') + '" id="row-' + esc(key) + '" data-key="' + esc(key) + '"' +
-        ' data-id="' + esc(id) + '" data-source="' + esc(source) + '" data-url="' + esc(s.url || '') + '"' +
+      var pinned = !!pins[s.id];
+      var host = s.host || (s.source === 'lobsters' ? 'lobste.rs' : 'news.ycombinator.com');
+      var pinLabel = pinned ? 'Unpin this story' : 'Pin this story';
+      var last = cfg.remove ? '<button type="button" class="icon-btn story-uncollect" aria-label="' + esc(cfg.remove) + '" title="' + esc(cfg.remove) + '"></button>' :
+        '<button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story"></button>';
+      return '<div class="md-row story-row' + (pinned ? ' pinned' : '') + (cfg.rowClass ? ' ' + cfg.rowClass : '') + (current ? ' active' : '') + '" id="row-' + esc(key) + '" data-key="' + esc(key) + '"' +
+        ' data-id="' + esc(s.id) + '" data-source="' + esc(s.source) + '" data-url="' + esc(s.url || '') + '"' +
         ' data-host="' + esc(host) + '" data-by="' + esc(s.by || '') + '" data-score="' + (s.score || 0) + '"' +
         ' data-comments="' + (s.comments || 0) + '">' +
-        '<a class="md-item" href="/story/' + esc(source) + '/' + esc(id) + '" data-win-open="' + esc(key) + '"' +
+        '<a class="md-item" href="/story/' + esc(s.source) + '/' + esc(s.id) + '" data-win-open="' + esc(key) + '"' +
         (current ? ' aria-current="true"' : '') + '>' + esc(s.title || '(no title)') +
         '<span class="md-meta num">' + esc(host) + ' &middot; ' + (s.score || 0) + ' points' +
-        (s.by ? ' &middot; ' + esc(s.by) : '') + ' &middot; pinned ' + relTime(s.pinned_at) +
-        ' &middot; ' + (s.comments || 0) + ' comments</span></a>' +
-
-        '<div class="story-row-actions"><button type="button" class="icon-btn story-pin" aria-pressed="true" aria-label="Unpin this story" title="Unpin this story"></button>' +
-        '<button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story"></button></div></div>';
+        (s.by ? ' &middot; ' + esc(s.by) : '') + ' &middot; ' + esc(cfg.time) + ' ' + relTime(s.at) +
+        ' &middot; ' + (s.comments || 0) + ' comments</span>' + (cfg.extra ? cfg.extra(s) : '') + '</a>' +
+        '<div class="story-row-actions"><button type="button" class="icon-btn story-pin" aria-pressed="' + pinned + '" aria-label="' + pinLabel + '" title="' + pinLabel + '"></button>' +
+        last + '</div></div>';
     }).join('');
     box.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));
+  }
+
+  function renderPinnedList() {
+    var store = load();
+    renderStored(pinnedView(), Object.keys(store).map(function (id) {
+      return Object.assign({}, store[id], { id: id, source: store[id].source || 'hn', at: store[id].pinned_at });
+    }), { noun: 'pinned stories', time: 'pinned', emptyTitle: 'No pinned stories',
+      emptyBody: 'The pin at the start of a story\'s row, or the p key, keeps the story here.' });
   }
 
   function toggleRow(row) {
@@ -204,6 +214,7 @@
   }
 
   window.yavchn.pins = { isPinned: isPinned, toggleStory: toggleStory };
+  window.yavchn.stored = { render: renderStored, metaOf: metaOf, esc: esc };
 
   document.addEventListener('click', function (e) {
     var btn = e.target.closest && e.target.closest('.story-row .story-pin');

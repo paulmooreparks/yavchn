@@ -188,6 +188,9 @@ func testServer(t *testing.T) (*Server, *http.ServeMux) {
 	mux.HandleFunc("GET /window/{key}", s.Window)
 	mux.HandleFunc("GET /story/{source}/{id}", s.StoryPage)
 	mux.HandleFunc("GET /pinned/{$}", s.Pinned)
+	mux.HandleFunc("GET /collections/{$}", s.Collections)
+	mux.HandleFunc("GET /collections/{id}/{$}", s.Collections)
+	mux.HandleFunc("GET /notes/{$}", s.Notes)
 	return s, mux
 }
 

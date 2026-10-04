@@ -87,6 +87,8 @@
             <li><a href="/hn/">Hacker News</a></li>
             <li><a href="/lobsters/">Lobsters</a></li>
             <li><a href="/pinned/">Pinned stories</a></li>
+            <li><a href="/collections/">Collections</a></li>
+            <li><a href="/notes/">Notes</a></li>
             <li><a href="/find">Find the discussions of a link</a></li>
             <li>-</li>
             <li><button type="button" data-feed-refresh disabled>Refresh feed</button></li>
@@ -155,8 +157,16 @@
       <button type="button" data-reader-pane="discussion" aria-pressed="false">Discussion</button>
       <button type="button" data-reader-pane="split" aria-pressed="true">Split</button>
     </div>
+    <button type="button" class="btn btn-sm story-note-toggle" data-note-toggle aria-pressed="false" aria-controls="note-{{ .Key }}-{{ .StoryKey }}" hidden>Add note</button>
     <a class="btn btn-sm story-next" href="{{ .PageURL }}" data-win-replace hidden>Next story</a>
   </div>
+  <section class="story-note-panel" id="note-{{ .Key }}-{{ .StoryKey }}" data-note-panel aria-label="Your note" hidden>
+    <div class="form-group">
+      <label class="form-label" for="note-{{ .Key }}-{{ .StoryKey }}-text">Your note on this story</label>
+      <textarea class="form-textarea story-note-text" id="note-{{ .Key }}-{{ .StoryKey }}-text" data-note-text maxlength="10000" rows="3"></textarea>
+      <p class="form-help" data-note-status role="status" aria-live="polite">Only you can see your notes. Clearing the text deletes the note.</p>
+    </div>
+  </section>
   <div class="split stacked story-split">
     <section class="split-pane story-pane story-article" aria-label="Article">
       <div class="story-scroll story-article-body" tabindex="0">
@@ -253,6 +263,32 @@
   </form>
 </dialog>
 
+<dialog class="dialog" id="collection-dialog" aria-labelledby="collection-dialog-title">
+  <form method="dialog" data-collection-form>
+    <h3 class="dialog-title" id="collection-dialog-title">New collection</h3>
+    <div class="dialog-body">
+      <div class="form-group">
+        <label class="form-label" for="collection-name">Name</label>
+        <input class="form-input" id="collection-name" name="name" maxlength="100" required autocomplete="off" aria-describedby="collection-name-error">
+        <p class="form-error" id="collection-name-error" data-collection-error hidden></p>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn" type="button" commandfor="collection-dialog" command="close">Cancel</button>
+      <button class="btn btn-primary" type="submit" data-collection-submit>Create</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="collection-delete-dialog" aria-labelledby="collection-delete-title">
+  <h3 class="dialog-title" id="collection-delete-title">Delete this collection?</h3>
+  <div class="dialog-body"><p data-collection-delete-body></p></div>
+  <form class="dialog-actions" method="dialog">
+    <button class="btn" value="cancel">Cancel</button>
+    <button class="btn btn-danger" value="delete" data-collection-delete-confirm><span aria-hidden="true">&#x26A0;&#xFE0E;</span> Delete the collection</button>
+  </form>
+</dialog>
+
 <dialog class="dialog" id="about-dialog" aria-labelledby="about-dialog-title">
   <h3 class="dialog-title" id="about-dialog-title">About YAVCHN</h3>
   <div class="dialog-body">
@@ -293,6 +329,7 @@
     <section>
       <h4>The list</h4>
       <p>The pin at the start of a row keeps the story in Pinned, and the cross at its end hides it. Pinned can be narrowed by words in the title, site or author, by source, and to the stories you haven't opened yet, and ordered by when you pinned them, by points or by comments; the filters are part of the address, so a filtered view can be bookmarked. Scroll past the end of the list to load more. Domain filters, in the View menu, hide every story from a site.</p>
+      <p>Collections are named lists of stories. Story &gt; Add to collection files the story in front into one or more of them, and the Collections feed shows them all or one at a time; its Manage menu creates, renames, and deletes collections. A note is your own text on a story. Choose Add note in a story's toolbar to write one; it saves as you type. Rows with a note carry the note mark, and the Notes feed lists every noted story and searches the text of your notes.</p>
     </section>
     <section>
       <h4>Browsing view</h4>
@@ -309,7 +346,7 @@
     </section>
     <section>
       <h4>About</h4>
-      <p>YAVCHN never sees your Hacker News or Lobsters login. The discussion is fetched from each site's public API; to vote or reply, follow the link above the discussion, or the arrow beside a comment, to the source's own site. Without a YAVCHN account, your data stays in this browser. When signed in, pins, blocked domains, and retained reading state are stored with your account and synchronized across devices. Hidden stories and layout stay in this browser.</p>
+      <p>YAVCHN never sees your Hacker News or Lobsters login. The discussion is fetched from each site's public API; to vote or reply, follow the link above the discussion, or the arrow beside a comment, to the source's own site. Without a YAVCHN account, your data stays in this browser. When signed in, pins, collections, notes, blocked domains, and retained reading state are stored with your account and synchronized across devices. Hidden stories and layout stay in this browser.</p>
       <p>Open source: <a href="https://github.com/paulmooreparks/yavchn" target="_blank" rel="noopener">github.com/paulmooreparks/yavchn</a>. Built with <a href="https://github.com/paulmooreparks/pudl" target="_blank" rel="noopener">PUDL</a>.</p>
     </section>
   </div>
@@ -343,6 +380,7 @@
 <script src="{{ asset "/static/list.js" }}" defer></script>
 <script src="{{ asset "/static/visited.js" }}" defer></script>
 <script src="{{ asset "/static/pinned.js" }}" defer></script>
+<script src="{{ asset "/static/library.js" }}" defer></script>
 <script src="{{ asset "/static/dismissed.js" }}" defer></script>
 <script src="{{ asset "/static/filters.js" }}" defer></script>
 <script src="{{ asset "/static/settings.js" }}" defer></script>

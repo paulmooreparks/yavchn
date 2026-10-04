@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -222,6 +223,61 @@ func TestAccountDataIsolationConflictAndValidation(t *testing.T) {
 	}
 	if w = f.request("PUT", "/account/data", `{"pins":{},"domains":[],"progress":{},"unknown":1}`, []*http.Cookie{first}, map[string]string{"Content-Type": "application/json", "If-Match": `"1"`, "X-CSRF-Token": u.CSRF}); w.Code != 400 {
 		t.Fatal("unknown data accepted")
+	}
+}
+func TestAccountCollectionsAndNotes(t *testing.T) {
+	f := accountsForTest(t)
+	c := f.login(5)
+	u := f.session(c)
+	if u.Data.Collections == nil || u.Data.Collected == nil || u.Data.Notes == nil {
+		t.Fatal("stored document lacks empty collections and notes")
+	}
+	d := emptyAccountDocument()
+	d.Collections["k3x9q2"] = collectionEntry{Name: "Read later", CreatedAt: 1}
+	d.Collected["k3x9q2:hn-42"] = collectedEntry{Source: "hn", ID: "42", Title: "Story", URL: "https://example.com/", AddedAt: 2}
+	d.Notes["lobsters-ab12cd"] = noteEntry{Source: "lobsters", ID: "ab12cd", Title: "Thread", Text: "Worth rereading.", UpdatedAt: 3}
+	if w := f.put(c, u, d); w.Code != 200 {
+		t.Fatalf("save collections and notes: %d %s", w.Code, w.Body)
+	}
+	// A script from before these features sends only the original members.
+	u = f.session(c)
+	w := f.request("PUT", "/account/data", `{"pins":{},"domains":["example.com"],"progress":{}}`, []*http.Cookie{c}, map[string]string{"Content-Type": "application/json", "If-Match": accountETag(u.Revision), "X-CSRF-Token": u.CSRF})
+	if w.Code != 200 {
+		t.Fatalf("older client write: %d %s", w.Code, w.Body)
+	}
+	u = f.session(c)
+	if u.Data.Collections["k3x9q2"].Name != "Read later" || len(u.Data.Collected) != 1 || u.Data.Notes["lobsters-ab12cd"].Text != "Worth rereading." || len(u.Data.Domains) != 1 {
+		t.Fatalf("older client erased newer members: %+v", u.Data)
+	}
+	invalid := map[string]func(*accountDocument){
+		"orphan entry":     func(d *accountDocument) { d.Collected["zzzzzz:hn-1"] = collectedEntry{Source: "hn", ID: "1"} },
+		"mismatched entry": func(d *accountDocument) { d.Collected["k3x9q2:hn-1"] = collectedEntry{Source: "hn", ID: "2"} },
+		"unsafe entry URL": func(d *accountDocument) {
+			d.Collected["k3x9q2:hn-1"] = collectedEntry{Source: "hn", ID: "1", URL: "javascript:alert(1)"}
+		},
+		"bad collection id": func(d *accountDocument) { d.Collections["Bad-ID"] = collectionEntry{Name: "x"} },
+		"blank collection":  func(d *accountDocument) { d.Collections["abcdef"] = collectionEntry{Name: "  "} },
+		"untrimmed name":    func(d *accountDocument) { d.Collections["abcdef"] = collectionEntry{Name: " x"} },
+		"mismatched note":   func(d *accountDocument) { d.Notes["hn-1"] = noteEntry{Source: "hn", ID: "2", Text: "x"} },
+		"empty note":        func(d *accountDocument) { d.Notes["hn-1"] = noteEntry{Source: "hn", ID: "1", Text: " "} },
+		"oversized note": func(d *accountDocument) {
+			d.Notes["hn-1"] = noteEntry{Source: "hn", ID: "1", Text: strings.Repeat("é", 10001)}
+		},
+		"unknown note source": func(d *accountDocument) { d.Notes["x-1"] = noteEntry{Source: "x", ID: "1", Text: "x"} },
+	}
+	for name, change := range invalid {
+		u = f.session(c)
+		bad := u.Data
+		bad.Collections, bad.Collected, bad.Notes = maps.Clone(bad.Collections), maps.Clone(bad.Collected), maps.Clone(bad.Notes)
+		change(&bad)
+		if f.put(c, u, bad).Code != 400 {
+			t.Fatalf("accepted %s", name)
+		}
+	}
+	long := u.Data
+	long.Notes = map[string]noteEntry{"hn-1": {Source: "hn", ID: "1", Text: strings.Repeat("é", 10000)}}
+	if w := f.put(c, f.session(c), long); w.Code != 200 {
+		t.Fatalf("rejected a note at the limit: %d", w.Code)
 	}
 }
 func TestAccountWriteProtectionAndSessionRevocation(t *testing.T) {

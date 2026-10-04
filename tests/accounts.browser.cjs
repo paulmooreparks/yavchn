@@ -12,7 +12,12 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     page.on('pageerror', e => errors.push(e.message));
     const pin = { source: 'hn', title: 'Anonymous story', url: 'https://example.com/', host: 'example.com', by: 'reader', score: 1, comments: 0, pinned_at: 1 };
     await page.goto(origin + '/hn/');
-    await page.evaluate(value => localStorage.setItem('yavchn-pinned', JSON.stringify({ 'hn-99': value })), pin);
+    await page.evaluate(value => {
+      localStorage.setItem('yavchn-pinned', JSON.stringify({ 'hn-99': value }));
+      localStorage.setItem('yavchn-collections', JSON.stringify({ q7w8e9r0t1y2: { name: 'Anonymous list', created_at: 1 } }));
+      localStorage.setItem('yavchn-collected', JSON.stringify({ 'q7w8e9r0t1y2:hn-99': { source: 'hn', id: '99', title: value.title, url: value.url, host: value.host, by: value.by, score: 1, comments: 0, added_at: 1 } }));
+      localStorage.setItem('yavchn-notes', JSON.stringify({ 'hn-99': { source: 'hn', id: '99', title: value.title, url: value.url, host: value.host, by: value.by, score: 1, comments: 0, text: 'Anonymous note', updated_at: 1 } }));
+    }, pin);
     const session = token => ({ name: '__Host-yavchn-session', value: token, url: origin, httpOnly: true, secure: true, sameSite: 'Lax' });
     await context.addCookies([session(process.argv[3])]);
     await page.goto(origin + '/account');
@@ -23,6 +28,9 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await uploaded;
     const imported = await page.evaluate(async () => (await (await fetch('/account/data')).json()));
     assert.ok(imported.revision > 0 && imported.data.pins['hn-99'], JSON.stringify(imported));
+    assert.equal(imported.data.collections.q7w8e9r0t1y2.name, 'Anonymous list');
+    assert.ok(imported.data.collected['q7w8e9r0t1y2:hn-99']);
+    assert.equal(imported.data.notes['hn-99'].text, 'Anonymous note');
 
     // A backup imported while signed in points to the account's explicit import.
     await page.goto(origin + '/hn/?view=window&migration=complete');

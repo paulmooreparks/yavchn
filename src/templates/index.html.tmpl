@@ -51,9 +51,19 @@
       </nav>
       {{ end }}
       {{ with .Pin }}
-      <form class="md-filter-group pin-filter" action="/pinned/" method="get" role="search">
+      {{ if eq $.Source "collections" }}<nav class="seg sm collection-choice" data-seg-menu data-collection-choice aria-label="Collection"></nav>
+      <div class="menu collection-manage">
+        <button type="button" class="btn btn-sm menu-btn" popovertarget="collection-actions">Manage</button>
+        <div class="menu-panel" id="collection-actions" popover aria-label="Manage collections">
+          <button type="button" class="menu-action" data-collection-action="new">New collection&hellip;</button>
+          {{ if $.Collection }}<hr class="menu-sep">
+          <button type="button" class="menu-action" data-collection-action="rename">Rename this collection&hellip;</button>
+          <button type="button" class="menu-action" data-collection-action="delete">Delete this collection&hellip;</button>{{ end }}
+        </div>
+      </div>{{ end }}
+      <form class="md-filter-group pin-filter" action="{{ .Base }}" method="get" role="search">
         <input type="hidden" name="view" value="{{ $.View }}">
-      <input class="md-filter" type="search" name="q" value="{{ .Q }}" placeholder="Filter pinned stories&hellip;" aria-label="Filter pinned stories by title, site or author" autocomplete="off">
+      <input class="md-filter" type="search" name="q" value="{{ .Q }}" placeholder="Filter {{ .Noun }}&hellip;" aria-label="Filter {{ .Noun }} by {{ if eq $.Source "notes" }}note, {{ end }}title, site or author" autocomplete="off">
         {{ if .Source }}<input type="hidden" name="source" value="{{ .Source }}">{{ end }}
         {{ if .Unread }}<input type="hidden" name="show" value="unread">{{ end }}
         {{ if .Sort }}<input type="hidden" name="sort" value="{{ .Sort }}">{{ end }}
@@ -78,7 +88,7 @@
   </div>
 
   <div class="md-body">
-    <nav class="md-sidebar story-list" id="story-list" data-region="list" data-source="{{ .Source }}"{{ if and .Finder .Stories }} data-auto-open{{ end }}{{ with .Pin }} data-pin-q="{{ .Q }}" data-pin-source="{{ .Source }}" data-pin-sort="{{ .Sort }}"{{ if .Unread }} data-pin-unread{{ end }}{{ end }} aria-label="Stories">
+    <nav class="md-sidebar story-list" id="story-list" data-region="list" data-source="{{ .Source }}"{{ if and .Finder .Stories }} data-auto-open{{ end }}{{ with .Pin }} data-pin-q="{{ .Q }}" data-pin-source="{{ .Source }}" data-pin-sort="{{ .Sort }}"{{ if .Unread }} data-pin-unread{{ end }}{{ end }}{{ if eq .Source "collections" }} data-collection="{{ .Collection }}"{{ end }} aria-label="Stories">
       {{ if .ListError }}
       <div class="notice danger list-notice" role="alert">
         <div class="notice-content">

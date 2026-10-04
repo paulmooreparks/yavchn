@@ -38,9 +38,25 @@ Paul will create proxied CNAME records for `@` and `www` in the `yavchn.com` Clo
 
 A redirect from the original hostname remains a proposal. Browser-local pins, reading progress, and preferences cannot be read by the new origin. A migration path must precede a forced redirect so users can retain their existing data. The proposed transition offers an explicit transfer from the original site, then introduces a redirect preserving the path and query string after the new domain and migration have been verified. Installed web apps also belong to their original origin and need separate migration guidance.
 
+## Collections and notes
+
+Paul approved collections and notes on 2026-10-04 as the first features after the initial account release. Both work anonymously in browser storage, as pins do, and synchronize when the reader is signed in.
+
+A collection is a named list of stories. A story can belong to any number of collections, and pins remain a separate list. The Story menu's Add to collection submenu files the front story into an existing collection or a new one, and shows a check beside each collection that already holds it. The Collections feed at `/collections/` lists every collected story, and `/collections/{id}/` lists one collection. Both accept the Pinned view's words, source, unread, and order filters in the address. The Manage menu in the Collections list bar creates collections and renames or deletes the one on display. It sits in the list bar, not the front menu, because a story window in front owns the front menu. Deleting a collection removes its entries and leaves the stories in other collections untouched.
+
+A note is private text that the reader attaches to a story. The Note button in a story's toolbar opens an editor above the article and discussion, and the Story menu opens the same editor. The note saves as the reader types, and clearing its text deletes it. Story rows in every feed show a note glyph when the story has a note. The Notes feed at `/notes/` lists every noted story with the start of its note, and its words filter also searches the note text. A note holds at most 10,000 characters, and an account holds at most 1,000 notes, 100 collections, and 2,000 collection entries.
+
+The top bar's source switch had no room for two more entries, so its Pinned entry became Saved. Saved stays selected on all three views, and their list bar shows Pinned, Collections, and Notes as tabs, the way Hacker News shows its lists. The pin count moved to the Pinned tab.
+
+Collection identifiers are random lowercase strings generated in the browser, so a collection created offline needs no server round trip. Collection entries and notes each keep a copy of the story's title, address, site, author, points, and comment count, so the feeds can list a story after it has left its source's lists. Collection and note names appear only in the browser. The server renders an empty list and the browser fills it from storage, as it does for Pinned.
+
 ## Synchronization contract
 
-Account data is private and available at `/account/data`. Its representation contains pinned stories, blocked domains, and retained applet reading state. Writes require the current representation's ETag through If-Match; a stale write is rejected rather than replacing newer data. Browser clients rebase changes to individual entries on the returned latest representation before retrying. An explicit edit to the same entry is applied after the remote change.
+Account data is private and available at `/account/data`. Its representation contains pinned stories, blocked domains, retained applet reading state, collections, collection entries, and notes. Collections are keyed by identifier. Collection entries are keyed by the collection identifier and the story key, joined by a colon, so two devices adding different stories to one collection merge without conflict. Notes are keyed by story key. When two devices edit the same note, the edit synchronized last replaces the other, as with every other entry. The server rejects a collection entry whose collection does not exist, and browsers drop such entries after merging.
+
+A write that omits the collections, collection entries, or notes member keeps the stored value of that member. A tab still running a script from before these features therefore cannot erase them. The other members remain required.
+
+Writes require the current representation's ETag through If-Match; a stale write is rejected rather than replacing newer data. Browser clients rebase changes to individual entries on the returned latest representation before retrying. An explicit edit to the same entry is applied after the remote change.
 
 The browser uses account-specific storage keys for synchronized data. Anonymous data remains separate and is imported only after an explicit action. Signing out returns to anonymous storage. Requests from an old tab must not update another account after the session changes.
 

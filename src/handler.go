@@ -58,7 +58,7 @@ type listVM struct {
 	menuContext
 	NewReaderHref string
 	Title         string        // the page's <title>
-	Source        string        // active view: "hn" / "lobsters" / "pinned" / "find"
+	Source        string        // active view: "hn" / "lobsters" / "pinned" / "collections" / "notes" / "find"
 	SourceLabel   string        // active source label: "Hacker News" / "Lobsters"
 	Tab           string        // active tab slug within the source
 	AllSources    []sourceOptVM // the topbar's source switcher
@@ -77,7 +77,8 @@ type listVM struct {
 	FindURL       string
 	FindHost      string
 	FindNote      string       // why the finder's list is empty, when it is
-	Pin           *pinFilterVM // the Pinned view's filters, from its address
+	Pin           *pinFilterVM // a stored list's filters, from its address
+	Collection    string       // the collection /collections/{id}/ shows
 	Win           windowsVM
 }
 
@@ -89,11 +90,30 @@ type pinFilterVM struct {
 	Q      string
 	Source string // "", "hn" or "lobsters"
 	Unread bool   // only the stories the reader has not opened
-	Sort   string // "" (newest pin first), "oldest", "points" or "comments"
+	Sort   string // "" (newest first), "oldest", "points" or "comments"
 
 	Sources, Shows, Sorts []choiceVM
 	Chips                 []chipVM
 	ClearURL              string
+	Base                  string // the view's own address, such as /pinned/
+	Noun                  string // what the words filter narrows, such as "pinned stories"
+}
+
+// storedList names one browser-stored list: Pinned, Collections or Notes.
+type storedList struct {
+	Base, Noun     string
+	Newest, Oldest string // the labels of the two time orders
+}
+
+var pinnedView = storedList{"/pinned/", "pinned stories", "Newest pin", "Oldest pin"}
+var notesView = storedList{"/notes/", "notes", "Recently edited", "Oldest edit"}
+
+func collectionsView(id string) storedList {
+	base := "/collections/"
+	if id != "" {
+		base += id + "/"
+	}
+	return storedList{base, "collected stories", "Recently added", "Oldest added"}
 }
 
 type choiceVM struct {
@@ -124,9 +144,9 @@ func (f *pinFilterVM) params() url.Values {
 	return v
 }
 
-func pinFilter(r *http.Request) *pinFilterVM {
+func pinFilter(r *http.Request, view storedList) *pinFilterVM {
 	q := r.URL.Query()
-	f := &pinFilterVM{Q: strings.TrimSpace(q.Get("q"))}
+	f := &pinFilterVM{Q: strings.TrimSpace(q.Get("q")), Base: view.Base, Noun: view.Noun}
 	if len([]rune(f.Q)) > 100 {
 		f.Q = string([]rune(f.Q)[:100])
 	}
@@ -137,8 +157,8 @@ func pinFilter(r *http.Request) *pinFilterVM {
 	if s := q.Get("sort"); s == "oldest" || s == "points" || s == "comments" {
 		f.Sort = s
 	}
-	// The Pinned view's address with one filter set, or removed when value
-	// is empty, keeping the others and the windows.
+	// The view's address with one filter set, or removed when value is
+	// empty, keeping the others and the windows.
 	wins := parseWinState(q)
 	pinnedHref := func(name, value string) string {
 		v := f.params()
@@ -147,7 +167,7 @@ func pinFilter(r *http.Request) *pinFilterVM {
 		} else {
 			v.Set(name, value)
 		}
-		return winURL("/pinned/", v, wins)
+		return winURL(view.Base, v, wins)
 	}
 	choices := func(name, current string, opts [][2]string) []choiceVM {
 		out := make([]choiceVM, len(opts))
@@ -162,7 +182,7 @@ func pinFilter(r *http.Request) *pinFilterVM {
 		show = "unread"
 	}
 	f.Shows = choices("show", show, [][2]string{{"", "All"}, {"unread", "Unread"}})
-	f.Sorts = choices("sort", f.Sort, [][2]string{{"", "Newest pin"}, {"oldest", "Oldest pin"}, {"points", "Points"}, {"comments", "Comments"}})
+	f.Sorts = choices("sort", f.Sort, [][2]string{{"", view.Newest}, {"oldest", view.Oldest}, {"points", "Points"}, {"comments", "Comments"}})
 
 	if f.Q != "" {
 		f.Chips = append(f.Chips, chipVM{"Words", f.Q, pinnedHref("q", "")})
@@ -178,7 +198,7 @@ func pinFilter(r *http.Request) *pinFilterVM {
 	if f.Sort != "" {
 		rest.Set("sort", f.Sort)
 	}
-	f.ClearURL = winURL("/pinned/", rest, wins)
+	f.ClearURL = winURL(view.Base, rest, wins)
 	return f
 }
 
@@ -394,17 +414,42 @@ func externalLabelForSource(sourceName string) string {
 // server-rendered page; pinned.js fills it from localStorage, so the
 // server keeps no per-reader state.
 func (s *Server) Pinned(w http.ResponseWriter, r *http.Request) {
+	s.storedList(w, r, "pinned", "Pinned", "", pinnedView)
+}
+
+// Collections serves every collected story, or one collection's at
+// /collections/{id}/. Collection names live in the browser, as pins do,
+// so library.js names the collection and fills the list.
+func (s *Server) Collections(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id != "" && !collectionID.MatchString(id) {
+		http.NotFound(w, r)
+		return
+	}
+	s.storedList(w, r, "collections", "Collections", id, collectionsView(id))
+}
+
+// Notes serves the stories that carry the reader's notes.
+func (s *Server) Notes(w http.ResponseWriter, r *http.Request) {
+	s.storedList(w, r, "notes", "Notes", "", notesView)
+}
+
+func (s *Server) storedList(w http.ResponseWriter, r *http.Request, source, label, collection string, view storedList) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	vm := listVM{
-		Title:       "Pinned · YAVCHN",
-		Source:      "pinned",
-		SourceLabel: "Pinned",
-		Tab:         "pinned",
-		AllSources:  s.buildSourceOpts("pinned"),
+		Title:       label + " · YAVCHN",
+		Source:      source,
+		SourceLabel: "Saved",
+		Tab:         source,
+		AllSources:  s.buildSourceOpts(source),
 		Page:        pageParam(r),
 		RetryURL:    r.URL.RequestURI(),
-		Pin:         pinFilter(r),
+		Pin:         pinFilter(r, view),
+		Collection:  collection,
+	}
+	for _, t := range [][3]string{{"pinned", "Pinned", "/pinned/"}, {"collections", "Collections", "/collections/"}, {"notes", "Notes", "/notes/"}} {
+		vm.Tabs = append(vm.Tabs, tabVM{Label: t[1], URL: t[2], Active: t[0] == source})
 	}
 	s.renderList(w, r, &vm, s.startWindows(ctx, r), 0)
 }
@@ -850,11 +895,13 @@ func (s *Server) buildSourceOpts(activeName string) []sourceOptVM {
 			Active: name == activeName,
 		})
 	}
+	// Saved holds the reader's own lists: Pinned, Collections and Notes,
+	// which its list bar shows as tabs.
 	out = append(out, sourceOptVM{
 		Name:   "pinned",
-		Label:  "Pinned",
+		Label:  "Saved",
 		URL:    "/pinned/",
-		Active: activeName == "pinned",
+		Active: activeName == "pinned" || activeName == "collections" || activeName == "notes",
 	})
 	out = append(out, sourceOptVM{
 		Name:   "find",

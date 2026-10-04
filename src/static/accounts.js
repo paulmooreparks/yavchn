@@ -1,7 +1,10 @@
 /* Account-aware storage keeps anonymous data separate from synchronized data. */
 (function () {
   'use strict';
-  var keys = { 'yavchn-pinned': 'pins', 'yavchn-blocked-domains': 'domains', 'yavchn-applet-state': 'progress' };
+  var keys = { 'yavchn-pinned': 'pins', 'yavchn-blocked-domains': 'domains', 'yavchn-applet-state': 'progress',
+    'yavchn-collections': 'collections', 'yavchn-collected': 'collected', 'yavchn-notes': 'notes' };
+  var KINDS = ['pins', 'domains', 'progress', 'collections', 'collected', 'notes'];
+  function emptyData() { return { pins: {}, domains: [], progress: {}, collections: {}, collected: {}, notes: {} }; }
   var boot = document.getElementById('yavchn-account-data');
   var user = boot ? JSON.parse(boot.textContent) : null;
   var csrf = document.querySelector('meta[name="yavchn-csrf"]');
@@ -29,15 +32,22 @@
   }
   function physical(key) { return user && keys[key] ? 'yavchn-account:' + user.id + ':' + keys[key] : key; }
   function documentData() {
-    var out = { pins: {}, domains: [], progress: {} };
+    var out = emptyData();
     Object.keys(keys).forEach(function (key) { try { out[keys[key]] = JSON.parse(rawGet(physical(key))) || out[keys[key]]; } catch (e) {} });
+    return out;
+  }
+  // A document stored before collections and notes lacks their members.
+  function complete(data) {
+    var out = emptyData();
+    KINDS.forEach(function (kind) { if (data && data[kind]) out[kind] = data[kind]; });
     return out;
   }
   function domainsMap(list) { var map = Object.create(null); list.forEach(function (v) { map[v] = true; }); return map; }
   // Only entries changed locally are applied to the newer remote representation.
   function rebase(before, after, remote) {
-    var out = copy(remote);
-    ['pins', 'domains', 'progress'].forEach(function (kind) {
+    before = complete(before); after = complete(after);
+    var out = complete(copy(remote));
+    KINDS.forEach(function (kind) {
       var left = kind === 'domains' ? domainsMap(before[kind]) : before[kind];
       var right = kind === 'domains' ? domainsMap(after[kind]) : after[kind];
       var target = kind === 'domains' ? domainsMap(out[kind]) : out[kind];
@@ -50,10 +60,15 @@
       out[kind] = kind === 'domains' ? Object.keys(target).sort() : target;
     });
     // Match the reader's existing retention limits after combining devices.
-    [['pins', 500, 'pinned_at'], ['progress', 100, 't']].forEach(function (limit) {
+    [['pins', 500, 'pinned_at'], ['progress', 100, 't'], ['collections', 100, 'created_at'],
+      ['collected', 2000, 'added_at'], ['notes', 1000, 'updated_at']].forEach(function (limit) {
       var map = out[limit[0]], names = Object.keys(map);
       names.sort(function (a, b) { return (map[b][limit[2]] || 0) - (map[a][limit[2]] || 0); });
       names.slice(limit[1]).forEach(function (name) { delete map[name]; });
+    });
+    // A collection deleted on one device takes the entries another device added to it.
+    Object.keys(out.collected).forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(out.collections, key.split(':')[0])) delete out.collected[key];
     });
     return out;
   }
@@ -90,7 +105,7 @@
       button.dataset.accountBound = "true";
       button.hidden = false;
       button.addEventListener('click', function () {
-        var data = documentData(), anonymous = { pins: {}, domains: [], progress: {} };
+        var data = documentData(), anonymous = emptyData();
         Object.keys(keys).forEach(function (key) { try { anonymous[keys[key]] = JSON.parse(rawGet(key)) || anonymous[keys[key]]; } catch (e) {} });
         Object.keys(anonymous.pins).forEach(function (key) {
           if (!data.pins[key]) {
@@ -99,7 +114,10 @@
           }
         });
         data.domains = Array.from(new Set(data.domains.concat(anonymous.domains))).sort();
-        Object.keys(anonymous.progress).forEach(function (key) { if (!data.progress[key]) data.progress[key] = anonymous.progress[key]; });
+        // The account's own entry wins where both have one, as for pins.
+        ['progress', 'collections', 'collected', 'notes'].forEach(function (kind) {
+          Object.keys(anonymous[kind]).forEach(function (key) { if (!data[kind][key]) data[kind][key] = anonymous[kind][key]; });
+        });
         data = rebase(baseline, data, baseline);
         install(data, true); schedule();
         button.textContent = 'Import anonymous data again';

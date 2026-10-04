@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const accountSchema = `
@@ -52,7 +53,7 @@ CREATE TABLE IF NOT EXISTS account_data (
 const sessionCookie = "__Host-yavchn-session"
 const flowCookie = "__Host-yavchn-flow"
 const loginCookie = "__Host-yavchn-login"
-const accountBodyLimit = 1024 * 1024
+const accountBodyLimit = 4 * 1024 * 1024
 
 type accountConfig struct {
 	Origin, ClientID, ClientSecret string
@@ -96,36 +97,118 @@ type pinEntry struct {
 	Comments int    `json:"comments"`
 	PinnedAt int64  `json:"pinned_at"`
 }
+type collectionEntry struct {
+	Name      string `json:"name"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// collectedEntry is one story in one collection, keyed "{collection}:{source}-{id}".
+type collectedEntry struct {
+	Source   string `json:"source"`
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	URL      string `json:"url"`
+	Host     string `json:"host"`
+	By       string `json:"by"`
+	Score    int    `json:"score"`
+	Comments int    `json:"comments"`
+	AddedAt  int64  `json:"added_at"`
+}
+
+// noteEntry is the reader's note on one story, keyed "{source}-{id}".
+type noteEntry struct {
+	Source    string `json:"source"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	URL       string `json:"url"`
+	Host      string `json:"host"`
+	By        string `json:"by"`
+	Score     int    `json:"score"`
+	Comments  int    `json:"comments"`
+	Text      string `json:"text"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
 type accountDocument struct {
-	Pins     map[string]pinEntry        `json:"pins"`
-	Domains  []string                   `json:"domains"`
-	Progress map[string]json.RawMessage `json:"progress"`
+	Pins        map[string]pinEntry        `json:"pins"`
+	Domains     []string                   `json:"domains"`
+	Progress    map[string]json.RawMessage `json:"progress"`
+	Collections map[string]collectionEntry `json:"collections"`
+	Collected   map[string]collectedEntry  `json:"collected"`
+	Notes       map[string]noteEntry       `json:"notes"`
 }
 
 func emptyAccountDocument() accountDocument {
-	return accountDocument{Pins: map[string]pinEntry{}, Domains: []string{}, Progress: map[string]json.RawMessage{}}
+	d := accountDocument{Pins: map[string]pinEntry{}, Domains: []string{}, Progress: map[string]json.RawMessage{}}
+	d.normalize()
+	return d
+}
+
+// normalize gives documents stored before collections and notes their empty members.
+func (d *accountDocument) normalize() {
+	if d.Collections == nil {
+		d.Collections = map[string]collectionEntry{}
+	}
+	if d.Collected == nil {
+		d.Collected = map[string]collectedEntry{}
+	}
+	if d.Notes == nil {
+		d.Notes = map[string]noteEntry{}
+	}
 }
 
 var accountEntryKey = regexp.MustCompile(`^[a-zA-Z0-9._:-]{1,100}$`)
 var accountDomain = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\.[a-z]{2,63}$`)
+var collectionID = regexp.MustCompile(`^[a-z0-9]{6,24}$`)
+var storyID = regexp.MustCompile(`^[a-zA-Z0-9]{1,40}$`)
 
 func validAccountEntryKey(key string) bool {
 	return accountEntryKey.MatchString(key) && key != "__proto__" && key != "constructor" && key != "prototype"
+}
+
+// validStory checks the copy of a story's listing that saved entries keep.
+func validStory(source, title, link, host, by string, score, comments int) bool {
+	if (source != "hn" && source != "lobsters") || len(title) > 4096 || len(link) > 8192 || len(host) > 253 || len(by) > 100 || score < 0 || comments < 0 {
+		return false
+	}
+	if link != "" {
+		u, err := url.Parse(link)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+			return false
+		}
+	}
+	return true
 }
 
 func (d accountDocument) validate() error {
 	if d.Pins == nil || d.Domains == nil || d.Progress == nil || len(d.Pins) > 500 || len(d.Domains) > 500 || len(d.Progress) > 100 {
 		return errors.New("invalid account data size")
 	}
+	if d.Collections == nil || d.Collected == nil || d.Notes == nil || len(d.Collections) > 100 || len(d.Collected) > 2000 || len(d.Notes) > 1000 {
+		return errors.New("invalid account data size")
+	}
 	for k, p := range d.Pins {
-		if !validAccountEntryKey(k) || (p.Source != "hn" && p.Source != "lobsters") || len(p.Title) > 4096 || len(p.URL) > 8192 || len(p.Host) > 253 || len(p.By) > 100 || p.Score < 0 || p.Comments < 0 || p.PinnedAt < 0 {
+		if !validAccountEntryKey(k) || !validStory(p.Source, p.Title, p.URL, p.Host, p.By, p.Score, p.Comments) || p.PinnedAt < 0 {
 			return errors.New("invalid pinned story")
 		}
-		if p.URL != "" {
-			u, err := url.Parse(p.URL)
-			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
-				return errors.New("invalid story URL")
-			}
+	}
+	for k, c := range d.Collections {
+		name := strings.TrimSpace(c.Name)
+		if !collectionID.MatchString(k) || name == "" || name != c.Name || utf8.RuneCountInString(name) > 100 || c.CreatedAt < 0 {
+			return errors.New("invalid collection")
+		}
+	}
+	for k, e := range d.Collected {
+		collection, story, ok := strings.Cut(k, ":")
+		if _, exists := d.Collections[collection]; !ok || !exists || !storyID.MatchString(e.ID) || story != e.Source+"-"+e.ID ||
+			!validStory(e.Source, e.Title, e.URL, e.Host, e.By, e.Score, e.Comments) || e.AddedAt < 0 {
+			return errors.New("invalid collection entry")
+		}
+	}
+	for k, n := range d.Notes {
+		if !storyID.MatchString(n.ID) || k != n.Source+"-"+n.ID || !validStory(n.Source, n.Title, n.URL, n.Host, n.By, n.Score, n.Comments) ||
+			strings.TrimSpace(n.Text) == "" || !utf8.ValidString(n.Text) || utf8.RuneCountInString(n.Text) > 10000 || n.UpdatedAt < 0 {
+			return errors.New("invalid note")
 		}
 	}
 	seen := map[string]bool{}
@@ -288,14 +371,17 @@ type accountScanner struct{ data *accountDocument }
 
 func newAccountScan(d *accountDocument) *accountScanner { return &accountScanner{data: d} }
 func (s *accountScanner) Scan(v any) error {
+	var err error
 	switch x := v.(type) {
 	case string:
-		return json.Unmarshal([]byte(x), s.data)
+		err = json.Unmarshal([]byte(x), s.data)
 	case []byte:
-		return json.Unmarshal(x, s.data)
+		err = json.Unmarshal(x, s.data)
 	default:
 		return errors.New("invalid account document")
 	}
+	s.data.normalize()
+	return err
 }
 
 type accountPanelVM struct {
@@ -358,7 +444,10 @@ func accountReturn(r *http.Request, message string) string {
 	u, err := url.Parse(raw)
 	if err == nil && len(raw) <= 4096 && strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "//") && !strings.Contains(raw, "\\") && u.Host == "" && u.Scheme == "" && u.User == nil {
 		q := u.Query()
-		workspace := u.Path == "/hn/" || u.Path == "/lobsters/" || u.Path == "/pinned/" || u.Path == "/find"
+		collection, inCollections := strings.CutPrefix(u.Path, "/collections/")
+		collection = strings.TrimSuffix(collection, "/")
+		inCollections = inCollections && (collection == "" || (collectionID.MatchString(collection) && strings.HasSuffix(u.Path, "/")))
+		workspace := u.Path == "/hn/" || u.Path == "/lobsters/" || u.Path == "/pinned/" || u.Path == "/notes/" || u.Path == "/find" || inCollections
 		if u.Path == "/account" || (workspace && q.Get("view") == "window" && slices.Contains(strings.Split(q.Get("open"), ","), "account")) {
 			u.Fragment = ""
 			q.Del("message")
@@ -683,6 +772,16 @@ func (a *accountService) putData(w http.ResponseWriter, r *http.Request) {
 	if err := decoder.Decode(&d); err != nil {
 		accountError(w, 400, "Invalid account data.")
 		return
+	}
+	// A client from before collections and notes omits them; it must not erase them.
+	if d.Collections == nil {
+		d.Collections = u.Data.Collections
+	}
+	if d.Collected == nil {
+		d.Collected = u.Data.Collected
+	}
+	if d.Notes == nil {
+		d.Notes = u.Data.Notes
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF || d.validate() != nil {
 		accountError(w, 400, "Invalid account data.")

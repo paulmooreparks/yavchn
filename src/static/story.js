@@ -306,6 +306,7 @@
       var source = root.querySelector('.story-discussion .story-bar a[target="_blank"]');
       var story = [
         { label: 'Pin this story', checked: !!(pins && pins.isPinned(d.storyId)), run: function () { pins.toggleStory(root); } },
+        ...(lib.library ? lib.library.storyMenu(root) : []),
         '-',
         ...(win() ? [{ label: 'Open in new reader window', run: function () { lib.readers.create(d.storyKey); } }] : []),
         { label: 'Open the original', disabled: !original, run: function () { window.open(original, '_blank', 'noopener'); } },

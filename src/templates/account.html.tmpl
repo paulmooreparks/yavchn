@@ -3,7 +3,7 @@
   {{ if .Message }}<p role="status">{{ .Message }}</p>{{ end }}
   {{ if .Account }}
   <p>You are signed in as <strong>{{ .Account.Username }}</strong> through GitHub.</p>
-  <p>Your pins, blocked domains, and reading progress synchronize with this account. Window positions and appearance stay in this browser.</p>
+  <p>Your pins, collections, notes, blocked domains, and reading progress synchronize with this account. Window positions and appearance stay in this browser.</p>
   <p role="status" data-account-sync-status>Account data loaded.</p>
   <section class="account-section">
     <h2>Browser data</h2>
@@ -46,7 +46,7 @@
     </form>{{ end }}{{ end }}
   </section>
   {{ else }}
-  <p>Sign in to keep your pinned stories, blocked domains, and reading progress across devices. You can continue reading without an account.</p>
+  <p>Sign in to keep your pinned stories, collections, notes, blocked domains, and reading progress across devices. You can continue reading without an account.</p>
   {{ if .LoginAvailable }}<form method="post" action="/auth/github">
     <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
     <input type="hidden" name="csrf" value="{{ .LoginCSRF }}">
