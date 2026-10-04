@@ -1,71 +1,86 @@
-# PUDL responsive workspace proposal
+# Proposal: what PUDL should take over from YAVCHN
 
-This proposal records the issues found while adapting YAVCHN to phone, tablet, and desktop widths. It is ready for the PUDL agent as of 3 October 2026. The observations apply to YAVCHN's bundled PUDL 0.40.0. Please check the current PUDL source before implementing, since a newer release may already address some items.
+This proposal is for the PUDL agent. YAVCHN wrote it on 4 October 2026, against PUDL 0.44.1. Every gap below was checked against the v0.44.1 tag that day, so please check current PUDL before implementing, in case a later release covers some of them.
 
-YAVCHN has implemented its reader layout and site controls. The remaining work concerns shared window capabilities, menu overflow, and reusable control behavior. No new PUDL vendor patches were introduced for this review. Please implement shared fixes in PUDL source, document the public contract, and release them for downstream adoption.
+The proposal has two parts. Part A covers four runtime features that YAVCHN has patched into its bundled copies of `pudl-regions.js` and `pudl-windows.js`. Those patches are why YAVCHN cannot simply copy a release, and why its 0.44.1 upgrade had to take files one at a time. The adoption guide asks sites to use tagged releases rather than patching PUDL, so these are the most pressing. Part B covers patterns that YAVCHN and parkscomputing.com now implement separately, in their own stylesheets and scripts, which belong in PUDL so both can drop their copies.
 
-## 1. Restrict window placement in narrow workspaces
+Each item names where YAVCHN's version lives, so you can read the behavior that works today before designing the public contract.
 
-This is the highest-priority unresolved issue. On a phone, YAVCHN's readers visually fill the available workspace, but PUDL still treats them as floating windows. Their menus offer Restore, snapping, docking, and reset even though those placements are not useful at that width. CSS alone cannot keep menu capabilities, keyboard operations, and window state consistent.
+## Part A. Runtime features YAVCHN patches into PUDL
 
-Provide a documented host opt-in for a responsive placement policy. YAVCHN needs a maximized-only workspace below its 640px layout breakpoint, with minimization still supported. Base the decision on available workspace width rather than user-agent detection. The policy must constrain actual window behavior, not merely filter a menu.
+### A1. Window-scoped address parameters
 
-Required behavior:
+YAVCHN's reader windows keep the article each one shows in the address, as `r.<window-key>`, beside PUDL's own `open`, `top`, `min`, and `p.<key>`. A reader window is an instance such as `reader-1`, and its article changes as the reader reads, so the article cannot be the window key.
 
-- Visible readers occupy the available workspace as maximized windows, without floating frames, resize handles, or draggable placement.
-- Minimize remains enabled. Selecting a minimized reader restores its visibility in maximized form.
-- Restore to floating is visible but disabled while the restriction applies. This is distinct from restoring a minimized reader.
-- Snap, dock, undock, movement, resizing, and placement reset are unavailable while restricted. Content commands, sharing, open-as-page, and close continue to work.
-- Window chrome, the window menu, generated Window menu, pointer gestures, title-bar double-click, keyboard commands, and script APIs enforce the same policy. Previously captured command callbacks cannot bypass it.
-- Opening a saved URL with a floating or docked placement in a narrow workspace yields a valid maximized presentation. Widening recovers the prior wide-screen placement and dock assignment without losing the article, scroll positions, or minimized state.
-- Changing width while a menu or gesture is active leaves a valid state. The policy must cover newly opened and restored windows as well as existing ones.
+Two patches make this work. In `pudl-regions.js`, `isWinParam()` also treats `r.` parameters as window state, so region swaps carry them with the windows. In `pudl-windows.js`, the parameter filter drops an `r.<key>` whose window is not open, so closing a reader removes its article from the address.
 
-PUDL 0.40.0's documented `menuCommands()` returns command snapshots; changing them does not change capabilities. The `pudl:window-menu` event permits additions, not restrictions. Please design an explicit public policy rather than requiring host interception of generated menu elements. Document how constrained presentation interacts with URL state, history, and stored placement.
+Please give hosts a documented way to declare window-scoped parameter prefixes, perhaps as an attribute on the window layer or an option to `pudlWindows`. PUDL would then treat `<prefix>.<key>` as belonging to window `<key>`. It would carry such parameters through region swaps and Back and Forward, include them in a shared window link, and drop them when the window closes. YAVCHN would declare `r`.
 
-Verify floating, docked, maximized, minimized, duplicate, and content-sized windows across the breakpoint. YAVCHN can opt its readers into the policy; other applets must retain their declared sizing rules.
+### A2. Reloading the current regions
 
-## 2. Make mobile menu overflow discoverable
+YAVCHN's Refresh the feed command refetches the current list without a page load and without a new history entry. Its patch adds `pudlRegions.reload()`. The function refetches `location.href` with `Cache-Control: no-cache`, swaps the regions in place, and resolves to `true`. If the fetched page has no matching regions, or the request fails, it rejects and leaves the current regions intact; it never navigates. A navigation that starts during the reload cancels it.
 
-In the mobile Window menu, the Open windows heading appeared at the bottom while both window entries were below the clipped edge. The auto-hiding scrollbar provided no persistent indication that the menu could scroll. The current menu panel height limit includes a 32rem cap.
+Please add `reload()` to `pudlRegions` with that contract, or an equivalent one, and document how it differs from following a link.
 
-On narrow screens, use the available viewport height after accounting for the menu anchor and safe areas. When content still overflows, show persistent directional overflow cues. The cues should indicate independently whether more content exists above or below, update during scrolling and resizing, and disappear when the corresponding edge is reached. They must not cover or intercept menu commands.
+### A3. Collapsed segmented controls as region links
 
-Verify a long generated Window menu, nested menus and Back navigation, keyboard focus scrolling, touch scrolling, landscape orientation, browser zoom, and viewport changes caused by browser chrome or the on-screen keyboard. Opening a submenu must leave its first actionable item discoverable. Do not rely on platform scrollbar visibility.
+On a phone, PUDL folds a `data-seg-menu` segmented control into a menu button whose panel repeats each choice as a link. The region script ignores every link inside `.menu-panel`, so choosing a list tab from the collapsed control loads the whole page, and the open windows reload with it. The same choice from the full control swaps only the list.
 
-## 3. Improve splitter targets and document single-pane presentation
+YAVCHN's patch exempts `.seg-choice` links from the menu-panel rule, because they stand in for links that are already region links. Please make the generated choices behave as the segments they mirror. That could mean copying the original link's region behavior onto each choice, or the exemption YAVCHN uses.
 
-The original reader splitter was difficult to acquire by finger or mouse. YAVCHN now uses an 18px divider in both desktop and mobile layouts. It also offers Article, Discussion, and Split modes so phone users can read without manipulating a divider.
+### A4. Re-keying a window
 
-Provide a documented splitter target-size option or token that can enlarge the interactive region without overlapping adjacent links or stealing normal content scrolling. Retain keyboard resizing, orientation semantics, limits, and visible focus. An 18px divider is YAVCHN's accepted starting point; it need not become a mandatory global size.
+A reader window that loads a different story keeps its element, placement, focus, and running content, but its key in the address changes. `pudlWindows.replace()` closes the old window and opens a new one, which loses all of that.
 
-Document or add a supported single-pane mode that hides the other pane and divider while retaining both mounted pane contents and the split proportion. YAVCHN currently owns its pane state, toggles the split layout, and refreshes PUDL when returning to Split. Confirm that supported pattern or provide a direct API. Per-reader choices, article labels, scroll restoration, and sharing remain host responsibilities.
+YAVCHN's patch adds `pudlWindows.rekey(oldKey, key, push)`. It renames the open window in the state, the minimized and placement maps, child windows' `data-win-parent`, focus memory and openers. It commits the change as a new history entry unless `push` is `false`, and dispatches `pudl:window-rekey` with both keys. Re-keying to the same key raises the window, and re-keying onto a key that is open or pending is refused.
 
-Verify horizontal and vertical splits, pointer cancellation, touch scrolling near the divider, minimum pane sizes, keyboard resizing, and repeated transitions between single and split panes.
+Please adopt `rekey()` and its event as public API, with that contract, and document it beside `replace()` so hosts know which to use.
 
-## 4. Support compact window chrome and readable glyphs
+## Part B. Patterns both sites implement separately
 
-YAVCHN hides secondary title-bar buttons at narrow widths and exposes their actions through the window menu. The menu button remains 40px square, but its original 12px caret was too small within that button. YAVCHN now uses a 20px outlined downward chevron for narrow readers.
+### B1. Multi-select filter menus
 
-Consider a documented compact-chrome option and separate glyph-size and target-size tokens. The compact title bar must retain its accessible title, active-window indication, and access to every applicable command. PUDL should suppress gesture instructions that are invalid under the restricted placement policy. Verify dark and light themes, forced colors, enlarged text, and keyboard-only access.
+parkscomputing.com's Categories and Tags menus, and YAVCHN's Show and collection menus, are menu panels of checkbox rows that filter a list. Both sites styled the rows themselves, as `.menu-panel .menu-check`, and both wrote the same behavior. Ticking a box submits the filter form, the region swap rebuilds the bar, and the menu that was open has to open again with focus back on the same box. Otherwise every tick closes the menu. parkscomputing.com does this in `desktop.js` (`syncFilterMenus`), and YAVCHN does it in `library.js`, which records the panel and box and calls `showPopover()` after `pudl:regions-swap`.
 
-## 5. Document workspace-level taskbars and pane navigation
+Please provide the checkbox row style, and a documented filter-menu behavior. A panel marked, say, `data-filter-menu` would submit its form on change and reopen across the swap that change causes, keeping focus on the box. In YAVCHN, each box belongs to the filter form through its `form` attribute, so the form works without script. The reference could recommend that.
 
-YAVCHN previously placed its taskbar beneath the detail pane. The mobile story-list view therefore hid every open-window entry. The taskbar now sits outside the sidebar/detail switch, spans the whole workspace, and reserves space below both panes. Overflow arrows keep additional window entries reachable when scrollbars disappear.
+### B2. A settings panel
 
-Please document the supported placement of `data-win-dock` outside the detail pane. If any runtime assumptions prevent this arrangement, remove those assumptions through a public contract. YAVCHN's current placement works and does not require a new API merely for its own sake.
+Both sites now lay out Settings, and YAVCHN its Account window, as a column of PUDL cards. Each card has a `.card-title`, a `.card-desc` in muted type, its controls, and an action row of buttons. YAVCHN carries this as `.settings-panel`, `.settings-card`, and `.settings-actions` in `src/static/style.css`, after parkscomputing.com's `css/settings.css`. The two differ only in names.
 
-YAVCHN also provides a taskbar sidebar button. On wide layouts it toggles the list; on phones it switches between stories and windows using public minimize/raise operations, preserving the previously visible window set. This replaces the title-bar back link. Consider whether master-detail should expose a pane-navigation operation independent of window minimization. If added, define its interaction with window activation, URL navigation, reload, and focus so hosts do not compete with automatic pane selection.
+Please add the pattern to PUDL with documented classes: the column, the card in it, and the action row. Add a reference example. YAVCHN would rename its classes to match and delete its copy.
 
-## 6. Offer consistent menu-bar elevation through theme tokens
+### B3. The account pill and avatar
 
-Theme Studio previews use standard PUDL selectors, but YAVCHN's earlier component overrides obscured the palette's effect. Those selector overrides have been removed. In light mode the top-bar surface was also too close to the selector track, making identical selectors appear different depending on their surroundings.
+Both sites end the top bar with the same account control. A signed-out reader sees a Sign in pill. A signed-in reader sees their picture in a round raised pill, or a head-and-shoulders placeholder drawn as an SVG in the text colour. YAVCHN's styles are `.account-pill`, `.account-avatar`, and `.account-avatar-placeholder` in `style.css`, and its placeholder SVG is the `avatar` template in `src/templates/partials.html.tmpl`. Both were copied from parkscomputing.com.
 
-The accepted YAVCHN presentation keeps selectors recessed and gives menu-bar groups the same track background with raised elevation. The local menu-bar rule uses `--recess-bg` for the background and PUDL's `--raise-border` and `--raise-shadow`; a one-pixel border replaces one pixel of padding so dimensions stay constant. Menu items, open states, and dropdown panels retain their existing behavior and styling. The light-mode top-bar background uses `--surface`; dark mode retains its existing background.
+Please make this a top-bar component, with the placeholder as a glyph or a documented SVG, so its look and size stay one decision.
 
-Consider explicit menu-bar surface and elevation tokens, or document this composition as supported. Preserve elevation as the clickability cue in both themes. Do not convert this proposal into a redesign of menu items or dropdowns; those remain under separate review.
+### B4. A disclosure button
 
-## Scope and handoff
+YAVCHN's Note button opens and closes the note under a story's toolbar. Following PUDL's semantics, it carries `aria-expanded` and a 16-pixel SVG chevron that turns over as it opens (`.disclosure-chevron` in `style.css`). PUDL has a caret glyph for menu buttons, but nothing for a button that discloses content in place, and Paul has asked for chevrons of a readable size.
 
-The host retains its feed choices, reader pane labels, toolbar composition, sidebar pin/open/hide placement, active-reader reuse, and palette values. YAVCHN's source and acceptance notes are in `DESIGN.md`; relevant implementations are in `src/static/style.css`, `desktop.js`, `story.js`, and `readers.js`, with templates under `src/templates`. Its browser regression suite is `tests/readers.browser.cjs`.
+Please add a disclosure button style: a raised button whose chevron reflects `aria-expanded`, at a size the reference sets. It should honor reduced motion.
 
-Please prioritize the restricted placement policy and menu overflow fixes. Return the documented API or markup contract, regression coverage, release version, and adoption instructions. Distinguish implemented fixes from optional design recommendations so YAVCHN can adopt the release without depending on undocumented behavior.
+### B5. Toasts from content loaded into a window
+
+PUDL re-raises server-rendered toasts that are in the page when it loads. A window body fetched later, as `/window/{key}` is, has no way to carry a toast. YAVCHN's Account window needs one after an action redirects back to it, for example "Your picture was saved". The panel renders `<p data-account-toast="positive" hidden>`, and the applet script calls `pudlToast()` with its text.
+
+Please let content mounted into a window carry `.toast` elements that PUDL moves into the toast region and announces, as it does for those present at load. The same markup would then work for a Classic page and a window.
+
+### B6. A default identity menu
+
+PUDL's conventions give every window an identity menu: Open as a page, Copy link, and Close window. A window whose content is not an applet with `menus()` gets no front menu at all. YAVCHN therefore registers three stub applets, for Settings, the user lookup, and profiles, only to supply that menu (`src/static/applets/identity.js`).
+
+Please generate the identity menu, titled from the window, for any window whose content supplies no menus, so hosts need no stubs. An applet that supplies menus would keep full control, as now.
+
+## Verification
+
+YAVCHN's browser suites already cover the behavior above and can serve as acceptance tests once YAVCHN adopts the release:
+
+- `tests/readers.browser.cjs` covers reader parameters, re-keying, feed reload, and collapsed segment links.
+- `tests/library.browser.cjs` covers the filter menus that stay open, and the settings layout at phone width.
+- `tests/signin.browser.cjs` and `tests/accounts.browser.cjs` cover the account pill.
+- `TestAccountFeedbackSitsBesideItsControl` in `src/signin_test.go` covers the toast markup; no browser test yet checks that the toast appears.
+
+When a release covers Part A, YAVCHN will replace its patched files with the release's and delete the patches. It will adopt Part B items as they ship.
