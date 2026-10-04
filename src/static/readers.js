@@ -58,6 +58,28 @@
     });
   }
 
+  // Applet icons come from host-owned window metadata, with PUDL's app glyph as fallback.
+  function syncAppletIcons() {
+    document.querySelectorAll('.win.app-win').forEach(function (win) {
+      var key = win.getAttribute('data-win');
+      document.querySelectorAll('[data-win-tab="' + CSS.escape(key) + '"]').forEach(function (tab) {
+        var title = document.createElement('span');
+        title.className = 'task-title';
+        title.textContent = win.querySelector('.win-title').textContent.trim();
+        var iconURL = win.getAttribute('data-window-icon');
+        var icon = document.createElement(iconURL ? 'img' : 'span');
+        icon.className = 'task-icon';
+        if (iconURL) { icon.src = iconURL; icon.alt = ''; }
+        else {
+          icon.classList.add('glyph');
+          icon.style.setProperty('--glyph', 'var(--glyph-' + (win.getAttribute('data-window-glyph') || 'app') + ')');
+        }
+        icon.setAttribute('aria-hidden', 'true');
+        tab.replaceChildren(icon, title);
+      });
+    });
+  }
+
   function remember(key) {
     recent = recent.filter(function (k) { return k !== key; });
     recent.push(key);
@@ -126,6 +148,7 @@
 
   function syncRows() {
     syncChrome();
+    syncAppletIcons();
     var front = document.querySelector('.win.active:not([hidden]) .story');
     document.querySelectorAll('.story-list .story-row').forEach(function (row) {
       var link = row.querySelector('a[data-win-open]');
@@ -177,6 +200,13 @@
   });
   document.addEventListener('yavchn:rows-appended', syncRows);
   lib.onList(syncRows);
+  // PUDL also rebuilds dock tabs for placement policies and title changes.
+  // Observe the dock's direct children so decorating a tab does not retrigger us.
+  var taskDock = document.querySelector('[data-win-dock]');
+  if (taskDock) new MutationObserver(function () {
+    syncChrome();
+    syncAppletIcons();
+  }).observe(taskDock, { childList: true });
   window.addEventListener('popstate', function () {
     mounted.forEach(function (entry, key) {
       if (entry.root.isConnected) {

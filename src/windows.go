@@ -418,28 +418,29 @@ func (st winState) layerStyle(attrs map[string]winAttrs) template.CSS {
 // a tool applet's window, Reader for the article reader's bootstrap, and
 // the story fields for a loaded story.
 type windowVM struct {
-	ContentSized     bool
-	StoryKey         string
-	App              *appVM
-	Reader           bool
-	Def              winAttrs // the placement the window's markup gives it
-	Key, Source, ID  string
-	Title, URL, Host string
-	By, Age          string
-	ByKey, ByURL     string // the poster's profile window and page
-	Score, Comments  int
-	SourceURL        string // the discussion on the source's own site
-	SourceLabel      string // "Open on HN" / "Open on Lobsters"
-	HasArticle       bool
-	IsComment        bool          // an HN comment, opened from a link to it
-	Text             template.HTML // a text post's own words, sanitised
-	Error            string
-	PageURL          string // the story's own page, /story/{source}/{id}
-	Mode, Edge       string
-	Style            template.CSS
-	Hidden, Active   bool
-	MinHref, MaxHref string
-	CloseHref        string
+	IconURL, IconGlyph string
+	ContentSized       bool
+	StoryKey           string
+	App                *appVM
+	Reader             bool
+	Def                winAttrs // the placement the window's markup gives it
+	Key, Source, ID    string
+	Title, URL, Host   string
+	By, Age            string
+	ByKey, ByURL       string // the poster's profile window and page
+	Score, Comments    int
+	SourceURL          string // the discussion on the source's own site
+	SourceLabel        string // "Open on HN" / "Open on Lobsters"
+	HasArticle         bool
+	IsComment          bool          // an HN comment, opened from a link to it
+	Text               template.HTML // a text post's own words, sanitised
+	Error              string
+	PageURL            string // the story's own page, /story/{source}/{id}
+	Mode, Edge         string
+	Style              template.CSS
+	Hidden, Active     bool
+	MinHref, MaxHref   string
+	CloseHref          string
 }
 
 func readerWindow() windowVM {

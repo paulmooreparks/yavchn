@@ -1268,3 +1268,8 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .account-section { margin-block: 1.5rem; padding-block-start: 1rem; border-top: 1px solid var(--border); }
 .account-section form { margin-block: .75rem; }
 .account-section label { display: block; margin-block-end: .75rem; }
+
+/* Applet identity follows the host's icon choice and PUDL's masked glyphs. */
+.win-tab .task-icon { width: 16px; height: 16px; flex: none; object-fit: contain; }
+.win-tab .task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.win-tab:has(.task-icon):not(.minimized)::before { display: none; }
