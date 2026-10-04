@@ -1,8 +1,8 @@
 /* Browser storage moves between origins through an explicit local file. */
 (function () {
   'use strict';
+  // Backups are saved only on the old domain and imported everywhere else.
   var legacy = location.hostname === 'yavchn.parkscomputing.com';
-  var destination = ['yavchn.com', 'www.yavchn.com'].includes(location.hostname);
   var limit = 10 * 1024 * 1024;
   var pending = new WeakMap();
 
@@ -23,10 +23,9 @@
       if (root.dataset.migrationReady) return;
       root.dataset.migrationReady = 'true';
       root.querySelector('[data-migration-export]').disabled = false;
+      root.querySelector('[data-migration-leaving]').hidden = !legacy;
       root.querySelector('[data-migration-import]').hidden = legacy;
       root.querySelector('[data-migration-file]').disabled = false;
-      var onward = root.querySelector('a[href^="https://yavchn.com/settings"]');
-      onward.hidden = destination;
     });
   }
   document.addEventListener('click', function (event) {

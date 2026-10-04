@@ -37,6 +37,10 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.waitForFunction(() => document.querySelector('[data-migration]')?.dataset.migrationReady === 'true');
     assert.equal(new URL(page.url()).hostname, 'yavchn.com');
     assert.equal(await page.getByRole('link', { name: 'Start migration' }).count(), 0);
+    // Only the old domain offers to save a backup; every other site imports one.
+    assert.equal(await page.locator('[data-migration-leaving]').isVisible(), false);
+    assert.equal(await page.getByRole('button', { name: 'Save browser data to a file' }).isVisible(), false);
+    assert.equal(await page.locator('[data-migration-import]').isVisible(), true);
     await page.evaluate(() => {
       localStorage.setItem('yavchn-roundtrip', 'previous');
       localStorage.setItem('destination-only', 'preserved');
