@@ -4,6 +4,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
 (async function () {
   const browser = await chromium.launch({ channel: process.env.YAVCHN_BROWSER_CHANNEL || 'msedge', headless: true });
   try {
+    await require('./viewport.browser.cjs')(browser, process.argv[2]);
     const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } });
     page.setDefaultTimeout(8000);
     const errors = [];

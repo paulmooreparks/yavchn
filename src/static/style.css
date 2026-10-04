@@ -1201,7 +1201,7 @@ kbd {
 .taskbar-scroll { font-size: 21px; }
 .taskbar-scroll[hidden] { display: none; }
 .win-bar-dock .win-tab { flex: 0 0 auto; max-width: 250px; }
-body.desktop, body.story-page { height: 100dvh; }
+body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 @container reader (max-width: 600px) {
   .reader-toolbar { padding: 6px; gap: 6px; }
   .reader-panes { flex: 1; min-width: 0; display: flex; }

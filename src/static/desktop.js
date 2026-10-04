@@ -11,6 +11,21 @@
 (function () {
   'use strict';
 
+  /* Keep the reading shell inside the visible viewport on navigation and
+     restoration as well as resize. CSS viewport units remain the fallback. */
+  function syncViewportHeight() {
+    var viewport = window.visualViewport;
+    // Pinch zoom magnifies the existing layout without changing its height.
+    if (viewport && viewport.scale !== 1) return;
+    var height = viewport ? viewport.height : window.innerHeight;
+    // An inactive document can report a zero-sized visual viewport.
+    if (height > 0) document.documentElement.style.setProperty('--yv-viewport-height', height + 'px');
+  }
+  syncViewportHeight();
+  window.addEventListener('pageshow', syncViewportHeight);
+  window.addEventListener('resize', syncViewportHeight);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', syncViewportHeight);
+
   function inEditable(t) {
     if (!t || !t.closest) return false;
     return !!t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
