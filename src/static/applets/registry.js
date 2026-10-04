@@ -26,21 +26,10 @@
   };
   var version = document.querySelector('script[data-asset-version]').getAttribute('data-asset-version');
   window.pudlApplets.define('story', {});
-  // Settings, the user lookup and profiles have no working commands, but
-  // every window still has its identity menu: Open as a page, Copy link
-  // and Close window, as PUDL's menu-bar conventions give each applet.
-  [['settings', 'Settings', 'Copy settings link', '/settings'],
-    ['lookup', 'Look up a user', 'Copy lookup link', '/user'],
-    ['profile', 'Profile', 'Copy profile link', '']].forEach(function (a) {
-    window.pudlApplets.define(a[0], {});
-    window.pudlApplets.register(a[0], { init: function (root) {
-      // These start as the page loads, which can be before the menu bar first
-      // reads its front menu, so they announce theirs through its refresh API.
-      requestAnimationFrame(function () { if (window.pudlMenubar) window.pudlMenubar.refresh(); });
-      return { menus: function () {
-        return { titles: [{ label: a[1], items: window.yavchn.identityMenu(root, a[2], a[3] || location.href) }] };
-      } };
-    } });
+  // Settings, the user lookup and profiles share one small script that gives
+  // each the identity menu every window has.
+  ['settings', 'lookup', 'profile'].forEach(function (name) {
+    window.pudlApplets.define(name, { src: '/static/applets/identity.js?v=' + version, ver: '1' });
   });
   window.pudlApplets.define('account', { src: '/static/applets/account.js?v=' + version, page: '/account?view=classic', ver: '1' });
   window.pudlApplets.define('replies', { src: '/static/applets/replies.js?v=' + version, page: '/applets/replies', ver: '1' });
