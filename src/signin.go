@@ -37,27 +37,39 @@ const pictureLimit = 200 * 1024
 
 var errIdentityTaken = errors.New("identity belongs to another account")
 
-// accountMessages are the outcomes an account action reports by name in
-// its return address, so the page that shows them is an address like any other.
-var accountMessages = map[string]string{
-	"signed-out":       "You are signed out. Your anonymous browser data is available again.",
-	"deleted":          "Your account and synchronized data have been deleted.",
-	"email-sent":       "If that address can receive mail, a sign-in link is on its way. It works once, within 15 minutes.",
-	"email-link-sent":  "If that address can receive mail, a confirmation link is on its way. Open it in this browser to add the address to your account.",
-	"email-refused":    "Enter a valid email address.",
-	"email-linked":     "That email address is now a way to sign in to your account.",
-	"github-linked":    "Your GitHub account is now a way to sign in to your account.",
-	"identity-taken":   "That sign-in already belongs to another YAVCHN account, so it was not added. Sign in with it to use that account.",
-	"link-expired":     "That link has expired or was already used. Ask for a new one.",
-	"link-elsewhere":   "Open the confirmation link in the browser where you are signed in to the account that asked for it.",
-	"identity-removed": "That way of signing in was removed.",
-	"last-identity":    "An account keeps at least one email address or GitHub account, so you can always get back in. Add another before removing this one.",
-	"passkey-added":    "Your passkey was added.",
-	"passkey-removed":  "The passkey was removed.",
-	"picture-saved":    "Your picture was saved.",
-	"picture-removed":  "Your picture was removed.",
-	"picture-github":   "Your GitHub picture is shown again.",
-	"picture-refused":  "That picture could not be used. Choose a PNG, JPEG, or WebP picture of at most 200 KB.",
+// accountMessage is an outcome an account action reports by name in its
+// return address, so the page that shows it is an address like any other.
+// After PUDL, a passing confirmation is a toast, and anything the reader
+// must act on is a notice beside the control it concerns: Place names the
+// spot in the account panel ("email", "methods", "passkeys", "picture",
+// "delete" or "page"). Kind is PUDL's: "positive", "warn", "danger", or ""
+// for information.
+type accountMessage struct {
+	Text, Kind, Place string
+	Toast             bool
+}
+
+var accountMessages = map[string]accountMessage{
+	"signed-out":       {Text: "You are signed out. Your anonymous browser data is available again.", Kind: "positive", Toast: true},
+	"deleted":          {Text: "Your account and synchronized data have been deleted.", Kind: "positive", Toast: true},
+	"email-sent":       {Text: "If that address can receive mail, a sign-in link is on its way. Open it within 15 minutes, then press the button on the page it opens.", Place: "email"},
+	"email-link-sent":  {Text: "If that address can receive mail, a confirmation link is on its way. Open it in this browser within 15 minutes to add the address.", Place: "email"},
+	"email-refused":    {Text: "Enter an email address such as name@example.com.", Kind: "danger", Place: "email"},
+	"link-expired":     {Text: "That link has expired or was already used. Ask for a new one here.", Kind: "warn", Place: "email"},
+	"link-elsewhere":   {Text: "Open the confirmation link in the browser where you are signed in to the account that asked for it.", Kind: "warn", Place: "page"},
+	"email-linked":     {Text: "That email address is now a way to sign in to your account.", Kind: "positive", Toast: true},
+	"github-linked":    {Text: "Your GitHub account is now a way to sign in to your account.", Kind: "positive", Toast: true},
+	"identity-taken":   {Text: "That sign-in already belongs to another YAVCHN account, so it was not added. Sign in with it to use that account.", Kind: "warn", Place: "methods"},
+	"identity-removed": {Text: "That way of signing in was removed.", Kind: "positive", Toast: true},
+	"last-identity":    {Text: "An account keeps at least one email address or GitHub account, so you can always get back in. Add another before removing this one.", Kind: "warn", Place: "methods"},
+	"passkey-added":    {Text: "Your passkey was added.", Kind: "positive", Toast: true},
+	"passkey-removed":  {Text: "The passkey was removed.", Kind: "positive", Toast: true},
+	"picture-saved":    {Text: "Your picture was saved.", Kind: "positive", Toast: true},
+	"picture-removed":  {Text: "Your picture was removed.", Kind: "positive", Toast: true},
+	"picture-github":   {Text: "Your GitHub picture is shown again.", Kind: "positive", Toast: true},
+	"picture-refused":  {Text: "That picture could not be used. Choose a PNG, JPEG, or WebP picture of at most 200 KB.", Kind: "danger", Place: "picture"},
+	"session-changed":  {Text: "You signed in or out in another tab, so nothing was changed. This is your account as it is now.", Kind: "warn", Place: "page"},
+	"session-ended":    {Text: "Your sign-in ended, so nothing was changed. Sign in to continue.", Kind: "warn", Place: "page"},
 }
 
 // withMessage adds an outcome to a local return address.
@@ -72,16 +84,26 @@ func withMessage(target, message string) string {
 	return u.String()
 }
 
-// signInToken is the token a sign-in form must carry: the session's own
-// when someone is signed in, and otherwise the one the account page issued.
-func signInToken(r *http.Request) string {
-	if user := currentAccount(r); user != nil {
-		return user.CSRF
+// Signing in needs no token of its own: the caller has checked the
+// request's Origin, which the Fetch standard has browsers send with every
+// cross-site POST, and a sign-in replaces whatever session the browser had.
+// A request that adds a way in to the signed-in account is a change to that
+// account, so it carries the session's token like any other account change.
+//
+// linkTarget is the account such a request names, or with stale, the
+// message for a page that no longer matches the browser's sign-in.
+func linkTarget(r *http.Request) (account, stale string) {
+	if r.PostForm.Get("link") != "1" {
+		return "", ""
 	}
-	if c, err := r.Cookie(loginCookie); err == nil {
-		return c.Value
+	user := currentAccount(r)
+	switch {
+	case user == nil:
+		return "", "session-ended"
+	case !sameToken(user.CSRF, r.PostForm.Get("csrf")):
+		return "", "session-changed"
 	}
-	return ""
+	return user.ID, ""
 }
 
 // startSession replaces this browser's session with a new one for the account.
@@ -109,7 +131,6 @@ func (a *accountService) startSession(ctx context.Context, tx *sql.Tx, r *http.R
 
 func (a *accountService) setSession(w http.ResponseWriter, session string) {
 	accountCookie(w, sessionCookie, session, 30*24*3600)
-	accountCookie(w, loginCookie, "", -1)
 }
 
 // signInIdentity signs the browser in to the account an identity belongs
@@ -266,13 +287,14 @@ func (a *accountService) requestEmail(w http.ResponseWriter, r *http.Request) {
 		accountError(w, 403, "Invalid sign-in request.")
 		return
 	}
-	if !sameToken(signInToken(r), r.PostForm.Get("csrf")) {
-		accountError(w, 403, "Reload the account page before signing in.")
+	link, stale := linkTarget(r)
+	if stale != "" {
+		http.Redirect(w, r, accountReturn(r, stale), http.StatusSeeOther)
 		return
 	}
-	link, message := "", "email-sent"
-	if user := currentAccount(r); user != nil && r.PostForm.Get("link") == "1" {
-		link, message = user.ID, "email-link-sent"
+	message := "email-sent"
+	if link != "" {
+		message = "email-link-sent"
 	}
 	target := accountReturn(r, "")
 	address, ok := normalEmail(r.PostForm.Get("email"))
@@ -483,15 +505,20 @@ func passkeyRefused(w http.ResponseWriter, status int, message string) {
 	passkeyJSON(w, status, map[string]string{"error": message})
 }
 
-// passkeyRequest reads a script's JSON request for a passkey ceremony,
-// which carries its token in X-CSRF-Token.
+// passkeyRequest reads a script's JSON request for a passkey ceremony. A
+// sign-in passes no token, as other sign-ins do; a change to the signed-in
+// account passes the session's, which the request carries in X-CSRF-Token.
 func (a *accountService) passkeyRequest(w http.ResponseWriter, r *http.Request, token string, into any) bool {
 	if a.webauthn == nil {
 		passkeyRefused(w, 503, "Passkeys are not available here.")
 		return false
 	}
-	if !a.sameOrigin(r) || !sameToken(token, r.Header.Get("X-CSRF-Token")) || strings.Split(r.Header.Get("Content-Type"), ";")[0] != "application/json" {
-		passkeyRefused(w, 403, "Reload the page, then try again.")
+	if !a.sameOrigin(r) || strings.Split(r.Header.Get("Content-Type"), ";")[0] != "application/json" {
+		passkeyRefused(w, 403, "That request did not come from this page. Reload it, then try again.")
+		return false
+	}
+	if token != "" && !sameToken(token, r.Header.Get("X-CSRF-Token")) {
+		passkeyRefused(w, 409, accountMessages["session-changed"].Text)
 		return false
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(into); err != nil {
@@ -516,7 +543,7 @@ func returnFrom(r *http.Request, raw string) string {
 // passkeyOptions starts a sign-in with a passkey, which needs no address.
 func (a *accountService) passkeyOptions(w http.ResponseWriter, r *http.Request) {
 	var body passkeyBody
-	if !a.passkeyRequest(w, r, signInToken(r), &body) {
+	if !a.passkeyRequest(w, r, "", &body) {
 		return
 	}
 	if !a.rate.Allow(clientIP(r)) {
@@ -537,7 +564,7 @@ func (a *accountService) passkeyOptions(w http.ResponseWriter, r *http.Request) 
 // passkeySignIn finishes a sign-in with a passkey.
 func (a *accountService) passkeySignIn(w http.ResponseWriter, r *http.Request) {
 	var body passkeyBody
-	if !a.passkeyRequest(w, r, signInToken(r), &body) {
+	if !a.passkeyRequest(w, r, "", &body) {
 		return
 	}
 	refused := "That passkey could not sign you in. Try again, or use another way to sign in."

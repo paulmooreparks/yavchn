@@ -533,7 +533,7 @@ func (s *Server) startWindows(ctx context.Context, r *http.Request) func() windo
 	// says rather than from the list's ?q=.
 	bare := r.Clone(context.WithValue(ctx, accountReturnContextKey{}, viewURL(r.URL.RequestURI(), "window")))
 	readerQuery := url.Values{}
-	if message := q.Get("message"); accountMessages[message] != "" {
+	if message := q.Get("message"); accountMessages[message].Text != "" {
 		readerQuery.Set("message", message)
 	}
 	for k, article := range st.reader {

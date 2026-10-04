@@ -19,8 +19,10 @@ module.exports = async function checkReaderViewport(browser, baseURL) {
       });
     };
     const switchView = async (label, value) => {
-      await page.locator('.view-switch .seg-menu > button').tap();
-      await page.locator('.view-switch .seg-menu-panel').getByRole('button', { name: label, exact: true }).tap();
+      // On a phone the menu bar is one button whose panel opens a level at a time.
+      await page.locator('.menubar-one > button').tap();
+      await page.getByRole('menuitem', { name: 'View', exact: true }).tap();
+      await page.getByRole('menuitemcheckbox', { name: label, exact: true }).tap();
       await page.waitForFunction(view => document.body?.dataset.view === view, value);
       await page.locator('.story[data-story-key="hn-1"]').waitFor();
     };

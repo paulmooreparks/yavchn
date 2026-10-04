@@ -80,11 +80,6 @@ func (f *signinFixture) requestLink(address string, cookies []*http.Cookie, csrf
 	return loc.Query().Get("message"), token
 }
 
-func (f *signinFixture) loginToken() *http.Cookie {
-	f.t.Helper()
-	return cookieNamed(f.t, f.request("GET", "/account", "", nil, nil), loginCookie)
-}
-
 // redeem presses the confirmation page's button as a browser would. The
 // Fetch standard sends Origin: null with a form posted from a page whose
 // referrer policy is no-referrer, so the page's own policy decides it.
@@ -101,8 +96,7 @@ func (f *signinFixture) redeem(token string, cookies []*http.Cookie) *httptest.R
 func (f *signinFixture) github(id int64) *http.Cookie {
 	f.t.Helper()
 	f.githubID = id
-	login := f.loginToken()
-	w := f.request("POST", "/auth/github", url.Values{"csrf": {login.Value}, "return_to": {"/account"}}.Encode(), []*http.Cookie{login}, nil)
+	w := f.request("POST", "/auth/github", url.Values{"return_to": {"/account"}}.Encode(), nil, nil)
 	loc, _ := url.Parse(w.Header().Get("Location"))
 	w = f.request("GET", "/auth/github/callback?state="+loc.Query().Get("state")+"&code=code", "", []*http.Cookie{cookieNamed(f.t, w, flowCookie)}, nil)
 	return cookieNamed(f.t, w, sessionCookie)
@@ -139,18 +133,17 @@ func identitiesOf(t *testing.T, f *signinFixture, accountID string) []string {
 
 func TestEmailLinkSignIn(t *testing.T) {
 	f := signinForTest(t)
-	login := f.loginToken()
-	if msg, _ := f.requestLink("not an address", []*http.Cookie{login}, login.Value, false); msg != "email-refused" {
+	if msg, _ := f.requestLink("not an address", nil, "", false); msg != "email-refused" {
 		t.Fatalf("invalid address: %s", msg)
 	}
-	if w := f.request("POST", "/auth/email", url.Values{"csrf": {"forged"}, "email": {"a@example.com"}}.Encode(), []*http.Cookie{login}, nil); w.Code != 403 {
-		t.Fatal("email request accepted without the page's token")
+	if w := f.request("POST", "/auth/email", url.Values{"email": {"a@example.com"}}.Encode(), nil, map[string]string{"Origin": "https://evil.example"}); w.Code != 403 || len(f.mails) != 0 {
+		t.Fatal("an email request from another site was accepted")
 	}
-	msg, first := f.requestLink(" Reader@Example.com ", []*http.Cookie{login}, login.Value, false)
+	msg, first := f.requestLink(" Reader@Example.com ", nil, "", false)
 	if msg != "email-sent" || first == "" || f.mails[0]["to"].([]any)[0] != "reader@example.com" || f.mails[0]["reply_to"] != "help@example.com" {
 		t.Fatalf("sign-in link: %s %v", msg, f.mails)
 	}
-	_, second := f.requestLink("reader@example.com", []*http.Cookie{login}, login.Value, false)
+	_, second := f.requestLink("reader@example.com", nil, "", false)
 	if f.redeem(first, nil).Header().Get("Location") != "/account?message=link-expired" {
 		t.Fatal("a newer link did not replace the older one")
 	}
@@ -177,13 +170,13 @@ func TestEmailLinkSignIn(t *testing.T) {
 		t.Fatal("a spent link still offered to sign in")
 	}
 	// A second sign-in with the address reaches the same account.
-	_, again := f.requestLink("reader@example.com", []*http.Cookie{login}, login.Value, false)
+	_, again := f.requestLink("reader@example.com", nil, "", false)
 	if f.session(cookieNamed(t, f.redeem(again, nil), sessionCookie)).ID != u.ID {
 		t.Fatal("the address signed in to a different account")
 	}
 	// A message Resend refuses cancels its link.
 	f.mailStatus = 500
-	_, refused := f.requestLink("other@example.com", []*http.Cookie{login}, login.Value, false)
+	_, refused := f.requestLink("other@example.com", nil, "", false)
 	if f.redeem(refused, nil).Header().Get("Location") != "/account?message=link-expired" {
 		t.Fatal("an undelivered link still worked")
 	}
@@ -191,9 +184,8 @@ func TestEmailLinkSignIn(t *testing.T) {
 
 func TestEmailBudget(t *testing.T) {
 	f := signinForTest(t)
-	login := f.loginToken()
 	for i := range 6 {
-		msg, token := f.requestLink("busy@example.com", []*http.Cookie{login}, login.Value, false)
+		msg, token := f.requestLink("busy@example.com", nil, "", false)
 		if msg != "email-sent" || (i < 5) != (token != "") {
 			t.Fatalf("request %d: %s sent=%v", i, msg, token != "")
 		}
@@ -222,8 +214,7 @@ func TestLinkingIdentities(t *testing.T) {
 		t.Fatalf("identities: %s", got)
 	}
 	// An address another account holds is refused, not moved.
-	login := f.loginToken()
-	_, other := f.requestLink("theirs@example.com", []*http.Cookie{login}, login.Value, false)
+	_, other := f.requestLink("theirs@example.com", nil, "", false)
 	theirs := f.session(cookieNamed(t, f.redeem(other, nil), sessionCookie))
 	_, token = f.requestLink("theirs@example.com", []*http.Cookie{gh}, f.session(gh).CSRF, true)
 	if loc := f.redeem(token, []*http.Cookie{gh}).Header().Get("Location"); loc != "/account?message=identity-taken" {
@@ -233,7 +224,7 @@ func TestLinkingIdentities(t *testing.T) {
 		t.Fatalf("the other account lost its address: %s", got)
 	}
 	// GitHub links the same way from inside an email account.
-	_, token = f.requestLink("solo@example.com", []*http.Cookie{login}, login.Value, false)
+	_, token = f.requestLink("solo@example.com", nil, "", false)
 	solo := cookieNamed(t, f.redeem(token, nil), sessionCookie)
 	soloID := f.session(solo).ID
 	if loc := f.githubLink(31, solo).Header().Get("Location"); loc != "/account?message=identity-taken" {
@@ -326,6 +317,48 @@ func TestUploadedPictures(t *testing.T) {
 	}
 }
 
+func TestStalePagesChangeNothing(t *testing.T) {
+	f := signinForTest(t)
+	c := f.github(71)
+	// A sign-in from a page of any age goes ahead.
+	if w := f.request("POST", "/auth/github", "", nil, nil); w.Code != 303 || !strings.HasPrefix(w.Header().Get("Location"), "https://github.com/") {
+		t.Fatalf("sign-in from an old page: %d %s", w.Code, w.Body)
+	}
+	// A form from before the session changed changes nothing.
+	w := f.request("POST", "/account/session", url.Values{"csrf": {"from-an-older-session"}, "return_to": {"/account"}}.Encode(), []*http.Cookie{c}, nil)
+	if w.Header().Get("Location") != "/account?message=session-changed" {
+		t.Fatalf("stale sign-out: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	if f.session(c) == nil {
+		t.Fatal("a stale form signed the browser out")
+	}
+	// A form from a signed-in page after the sign-in ended changes nothing either.
+	if loc := f.request("POST", "/account/avatar/remove", url.Values{"csrf": {"x"}, "return_to": {"/account"}}.Encode(), nil, nil).Header().Get("Location"); loc != "/account?message=session-ended" {
+		t.Fatalf("form after sign-out: %s", loc)
+	}
+	if loc := f.request("POST", "/auth/email", url.Values{"link": {"1"}, "email": {"a@example.com"}, "return_to": {"/account"}}.Encode(), nil, nil).Header().Get("Location"); loc != "/account?message=session-ended" || len(f.mails) != 0 {
+		t.Fatalf("link request after sign-out: %s", loc)
+	}
+	page := f.request("GET", "/account?message=session-changed", "", []*http.Cookie{c}, nil).Body.String()
+	if !strings.Contains(page, `class="notice warn account-notice" role="alert"`) || !strings.Contains(page, "nothing was changed") {
+		t.Fatal("the stale-page notice is missing")
+	}
+}
+
+func TestAccountFeedbackSitsBesideItsControl(t *testing.T) {
+	f := signinForTest(t)
+	page := f.request("GET", "/account?message=email-sent", "", nil, nil).Body.String()
+	button, notice := strings.Index(page, ">Email me a link</button>"), strings.Index(page, "a sign-in link is on its way")
+	if button < 0 || notice < button || strings.Count(page, "a sign-in link is on its way") != 1 {
+		t.Fatalf("the email notice is not below its button: %d %d", button, notice)
+	}
+	// A passing confirmation is a toast for account.js to raise, not a notice.
+	page = f.request("GET", "/account?message=signed-out", "", nil, nil).Body.String()
+	if !strings.Contains(page, `<p data-account-toast="positive" hidden>You are signed out.`) {
+		t.Fatal("the sign-out confirmation is not a toast")
+	}
+}
+
 func TestSigninBrowser(t *testing.T) {
 	if os.Getenv("YAVCHN_BROWSER_TEST") == "" {
 		t.Skip("set YAVCHN_BROWSER_TEST=1 to run browser verification")
@@ -356,13 +389,12 @@ func TestSigninBrowser(t *testing.T) {
 
 func TestPasskeyEndpointsRefuseForgedRequests(t *testing.T) {
 	f := signinForTest(t)
-	login := f.loginToken()
-	headers := map[string]string{"Content-Type": "application/json", "X-CSRF-Token": "forged"}
-	if w := f.request("POST", "/auth/passkey/options", `{}`, []*http.Cookie{login}, headers); w.Code != 403 {
-		t.Fatalf("forged options: %d", w.Code)
+	headers := map[string]string{"Content-Type": "application/json", "Origin": "https://evil.example"}
+	if w := f.request("POST", "/auth/passkey/options", `{}`, nil, headers); w.Code != 403 {
+		t.Fatalf("options for another site: %d", w.Code)
 	}
-	headers["X-CSRF-Token"] = login.Value
-	w := f.request("POST", "/auth/passkey/options", `{"return_to":"https://evil.example/"}`, []*http.Cookie{login}, headers)
+	delete(headers, "Origin")
+	w := f.request("POST", "/auth/passkey/options", `{"return_to":"https://evil.example/"}`, nil, headers)
 	var options struct {
 		PublicKey struct {
 			Challenge string `json:"challenge"`
@@ -378,13 +410,13 @@ func TestPasskeyEndpointsRefuseForgedRequests(t *testing.T) {
 	if target != "/account" {
 		t.Fatalf("a passkey ceremony kept a foreign destination: %s", target)
 	}
-	if w := f.request("POST", "/auth/passkey", `{"credential":{}}`, []*http.Cookie{login, ceremony}, headers); w.Code != 401 {
+	if w := f.request("POST", "/auth/passkey", `{"credential":{}}`, []*http.Cookie{ceremony}, headers); w.Code != 401 {
 		t.Fatalf("a malformed assertion: %d", w.Code)
 	}
-	if w := f.request("POST", "/auth/passkey", `{"credential":{}}`, []*http.Cookie{login, ceremony}, headers); w.Code != 400 {
+	if w := f.request("POST", "/auth/passkey", `{"credential":{}}`, []*http.Cookie{ceremony}, headers); w.Code != 400 {
 		t.Fatalf("a ceremony was used twice: %d", w.Code)
 	}
-	if w := f.request("POST", "/account/passkeys/options", `{}`, []*http.Cookie{login}, headers); w.Code != 401 {
+	if w := f.request("POST", "/account/passkeys/options", `{}`, nil, headers); w.Code != 401 {
 		t.Fatalf("passkey added without an account: %d", w.Code)
 	}
 }

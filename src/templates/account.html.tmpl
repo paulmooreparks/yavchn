@@ -1,25 +1,35 @@
+{{/* The account, in a window or on its Classic page. It follows the
+     Settings applet's layout. After PUDL, a passing confirmation is a toast
+     (account.js raises it), and anything the reader must act on is a notice
+     beside the control it concerns. */}}
+{{ define "accountnotice" }}{{ with . }}<div class="notice{{ if .Kind }} {{ .Kind }}{{ end }} account-notice" role="{{ if eq .Kind "danger" "warn" }}alert{{ else }}status{{ end }}"><div class="notice-content"><p class="notice-body">{{ .Text }}</p></div></div>{{ end }}{{ end }}
+
 {{ define "accountpanel" }}
-<div class="account-panel" data-applet="account" data-applet-page="/account?view=classic">
-  {{ if .Message }}<p role="status">{{ .Message }}</p>{{ end }}
+<div class="settings-panel account-panel" data-applet="account" data-applet-page="/account?view=classic">
+  {{ with .Toast }}<p data-account-toast="{{ .Kind }}" hidden>{{ .Text }}</p><noscript>{{ template "accountnotice" . }}</noscript>{{ end }}
+  {{ template "accountnotice" (.NoticeAt "page") }}
   {{ if .Account }}
   <div class="account-identity">{{ template "avatar" .Account.AvatarURL }}
-    <p>You are signed in as <strong>{{ .Account.Username }}</strong>.</p>
+    <p>Signed in as <strong>{{ .Account.Username }}</strong></p>
   </div>
-  <p>Your pins, collections, notes, blocked domains, and reading progress synchronize with this account. Window positions and appearance stay in this browser.</p>
-  <p role="status" data-account-sync-status>Account data loaded.</p>
-  <section class="account-section">
+  <p class="settings-intro">Your pins, collections, notes, blocked domains, and reading progress synchronize with this account. Window positions and appearance stay in this browser.</p>
+  <p class="settings-hint" role="status" data-account-sync-status>Account data loaded.</p>
+
+  <section class="settings-section">
     <h2>Profile picture</h2>
-    <p>Your picture appears at the top of every page while you are signed in. Any picture works. It is cropped to a square and made small before it is sent{{ if .HasGitHub }}, and it replaces the picture copied from GitHub{{ end }}.</p>
-    <form method="post" action="/account/avatar" enctype="multipart/form-data" data-account-picture-form>
+    <p class="settings-hint">Shown at the top of every page while you are signed in. Any picture works; it is cropped to a square and made small before it is sent.</p>
+    {{ template "accountnotice" (.NoticeAt "picture") }}
+    <form method="post" action="/account/avatar" enctype="multipart/form-data" id="account-picture-form" data-account-picture-form>
       <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
       <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
       <div class="form-group">
         <label class="form-label" for="account-picture-file">Choose a picture</label>
         <input class="form-input" id="account-picture-file" type="file" name="picture" accept="image/*" required>
       </div>
-      <button class="btn" type="submit">Save picture</button>
     </form>
+    {{/* The picture's commands share a row, each submitting its own form. */}}
     <div class="account-buttons">
+      <button class="btn" type="submit" form="account-picture-form">Save picture</button>
       {{ if .Account.AvatarURL }}<form method="post" action="/account/avatar/remove">
         <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
         <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
@@ -32,9 +42,11 @@
       </form>{{ end }}
     </div>
   </section>
-  <section class="account-section">
+
+  <section class="settings-section">
     <h2>Ways to sign in</h2>
-    <p>Each of these signs you in to this account. If you lose a device, any of them gets you back in, so you can remove one only while you have another.</p>
+    <p class="settings-hint">Each of these signs you in to this account, and any of them gets you back in if you lose a device, so the last one cannot be removed.</p>
+    {{ template "accountnotice" (.NoticeAt "methods") }}
     <table class="kv-table account-methods">
       <tbody>
         {{ $last := eq (len .Identities) 1 }}{{ $vm := . }}
@@ -55,7 +67,7 @@
       <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
       <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
       <input type="hidden" name="link" value="1">
-      <button class="btn" type="submit">Add your GitHub account</button>
+      <div class="account-buttons"><button class="btn" type="submit">Add your GitHub account</button></div>
     </form>{{ end }}
     {{ if .EmailAvailable }}<form method="post" action="/auth/email">
       <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
@@ -63,15 +75,17 @@
       <input type="hidden" name="link" value="1">
       <div class="form-group">
         <label class="form-label" for="account-add-email">Add an email address</label>
-        <input class="form-input" id="account-add-email" type="email" name="email" autocomplete="email" maxlength="254" required>
+        <input class="form-input" id="account-add-email" type="email" name="email" autocomplete="email" maxlength="254" required{{ if eq .Message.Kind "danger" }}{{ if eq .Message.Place "email" }} aria-invalid="true" aria-describedby="account-email-notice"{{ end }}{{ end }}>
         <p class="form-help">YAVCHN sends a link to the address. Open it in this browser to add it.</p>
       </div>
-      <button class="btn" type="submit">Send the link</button>
+      <div class="account-buttons"><button class="btn" type="submit">Send the link</button></div>
+      <div id="account-email-notice">{{ template "accountnotice" (.NoticeAt "email") }}</div>
     </form>{{ end }}
   </section>
-  {{ if .PasskeysAvailable }}<section class="account-section" data-passkeys>
+
+  {{ if .PasskeysAvailable }}<section class="settings-section" data-passkeys>
     <h2>Passkeys</h2>
-    <p>A passkey signs you in with this device's own lock, such as Windows Hello, Touch ID, your phone's screen lock, or a security key, instead of an email link.</p>
+    <p class="settings-hint">A passkey signs you in with this device's own lock, such as Windows Hello, Touch ID, your phone's screen lock, or a security key.</p>
     {{ if .Passkeys }}<table class="kv-table account-methods">
       <tbody>
         {{ $vm := . }}{{ range .Passkeys }}<tr>
@@ -90,81 +104,100 @@
       <label class="form-label" for="account-passkey-name">Name for a new passkey</label>
       <input class="form-input" id="account-passkey-name" maxlength="60" placeholder="Such as Laptop or Phone" data-passkey-name>
     </div>
-    <p data-passkey-ui hidden><button class="btn" type="button" data-passkey="register">Add a passkey</button></p>
+    <div class="account-buttons" data-passkey-ui hidden><button class="btn" type="button" data-passkey="register">Add a passkey</button></div>
     <p class="form-error" role="alert" data-passkey-status hidden></p>
-    <noscript><p>Adding a passkey requires JavaScript.</p></noscript>
+    <noscript><p class="settings-hint">Adding a passkey requires JavaScript.</p></noscript>
   </section>{{ end }}
-  <section class="account-section">
+
+  <section class="settings-section">
     <h2>Browser data</h2>
-    <p>Your anonymous pins and preferences are kept separately. You can merge them into this account when you choose.</p>
-    <button type="button" class="btn" data-account-import hidden>Import this browser's anonymous data</button>
-    <noscript><p>Importing existing browser data and live reading synchronization require JavaScript. Account export and management work without it.</p></noscript>
+    <p class="settings-hint">Your anonymous pins and preferences are kept separately. You can merge them into this account when you choose.</p>
+    <div class="account-buttons"><button type="button" class="btn" data-account-import hidden>Import this browser's anonymous data</button></div>
+    <noscript><p class="settings-hint">Importing existing browser data and live reading synchronization require JavaScript. Account export and management work without it.</p></noscript>
   </section>
-  <section class="account-section">
+
+  <section class="settings-section">
     <h2>Account data</h2>
-    <p><a class="btn" href="/account/export" download="yavchn-account.json">Export your account data</a></p>
-    <p>YAVCHN never sees a password. It keeps no GitHub access token, and it does not connect to your HN or Lobsters account.</p>
+    <p class="settings-hint">YAVCHN never sees a password. It keeps no GitHub access token, and it does not connect to your HN or Lobsters account.</p>
+    <div class="account-buttons"><a class="btn" href="/account/export" download="yavchn-account.json">Export your account data</a></div>
   </section>
-  <section class="account-section">
+
+  <section class="settings-section">
     <h2>Sign-in sessions</h2>
-    <p>You have {{ .OtherSessions }} other active sign-in sessions. Sessions expire after 30 days.</p>
-    {{ if .OtherSessions }}<form method="post" action="/account/sessions">
-      <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
-      <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
-      <button class="btn" type="submit">Sign out other devices</button>
-    </form>{{ end }}
-    <form method="post" action="/account/session">
-      <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
-      <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
-      <button class="btn" type="submit">Sign out this browser</button>
-    </form>
+    <p class="settings-hint">You have {{ .OtherSessions }} other active sign-in sessions. Sessions expire after 30 days.</p>
+    <div class="account-buttons">
+      {{ if .OtherSessions }}<form method="post" action="/account/sessions">
+        <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
+        <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
+        <button class="btn" type="submit">Sign out other devices</button>
+      </form>{{ end }}
+      <form method="post" action="/account/session">
+        <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
+        <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
+        <button class="btn" type="submit">Sign out this browser</button>
+      </form>
+    </div>
   </section>
-  <section class="account-section">
+
+  <section class="settings-section">
     <h2>Delete your account</h2>
-    <p>This permanently deletes your account, synchronized data, picture, passkeys, and active sessions. Your anonymous browser data remains available.</p>
-    {{ if .RecentLogin }}<form method="post" action="/account">
-      <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
-      <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
-      <label><input type="checkbox" name="confirm" value="delete" required> I want to delete my account and its data.</label>
-      <button class="btn btn-danger" type="submit"><span class="glyph" style="--glyph: var(--glyph-warning)" aria-hidden="true"></span> Delete my account</button>
-    </form>{{ else }}<p>Sign in again to confirm it is you before deleting your account.</p>
+    <p class="settings-hint">This permanently deletes your account, synchronized data, picture, passkeys, and active sessions. Your anonymous browser data remains available.</p>
+    {{ if .RecentLogin }}<div class="account-buttons"><button class="btn" type="button" commandfor="account-delete-dialog" command="show-modal">Delete my account&hellip;</button></div>
+    <dialog class="dialog" id="account-delete-dialog" aria-labelledby="account-delete-title">
+      <h3 class="dialog-title" id="account-delete-title">Delete your YAVCHN account?</h3>
+      <div class="dialog-body"><p>Your account, its synchronized data, picture, passkeys, and sessions are deleted for good. This cannot be undone.</p></div>
+      <form class="dialog-actions" method="post" action="/account">
+        <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
+        <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
+        <input type="hidden" name="confirm" value="delete">
+        <button class="btn" type="button" commandfor="account-delete-dialog" command="close">Keep my account</button>
+        <button class="btn btn-danger" type="submit"><span class="glyph" style="--glyph: var(--glyph-warning)" aria-hidden="true"></span> Delete my account</button>
+      </form>
+    </dialog>{{ else }}<p class="settings-hint">Sign in again to confirm it is you, then delete the account.</p>
     <div class="account-buttons">
       {{ if and .LoginAvailable .HasGitHub }}<form method="post" action="/auth/github">
         <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
-        <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
         <button class="btn" type="submit">Sign in again with GitHub</button>
       </form>{{ end }}
       {{ if and .PasskeysAvailable .Passkeys }}<button class="btn" type="button" data-passkey="signin" data-passkey-ui hidden>Sign in again with a passkey</button>{{ end }}
       {{ if and .EmailAvailable .Email }}<form method="post" action="/auth/email">
         <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
-        <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
         <input type="hidden" name="email" value="{{ .Email }}">
         <button class="btn" type="submit">Email me a sign-in link</button>
       </form>{{ end }}
     </div>{{ end }}
   </section>
+
   {{ else }}
-  <p>Sign in to keep your pinned stories, collections, notes, blocked domains, and reading progress across devices. You can continue reading without an account.</p>
+  <p class="settings-intro">Sign in to keep your pinned stories, collections, notes, blocked domains, and reading progress across devices. You can keep reading without an account.</p>
   {{ if or .LoginAvailable .EmailAvailable }}
-  {{ if .LoginAvailable }}<form method="post" action="/auth/github">
-    <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
-    <input type="hidden" name="csrf" value="{{ .LoginCSRF }}">
-    <button class="btn btn-primary" type="submit">Sign in with GitHub</button>
-  </form>{{ end }}
-  {{ if .PasskeysAvailable }}<p data-passkey-ui hidden><button class="btn" type="button" data-passkey="signin">Sign in with a passkey</button></p>
-  <p class="form-error" role="alert" data-passkey-status hidden></p>{{ end }}
-  {{ if .EmailAvailable }}<form method="post" action="/auth/email" class="account-email-signin">
-    <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
-    <input type="hidden" name="csrf" value="{{ .LoginCSRF }}">
-    <div class="form-group">
-      <label class="form-label" for="account-email">Or sign in with an email link</label>
-      <input class="form-input" id="account-email" type="email" name="email" autocomplete="email" maxlength="254" required>
-      <p class="form-help">YAVCHN sends a link that signs you in, and creates an account the first time.</p>
+  <section class="settings-section">
+    <h2>Sign in</h2>
+    <div class="account-buttons">
+      {{ if .LoginAvailable }}<form method="post" action="/auth/github">
+        <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
+        <button class="btn btn-primary" type="submit">Sign in with GitHub</button>
+      </form>{{ end }}
+      {{ if .PasskeysAvailable }}<button class="btn" type="button" data-passkey="signin" data-passkey-ui hidden>Sign in with a passkey</button>{{ end }}
     </div>
-    <button class="btn" type="submit">Email me a link</button>
-  </form>{{ end }}
-  <p>YAVCHN never asks for a password. GitHub sign-in shares only your public GitHub identity, with no access to your repositories, and YAVCHN does not connect to your HN or Lobsters account.</p>
-  {{ else }}<p role="status">Sign-in is not available yet. You can continue using YAVCHN without signing in.</p>{{ end }}
+    <p class="form-error" role="alert" data-passkey-status hidden></p>
+    <p class="settings-hint">GitHub sign-in shares only your public GitHub identity, with no access to your repositories.</p>
+  </section>
+  {{ if .EmailAvailable }}<section class="settings-section">
+    <h2>Sign in with an email link</h2>
+    <form method="post" action="/auth/email">
+      <input type="hidden" name="return_to" value="{{ .ReturnURL }}">
+      <div class="form-group">
+        <label class="form-label" for="account-email">Email address</label>
+        <input class="form-input" id="account-email" type="email" name="email" autocomplete="email" maxlength="254" required{{ if eq .Message.Kind "danger" }}{{ if eq .Message.Place "email" }} aria-invalid="true" aria-describedby="account-email-notice"{{ end }}{{ end }}>
+        <p class="form-help">YAVCHN sends a link that signs you in, and creates an account the first time. There is no password.</p>
+      </div>
+      <div class="account-buttons"><button class="btn" type="submit">Email me a link</button></div>
+      <div id="account-email-notice">{{ template "accountnotice" (.NoticeAt "email") }}</div>
+    </form>
+  </section>{{ end }}
+  <p class="settings-hint">YAVCHN does not connect to your HN or Lobsters account.</p>
+  {{ else }}<p role="status">Sign-in is not available yet. You can keep using YAVCHN without signing in.</p>{{ end }}
   {{ end }}
 </div>
 {{ end }}

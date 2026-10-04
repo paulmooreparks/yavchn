@@ -61,7 +61,8 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.locator('[data-win="account"] [data-win-action="page"]').click();
     await page.locator('body[data-view="classic"] [data-applet="account"]').waitFor();
     assert.equal(await page.locator('.win').count(), 0);
-    await page.getByRole('button', { name: 'Windowed', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    await page.getByRole('menuitemcheckbox', { name: 'Windowed', exact: true }).click();
     await page.locator('body[data-view="window"] [data-win="account"] [data-applet="account"]').waitFor();
     assert.ok(new URL(page.url()).searchParams.get('open').includes('account'));
 

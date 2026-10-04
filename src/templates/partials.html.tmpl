@@ -121,14 +121,14 @@
       </ul>
       <a class="brand" href="/"><img src="/static/logo-24x24.png" alt=""> YAVCHN</a>
     </nav>
-    <noscript>{{ if .WindowView }}<a class="btn btn-sm" href="{{ .NewReaderHref }}">New reader window</a>{{ end }}</noscript>
-    <span class="topbar-rule" aria-hidden="true"></span>
-    <div class="view-switch">
-      <nav class="seg view-seg" data-seg-menu aria-label="Browsing view">
+    {{/* The View menu chooses the browsing view; without script there is no
+         menu, so the choice stands in the bar. */}}
+    <noscript>{{ if .WindowView }}<a class="btn btn-sm" href="{{ .NewReaderHref }}">New reader window</a>{{ end }}
+      <nav class="seg view-seg" aria-label="Browsing view">
         <button type="submit" form="view-window-form" aria-pressed="{{ .WindowView }}">Windowed</button>
         <button type="submit" form="view-classic-form" aria-pressed="{{ not .WindowView }}">Classic</button>
-      </nav>
-    </div>
+      </nav></noscript>
+    <span class="topbar-rule" aria-hidden="true"></span>
     {{ if .StoriesURL }}<a class="btn btn-sm stories-button" href="{{ .StoriesURL }}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path d="M2 3h3v10H2z" fill="currentColor" stroke="none"/><path d="M5.5 2v12"/></svg>Stories</a>{{ end }}
     {{ if .HasList }}
     <div class="source-switch" data-region="sources">

@@ -79,9 +79,7 @@ func cookieNamed(t *testing.T, w *httptest.ResponseRecorder, name string) *http.
 }
 func (f *accountFixture) flow() (string, *http.Cookie, string) {
 	f.t.Helper()
-	page := f.request("GET", "/account", "", nil, nil)
-	c := cookieNamed(f.t, page, loginCookie)
-	w := f.request("POST", "/auth/github", url.Values{"csrf": {c.Value}}.Encode(), []*http.Cookie{c}, nil)
+	w := f.request("POST", "/auth/github", "", nil, nil)
 	if w.Code != 303 {
 		f.t.Fatalf("start: %d %s", w.Code, w.Body)
 	}
@@ -338,7 +336,7 @@ func TestAccountWriteProtectionAndSessionRevocation(t *testing.T) {
 	if w := f.request("POST", "/account/session", body, []*http.Cookie{first}, map[string]string{"Origin": "https://evil.example"}); w.Code != 403 {
 		t.Fatal("cross-origin logout accepted")
 	}
-	if w := f.request("POST", "/account/session", "csrf=wrong", []*http.Cookie{first}, nil); w.Code != 403 {
+	if w := f.request("POST", "/account/session", "csrf=wrong", []*http.Cookie{first}, nil); w.Code != 303 || w.Header().Get("Location") != "/account?message=session-changed" || f.session(first).ID != u.ID {
 		t.Fatal("wrong CSRF accepted")
 	}
 	if w := f.request("POST", "/account/sessions", body, []*http.Cookie{first}, nil); w.Code != 303 {
@@ -472,12 +470,11 @@ func TestAccountAppletViews(t *testing.T) {
 	if win.Code != 200 || !strings.Contains(win.Body.String(), `data-win="account"`) || !strings.Contains(win.Body.String(), `data-win-size="content"`) {
 		t.Fatalf("Account window: %d %s", win.Code, win.Body)
 	}
-	csrf := cookieNamed(t, win, loginCookie)
-	if !strings.Contains(win.Body.String(), `value="`+csrf.Value+`"`) || win.Header().Get("Cache-Control") != "no-store" {
-		t.Fatal("window login token or private cache policy missing")
+	if win.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("window private cache policy missing")
 	}
 	target := "/lobsters/?view=window&open=reader-1,account&top=account"
-	started := f.request("POST", "/auth/github", url.Values{"csrf": {csrf.Value}, "return_to": {target}}.Encode(), []*http.Cookie{csrf}, nil)
+	started := f.request("POST", "/auth/github", url.Values{"return_to": {target}}.Encode(), nil, nil)
 	if started.Code != 303 {
 		t.Fatalf("window login start: %d", started.Code)
 	}

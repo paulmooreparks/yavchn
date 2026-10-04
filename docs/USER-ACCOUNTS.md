@@ -6,7 +6,9 @@ Paul approved optional YAVCHN accounts on 2026-10-03. HN and Lobsters login and 
 
 The first login provider will be GitHub, using its documented authorization-code flow with PKCE and state validation. YAVCHN will request only the access needed to identify the user and discard the provider token after identification. Each account will have an internal identifier independent of its login provider. Additional providers must be linked explicitly rather than merged by matching email addresses.
 
-YAVCHN will use revocable server-side sessions with host-only Secure and HttpOnly cookies. State-changing requests will require protection against cross-site request forgery. Authentication and private account responses must not enter shared caches. Sessions and private data must remain isolated between production and beta.
+YAVCHN will use revocable server-side sessions with host-only Secure and HttpOnly cookies. State-changing requests will require protection against cross-site request forgery. Every account and sign-in request must carry this site's Origin, which the Fetch standard has browsers send with every cross-site POST. Starting a sign-in needs nothing more, because a sign-in replaces whatever session the browser had, so a sign-in button works from a page of any age (Paul, 2026-10-04). A change to a signed-in account also carries that session's token. A form from a page left open across a sign-in or sign-out changes nothing and returns the reader to their account with a notice saying so. It never shows an error page.
+
+The Account applet follows the Settings applet's layout. After PUDL, a passing confirmation such as a saved picture is a toast, and anything the reader must act on is a notice beside the control it concerns, such as the note under the email form that a link is on its way. Deleting the account goes through a confirmation dialog whose committing button carries the warning glyph. Authentication and private account responses must not enter shared caches. Sessions and private data must remain isolated between production and beta.
 
 ### Email links, passkeys, and recovery
 

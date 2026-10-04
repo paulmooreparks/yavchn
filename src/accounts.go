@@ -109,7 +109,6 @@ const avatarLimit = 256 * 1024
 
 const sessionCookie = "__Host-yavchn-session"
 const flowCookie = "__Host-yavchn-flow"
-const loginCookie = "__Host-yavchn-login"
 const accountBodyLimit = 4 * 1024 * 1024
 
 type accountConfig struct {
@@ -349,7 +348,6 @@ func (u *accountSession) setLinks() {
 }
 
 type accountContextKey struct{}
-type accountLoginContextKey struct{}
 type accountReturnContextKey struct{}
 type accountSignInContextKey struct{}
 
@@ -545,18 +543,6 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 		if a.config.Enabled() {
 			r = r.WithContext(context.WithValue(r.Context(), accountSignInContextKey{}, true))
 		}
-		if accountUI && r.Method == "GET" && currentAccount(r) == nil && a.config.Enabled() {
-			c, err := r.Cookie(loginCookie)
-			if err != nil || len(c.Value) != 43 {
-				token, err := accountToken()
-				if err != nil {
-					accountError(w, 500, "Cannot start sign-in.")
-					return
-				}
-				accountCookie(w, loginCookie, token, 600)
-				r = r.WithContext(context.WithValue(r.Context(), accountLoginContextKey{}, token))
-			}
-		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -579,8 +565,9 @@ func (s *accountScanner) Scan(v any) error {
 }
 
 type accountPanelVM struct {
-	Account                       *accountSession
-	Message, LoginCSRF, ReturnURL string
+	Account   *accountSession
+	Message   accountMessage // what the last action reported, if anything
+	ReturnURL string
 	// The ways of signing in this deployment offers.
 	LoginAvailable, EmailAvailable, PasskeysAvailable bool
 	OtherSessions                                     int
@@ -612,18 +599,29 @@ func (a *accountService) panel(r *http.Request) (*accountPanelVM, error) {
 			return nil, err
 		}
 		vm.RecentLogin = time.Now().Unix()-user.CreatedAt < 600
-	} else if c, err := r.Cookie(loginCookie); err == nil {
-		vm.LoginCSRF = c.Value
-	}
-	if token, ok := r.Context().Value(accountLoginContextKey{}).(string); ok {
-		vm.LoginCSRF = token
 	}
 	return vm, nil
+}
+
+// NoticeAt is the notice the panel shows at a place, or nil.
+func (vm *accountPanelVM) NoticeAt(place string) *accountMessage {
+	if vm.Message.Text == "" || vm.Message.Toast || vm.Message.Place != place {
+		return nil
+	}
+	return &vm.Message
+}
+
+// Toast is the passing confirmation the panel raises, or nil.
+func (vm *accountPanelVM) Toast() *accountMessage {
+	if !vm.Message.Toast {
+		return nil
+	}
+	return &vm.Message
 }
 func (a *accountService) page(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("view") == "window" {
 		target := url.Values{"view": {"window"}, "open": {"account"}, "top": {"account"}}
-		if message := r.URL.Query().Get("message"); accountMessages[message] != "" {
+		if message := r.URL.Query().Get("message"); accountMessages[message].Text != "" {
 			target.Set("message", message)
 		}
 		http.Redirect(w, r, "/hn/?"+target.Encode(), http.StatusSeeOther)
@@ -670,14 +668,11 @@ func (a *accountService) start(w http.ResponseWriter, r *http.Request) {
 		accountError(w, 403, "Invalid sign-in request.")
 		return
 	}
-	if !sameToken(signInToken(r), r.PostForm.Get("csrf")) {
-		accountError(w, 403, "Reload the account page before signing in.")
-		return
-	}
 	// Linking attaches the GitHub user to the account that asked for it.
-	link := ""
-	if user := currentAccount(r); user != nil && r.PostForm.Get("link") == "1" {
-		link = user.ID
+	link, stale := linkTarget(r)
+	if stale != "" {
+		http.Redirect(w, r, accountReturn(r, stale), http.StatusSeeOther)
+		return
 	}
 	if !a.rate.Allow(clientIP(r)) {
 		w.Header().Set("Retry-After", "300")
@@ -810,16 +805,11 @@ func (a *accountService) providerJSON(req *http.Request, out any) error {
 	return json.Unmarshal(b, out)
 }
 func (a *accountService) authorizedWrite(w http.ResponseWriter, r *http.Request) *accountSession {
-	u := currentAccount(r)
-	if u == nil {
-		accountError(w, 401, "Sign in to your account first.")
-		return nil
-	}
 	if !a.sameOrigin(r) {
 		accountError(w, 403, "This request must come from your account's site.")
 		return nil
 	}
-	csrf := r.Header.Get("X-CSRF-Token")
+	csrf, form := r.Header.Get("X-CSRF-Token"), false
 	if r.Method == "POST" {
 		// A script's JSON request carries its token in a header and leaves
 		// its body to the handler; a form, or an upload, carries it in a field.
@@ -832,17 +822,36 @@ func (a *accountService) authorizedWrite(w http.ResponseWriter, r *http.Request)
 				accountError(w, 400, "Invalid account request.")
 				return nil
 			}
-			csrf = r.PostFormValue("csrf")
+			csrf, form = r.PostFormValue("csrf"), true
 		default:
 			r.Body = http.MaxBytesReader(w, r.Body, 4096)
 			if r.ParseForm() != nil {
 				accountError(w, 400, "Invalid account request.")
 				return nil
 			}
-			csrf = r.PostForm.Get("csrf")
+			csrf, form = r.PostForm.Get("csrf"), true
 		}
 	}
-	if !sameToken(u.CSRF, csrf) {
+	// A form from a page left open across a sign-in or sign-out changes
+	// nothing, and the reader lands on their account as it is now. A
+	// script's request gets the status accounts.js reloads on.
+	u := currentAccount(r)
+	stale := ""
+	switch {
+	case u == nil:
+		stale = "session-ended"
+	case !sameToken(u.CSRF, csrf):
+		stale = "session-changed"
+	}
+	if stale != "" && form {
+		http.Redirect(w, r, accountReturn(r, stale), http.StatusSeeOther)
+		return nil
+	}
+	if u == nil {
+		accountError(w, 401, "Sign in to your account first.")
+		return nil
+	}
+	if stale != "" {
 		accountError(w, 403, "Your session changed. Reload this page before trying again.")
 		return nil
 	}

@@ -25,10 +25,12 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.getByRole('button', { name: 'Add a passkey', exact: true }).click();
     await page.waitForURL(u => u.searchParams.get('message') === 'passkey-added');
     await page.locator('.account-methods th', { hasText: 'Test laptop' }).waitFor();
+    if (process.env.YAVCHN_SHOTS) await page.screenshot({ path: process.env.YAVCHN_SHOTS + '/account-signed-in.png', fullPage: true });
 
     // Sign out, then back in with the passkey alone.
     await page.getByRole('button', { name: 'Sign out this browser', exact: true }).click();
     await page.waitForURL(u => u.searchParams.get('message') === 'signed-out');
+    if (process.env.YAVCHN_SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: process.env.YAVCHN_SHOTS + '/account-signed-out.png' }); }
     assert.equal(await page.locator('meta[name="yavchn-account"]').count(), 0);
     await page.getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
     await page.waitForURL(u => u.pathname === '/account' && !u.searchParams.has('message'));

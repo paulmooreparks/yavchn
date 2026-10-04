@@ -282,11 +282,14 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await clickRow('1');
     await story('reader-1', 'hn-1');
     assert.equal(await page.locator('.win.story-win').count(), 2);
-    // The view selector shares the saved preference and preserves the article.
-    const modeBox = await page.locator('.view-switch').boundingBox();
-    const sourceBox = await page.locator('.source-switch').boundingBox();
-    assert.ok(modeBox.x + modeBox.width <= sourceBox.x);
-    await page.locator('.view-seg').getByRole('button', { name: 'Classic', exact: true }).click();
+    // The View menu chooses the browsing view, shares the saved preference
+    // and preserves the article; with script the bar has no selector of its own.
+    const viewMenu = async label => {
+      await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+      await page.getByRole('menuitemcheckbox', { name: label, exact: true }).click();
+    };
+    assert.equal(await page.locator('.topbar .view-seg').count(), 0);
+    await viewMenu('Classic');
     await page.waitForURL('**/story/hn/1');
     assert.equal(await page.locator('body').getAttribute('data-view'), 'classic');
     assert.equal(await page.locator('[data-win-layer], [data-focus-toggle]').count(), 0);
@@ -303,7 +306,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     assert.ok(listBox.width > 1400, 'Classic feed should use the full page');
     await clickRow('2');
     await page.waitForURL('**/story/hn/2');
-    await page.locator('.view-seg').getByRole('button', { name: 'Windowed', exact: true }).click();
+    await viewMenu('Windowed');
     await page.waitForFunction(() => !!document.querySelector('[data-win-layer]'));
     assert.equal((await page.context().cookies()).find(c => c.name === 'yavchn-view').value, 'window');
     await page.getByRole('menuitem', { name: 'View', exact: true }).click();
