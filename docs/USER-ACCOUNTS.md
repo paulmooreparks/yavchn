@@ -38,6 +38,12 @@ Paul will create proxied CNAME records for `@` and `www` in the `yavchn.com` Clo
 
 A redirect from the original hostname remains a proposal. Browser-local pins, reading progress, and preferences cannot be read by the new origin. A migration path must precede a forced redirect so users can retain their existing data. The proposed transition offers an explicit transfer from the original site, then introduces a redirect preserving the path and query string after the new domain and migration have been verified. Installed web apps also belong to their original origin and need separate migration guidance.
 
+## Top bar and profile picture
+
+The account sits at the right end of the top bar, as on parkscomputing.com. A reader who is not signed in sees a Sign in pill when the deployment offers GitHub sign-in. It opens the Account applet, where the GitHub button starts sign-in, because that form needs the token the account page issues. A signed-in reader sees their picture in a round pill that opens their account, or a head-and-shoulders placeholder when there is no picture.
+
+The picture is the reader's GitHub avatar. At each sign-in the server fetches it at 96 pixels from `avatars.githubusercontent.com`, without the provider token, and stores a copy of at most 256 KB when its bytes are PNG, JPEG, GIF, or WebP. Pages show the copy from `/account/avatar`, so a reader's browser never contacts GitHub to draw it. The copy is served only to its owner, at an address that changes with the picture, and may be kept only in a private cache. A failed fetch keeps the previous copy and never stops sign-in. Deleting the account deletes the copy. The export leaves it out, since it is GitHub's public picture and not data the reader created.
+
 ## Collections and notes
 
 Paul approved collections and notes on 2026-10-04 as the first features after the initial account release. Both work anonymously in browser storage, as pins do, and synchronize when the reader is signed in.

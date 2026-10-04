@@ -2,7 +2,9 @@
 <div class="account-panel" data-applet="account" data-applet-page="/account?view=classic">
   {{ if .Message }}<p role="status">{{ .Message }}</p>{{ end }}
   {{ if .Account }}
-  <p>You are signed in as <strong>{{ .Account.Username }}</strong> through GitHub.</p>
+  <div class="account-identity">{{ template "avatar" .Account.AvatarURL }}
+    <p>You are signed in as <strong>{{ .Account.Username }}</strong> through GitHub. {{ if .Account.AvatarURL }}Your picture is copied from GitHub each time you sign in.{{ else }}Your GitHub picture appears here after your next sign-in, if GitHub provides one.{{ end }}</p>
+  </div>
   <p>Your pins, collections, notes, blocked domains, and reading progress synchronize with this account. Window positions and appearance stay in this browser.</p>
   <p role="status" data-account-sync-status>Account data loaded.</p>
   <section class="account-section">

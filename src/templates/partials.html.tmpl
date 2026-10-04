@@ -136,9 +136,19 @@
         {{ range .AllSources }}<a href="{{ .URL }}" data-source="{{ .Name }}"{{ if .Active }} aria-current="page"{{ end }}>{{ template "sourceicon" .Name }}<span class="source-label">{{ .Label }}</span></a>{{ end }}
       </nav>
     </div>{{ end }}
+    {{/* The account, at the far right where a site's account usually is:
+         Sign in when nobody is, and otherwise the reader's picture, which
+         opens their account. Both are raised pills, because both are pressed. */}}
+    {{ if .Account }}<a class="topbar-pill account-pill" href="/account?view={{ .View }}" data-win-open="account" aria-label="Your account ({{ .Account.Username }})" title="Your account ({{ .Account.Username }})">{{ template "avatar" .Account.AvatarURL }}</a>
+    {{ else if .SignIn }}<a class="topbar-pill account-pill account-signin" href="/account?view={{ .View }}" data-win-open="account">Sign in</a>{{ end }}
   </div>
 </header>
 {{ end }}
+
+{{/* A profile picture, or the generic one when there is none: a head and
+     shoulders drawn in the text colour. Decorative, so whatever holds it
+     names it. */}}
+{{ define "avatar" }}{{ if . }}<img class="account-avatar" src="{{ . }}" alt="">{{ else }}<svg class="account-avatar account-avatar-placeholder" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="currentColor" opacity="0.18"/><circle cx="16" cy="12.5" r="5.5" fill="currentColor" opacity="0.75"/><path d="M6.5 27.5c1.6-5 5.2-7.5 9.5-7.5s7.9 2.5 9.5 7.5a16 16 0 0 1-19 0z" fill="currentColor" opacity="0.75"/></svg>{{ end }}{{ end }}
 
 {{/* A story's article above its discussion, with a splitter between
      them: the body of a story window, and of a story's own page. */}}

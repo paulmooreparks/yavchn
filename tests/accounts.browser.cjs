@@ -31,6 +31,10 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     assert.equal(imported.data.collections.q7w8e9r0t1y2.name, 'Anonymous list');
     assert.ok(imported.data.collected['q7w8e9r0t1y2:hn-99']);
     assert.equal(imported.data.notes['hn-99'].text, 'Anonymous note');
+    // Signed in without a picture, the top bar's account pill shows the placeholder.
+    await page.goto(origin + '/hn/');
+    await page.locator('.topbar .account-pill .account-avatar-placeholder').waitFor();
+    if (process.env.YAVCHN_SHOTS) await page.screenshot({ path: process.env.YAVCHN_SHOTS + '/avatar-wide.png', clip: { x: 0, y: 0, width: 1280, height: 60 } });
 
     // A backup imported while signed in points to the account's explicit import.
     await page.goto(origin + '/hn/?view=window&migration=complete');
@@ -122,6 +126,11 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.goto(origin + '/account?view=window');
     await page.locator('[data-win="account"] [data-applet="account"]').waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    // Signed out, the top bar offers Sign in at its right end, inside a phone's width.
+    const signIn = page.locator('.topbar .account-signin');
+    const box = await signIn.boundingBox();
+    assert.ok(box && box.x + box.width <= 390 && box.y < 60, JSON.stringify(box));
+    if (process.env.YAVCHN_SHOTS) await page.screenshot({ path: process.env.YAVCHN_SHOTS + '/signin-narrow.png' });
     assert.deepEqual(errors, []);
     await secondDevice.close();
     await context.close();

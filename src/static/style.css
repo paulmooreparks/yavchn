@@ -1272,6 +1272,15 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .account-section form { margin-block: .75rem; }
 .account-section label { display: block; margin-block-end: .75rem; }
 
+/* The account at the far right of the top bar: Sign in, or the reader's
+   picture in a round raised pill, as on parkscomputing.com. */
+.account-pill { flex: none; margin-inline-start: auto; }
+.account-pill:has(.account-avatar) { padding: 2px; border-radius: 999px; }
+.account-avatar { display: block; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.account-avatar-placeholder { color: var(--text); }
+.account-identity { display: flex; align-items: center; gap: var(--space-3); }
+.account-identity .account-avatar { width: 48px; height: 48px; flex: none; }
+
 /* Applet identity follows the host's icon choice and PUDL's masked glyphs. */
 .win-tab .task-icon { width: 16px; height: 16px; flex: none; object-fit: contain; }
 .win-tab .task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

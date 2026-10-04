@@ -25,6 +25,10 @@ type accountFixture struct {
 	h   http.Handler
 	t   *testing.T
 	mux *http.ServeMux
+	// The fake GitHub's picture for the next login: its address in the
+	// identity, and the bytes it serves there.
+	avatarURL string
+	avatar    []byte
 }
 
 func accountsForTest(t *testing.T) *accountFixture {
@@ -104,10 +108,17 @@ func (f *accountFixture) login(id int64) *http.Cookie {
 			}
 			return jsonResp(200, `{"access_token":"transient-token","token_type":"bearer"}`), nil
 		}
+		if r.URL.Host == "avatars.githubusercontent.com" {
+			if r.Header.Get("Authorization") != "" || r.URL.Query().Get("s") != "96" {
+				f.t.Fatal("avatar request carried a token or asked for the wrong size")
+			}
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(f.avatar))), Header: http.Header{}}, nil
+		}
 		if r.URL.Host != "api.github.com" || r.Header.Get("Authorization") != "Bearer transient-token" {
 			f.t.Fatal("unexpected provider request")
 		}
-		return jsonResp(200, fmt.Sprintf(`{"id":%d,"login":"user%d"}`, id, id)), nil
+		avatar, _ := json.Marshal(f.avatarURL)
+		return jsonResp(200, fmt.Sprintf(`{"id":%d,"login":"user%d","avatar_url":%s}`, id, id, avatar)), nil
 	})
 	w := f.request("GET", "/auth/github/callback?state="+state+"&code=code", "", []*http.Cookie{flow}, nil)
 	if w.Code != 303 || w.Header().Get("Location") != "/account" {
@@ -278,6 +289,44 @@ func TestAccountCollectionsAndNotes(t *testing.T) {
 	long.Notes = map[string]noteEntry{"hn-1": {Source: "hn", ID: "1", Text: strings.Repeat("é", 10000)}}
 	if w := f.put(c, f.session(c), long); w.Code != 200 {
 		t.Fatalf("rejected a note at the limit: %d", w.Code)
+	}
+}
+func TestAccountTopBarAndAvatar(t *testing.T) {
+	f := accountsForTest(t)
+	if w := f.request("GET", "/hn/", "", nil, nil); !strings.Contains(w.Body.String(), `account-pill account-signin" href="/account?view=window" data-win-open="account">Sign in</a>`) {
+		t.Fatal("signed-out top bar lacks Sign in")
+	}
+	plain := f.login(6)
+	if w := f.request("GET", "/hn/", "", []*http.Cookie{plain}, nil); !strings.Contains(w.Body.String(), `account-avatar-placeholder`) || strings.Contains(w.Body.String(), ">Sign in</a>") {
+		t.Fatal("an account without a picture lacks the placeholder")
+	}
+	png := "\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 64)
+	f.avatarURL, f.avatar = "https://avatars.githubusercontent.com/u/7?v=4", []byte(png)
+	c := f.login(7)
+	page := f.request("GET", "/hn/", "", []*http.Cookie{c}, nil).Body.String()
+	at := strings.Index(page, `<img class="account-avatar" src="/account/avatar?v=`)
+	if at < 0 || !strings.Contains(page, `aria-label="Your account (user7)"`) {
+		t.Fatal("top bar lacks the account picture")
+	}
+	src := page[at+len(`<img class="account-avatar" src="`):]
+	src = src[:strings.Index(src, `"`)]
+	img := f.request("GET", src, "", []*http.Cookie{c}, nil)
+	if img.Code != 200 || img.Body.String() != png || img.Header().Get("Content-Type") != "image/png" || img.Header().Get("Cache-Control") != "private, max-age=31536000, immutable" {
+		t.Fatalf("avatar: %d %q %q", img.Code, img.Header().Get("Content-Type"), img.Header().Get("Cache-Control"))
+	}
+	if f.request("GET", src, "", nil, nil).Code != 404 || f.request("GET", "/account/avatar?v=stale", "", []*http.Cookie{c}, nil).Code != 404 {
+		t.Fatal("avatar served without its owner or at a stale version")
+	}
+	if f.request("GET", src, "", []*http.Cookie{plain}, nil).Code != 404 {
+		t.Fatal("avatar served to another account")
+	}
+	// Neither a picture from another host nor one that is not an image replaces the copy.
+	for _, next := range []struct{ url, body string }{{"https://evil.example/a.png", png}, {"https://avatars.githubusercontent.com/u/7", "<html>not an image</html>"}} {
+		f.avatarURL, f.avatar = next.url, []byte(next.body)
+		again := f.login(7)
+		if w := f.request("GET", src, "", []*http.Cookie{again}, nil); w.Code != 200 || w.Body.String() != png {
+			t.Fatalf("%s replaced the picture", next.url)
+		}
 	}
 }
 func TestAccountWriteProtectionAndSessionRevocation(t *testing.T) {

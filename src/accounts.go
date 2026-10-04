@@ -48,7 +48,14 @@ CREATE TABLE IF NOT EXISTS account_data (
  account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
  revision INTEGER NOT NULL DEFAULT 0,
  document TEXT NOT NULL DEFAULT '{"pins":{},"domains":[],"progress":{}}'
+);
+CREATE TABLE IF NOT EXISTS account_avatars (
+ account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+ content_type TEXT NOT NULL, image BLOB NOT NULL, version TEXT NOT NULL
 );`
+
+// avatarLimit bounds the copy of a GitHub profile picture, requested at 96 pixels.
+const avatarLimit = 256 * 1024
 
 const sessionCookie = "__Host-yavchn-session"
 const flowCookie = "__Host-yavchn-flow"
@@ -232,6 +239,7 @@ type accountSession struct {
 	CSRF      string                 `json:"-"`
 	TokenHash string                 `json:"-"`
 	CreatedAt int64                  `json:"-"`
+	AvatarURL string                 `json:"-"` // this site's copy of the GitHub picture, or empty
 	Revision  int64                  `json:"revision"`
 	Data      accountDocument        `json:"data"`
 	Links     map[string]accountLink `json:"links"`
@@ -258,6 +266,13 @@ func (u *accountSession) setLinks() {
 type accountContextKey struct{}
 type accountLoginContextKey struct{}
 type accountReturnContextKey struct{}
+type accountSignInContextKey struct{}
+
+// signInAvailable reports whether this deployment offers GitHub sign-in.
+func signInAvailable(r *http.Request) bool {
+	on, _ := r.Context().Value(accountSignInContextKey{}).(bool)
+	return on
+}
 
 func currentAccount(r *http.Request) *accountSession {
 	a, _ := r.Context().Value(accountContextKey{}).(*accountSession)
@@ -307,6 +322,71 @@ func (a *accountService) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /account/export", a.export)
 	mux.HandleFunc("GET /account/data", a.getData)
 	mux.HandleFunc("PUT /account/data", a.putData)
+	mux.HandleFunc("GET /account/avatar", a.avatar)
+}
+
+// avatar serves the signed-in reader their own picture. Its address
+// carries the picture's version, so a private cache may keep it.
+func (a *accountService) avatar(w http.ResponseWriter, r *http.Request) {
+	u := currentAccount(r)
+	if u == nil {
+		http.NotFound(w, r)
+		return
+	}
+	var kind, version string
+	var image []byte
+	err := a.server.db.QueryRowContext(r.Context(), `SELECT content_type,image,version FROM account_avatars WHERE account_id=?`, u.ID).Scan(&kind, &image, &version)
+	if err != nil || r.URL.Query().Get("v") != version {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", kind)
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	_, _ = w.Write(image)
+}
+
+// refreshAvatar copies the reader's GitHub picture at sign-in, so pages
+// show it from this site and never send the reader's browser to GitHub.
+// A failure keeps the previous copy, or the placeholder, and never stops
+// the sign-in.
+func (a *accountService) refreshAvatar(ctx context.Context, accountID, raw string) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host != "avatars.githubusercontent.com" || u.User != nil {
+		return
+	}
+	q := u.Query()
+	q.Set("s", "96")
+	u.RawQuery = q.Encode()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("User-Agent", "YAVCHN")
+	res, err := a.client.Do(req)
+	if err != nil {
+		slog.Warn("GitHub avatar fetch failed")
+		return
+	}
+	defer res.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(res.Body, avatarLimit+1))
+	if res.StatusCode != http.StatusOK || err != nil || len(b) == 0 || len(b) > avatarLimit {
+		slog.Warn("GitHub avatar unusable", "status", res.StatusCode, "bytes", len(b))
+		return
+	}
+	kind := http.DetectContentType(b)
+	if kind != "image/png" && kind != "image/jpeg" && kind != "image/gif" && kind != "image/webp" {
+		slog.Warn("GitHub avatar has an unexpected type", "type", kind)
+		return
+	}
+	sum := sha256.Sum256(b)
+	_, err = a.server.db.ExecContext(ctx, `INSERT INTO account_avatars(account_id,content_type,image,version)VALUES(?,?,?,?) ON CONFLICT(account_id) DO UPDATE SET content_type=excluded.content_type,image=excluded.image,version=excluded.version`,
+		accountID, kind, b, hex.EncodeToString(sum[:8]))
+	if err != nil {
+		slog.Warn("GitHub avatar could not be stored")
+	}
 }
 func (a *accountService) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -339,8 +419,12 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 		}
 		if c, err := r.Cookie(sessionCookie); err == nil && len(c.Value) == 43 {
 			user := &accountSession{}
-			err = a.server.db.QueryRowContext(r.Context(), `SELECT a.id,i.username,s.csrf,s.token_hash,s.created_at,d.revision,d.document FROM account_sessions s JOIN accounts a ON a.id=s.account_id JOIN account_identities i ON i.account_id=a.id AND i.provider='github' JOIN account_data d ON d.account_id=a.id WHERE s.token_hash=? AND s.expires_at>?`, tokenHash(c.Value), time.Now().Unix()).Scan(&user.ID, &user.Username, &user.CSRF, &user.TokenHash, &user.CreatedAt, &user.Revision, newAccountScan(&user.Data))
+			var avatar string
+			err = a.server.db.QueryRowContext(r.Context(), `SELECT a.id,i.username,s.csrf,s.token_hash,s.created_at,d.revision,d.document,COALESCE(v.version,'') FROM account_sessions s JOIN accounts a ON a.id=s.account_id JOIN account_identities i ON i.account_id=a.id AND i.provider='github' JOIN account_data d ON d.account_id=a.id LEFT JOIN account_avatars v ON v.account_id=a.id WHERE s.token_hash=? AND s.expires_at>?`, tokenHash(c.Value), time.Now().Unix()).Scan(&user.ID, &user.Username, &user.CSRF, &user.TokenHash, &user.CreatedAt, &user.Revision, newAccountScan(&user.Data), &avatar)
 			if err == nil {
+				if avatar != "" {
+					user.AvatarURL = "/account/avatar?v=" + avatar
+				}
 				user.setLinks()
 				r = r.WithContext(context.WithValue(r.Context(), accountContextKey{}, user))
 				w.Header().Set("Cache-Control", "private, no-store")
@@ -350,6 +434,9 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 				accountError(w, 503, "Account storage is unavailable. Please try again.")
 				return
 			}
+		}
+		if a.config.ClientID != "" {
+			r = r.WithContext(context.WithValue(r.Context(), accountSignInContextKey{}, true))
 		}
 		if accountUI && r.Method == "GET" && currentAccount(r) == nil && a.config.ClientID != "" {
 			c, err := r.Cookie(loginCookie)
@@ -566,8 +653,9 @@ func (a *accountService) callback(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	req.Header.Set("User-Agent", "YAVCHN")
 	var identity struct {
-		ID    int64  `json:"id"`
-		Login string `json:"login"`
+		ID        int64  `json:"id"`
+		Login     string `json:"login"`
+		AvatarURL string `json:"avatar_url"`
 	}
 	if err = a.providerJSON(req, &identity); err != nil || identity.ID <= 0 || identity.Login == "" || len(identity.Login) > 100 {
 		accountError(w, 502, "GitHub identity could not be verified. Please try again.")
@@ -627,6 +715,7 @@ func (a *accountService) callback(w http.ResponseWriter, r *http.Request) {
 		accountError(w, 503, "Cannot save your sign-in. Please try again.")
 		return
 	}
+	a.refreshAvatar(r.Context(), id, identity.AvatarURL)
 	accountCookie(w, sessionCookie, session, 30*24*3600)
 	accountCookie(w, loginCookie, "", -1)
 	http.Redirect(w, r, target, http.StatusSeeOther)
