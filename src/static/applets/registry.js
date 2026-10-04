@@ -26,6 +26,19 @@
   };
   var version = document.querySelector('script[data-asset-version]').getAttribute('data-asset-version');
   window.pudlApplets.define('story', {});
+  // Settings, the user lookup and profiles have no working commands, but
+  // every window still has its identity menu: Open as a page, Copy link
+  // and Close window, as PUDL's menu-bar conventions give each applet.
+  [['settings', 'Settings', 'Copy settings link', '/settings'],
+    ['lookup', 'Look up a user', 'Copy lookup link', '/user'],
+    ['profile', 'Profile', 'Copy profile link', '']].forEach(function (a) {
+    window.pudlApplets.define(a[0], {});
+    window.pudlApplets.register(a[0], { init: function (root) {
+      return { menus: function () {
+        return { titles: [{ label: a[1], items: window.yavchn.identityMenu(root, a[2], a[3] || location.href) }] };
+      } };
+    } });
+  });
   window.pudlApplets.define('account', { src: '/static/applets/account.js?v=' + version, page: '/account?view=classic', ver: '1' });
   window.pudlApplets.define('replies', { src: '/static/applets/replies.js?v=' + version, page: '/applets/replies', ver: '1' });
   window.pudlApplets.define('hiring', { src: '/static/applets/hiring.js?v=' + version, page: '/applets/hiring', ver: '1' });

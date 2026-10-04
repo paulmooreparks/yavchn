@@ -56,7 +56,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
       });
       const requested = page.waitForRequest(req => req.headers()['cache-control'] === 'no-cache' && req.url() === before);
       await page.getByRole('menuitem', { name: 'Feed', exact: true }).click();
-      await page.getByRole('menuitem', { name: 'Refresh feed', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Refresh the feed', exact: true }).click();
       await requested;
       await page.waitForFunction(() => document.querySelector('.feed-refresh-status')?.textContent === 'Feed refreshed.');
       assert.equal(page.url(), before);
@@ -350,6 +350,12 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     const settings = page.locator('.win[data-win="settings"] [data-settings]');
     await settings.waitFor();
     assert.equal(await settings.locator('select').count(), 0);
+    // Like every window, Settings has its identity menu.
+    await page.locator('.menubar-front .menubar-title').filter({ hasText: /^Settings$/ }).click();
+    for (const name of ['Open as a page', 'Copy settings link', 'Close window']) {
+      await page.getByRole('menuitem', { name, exact: true }).waitFor();
+    }
+    await page.keyboard.press('Escape');
     const settingsWindow = page.locator('.win[data-win="settings"]');
     assert.equal(await settingsWindow.getAttribute('data-win-size'), 'content');
     await page.getByRole('menuitem', { name: 'Window', exact: true }).click();

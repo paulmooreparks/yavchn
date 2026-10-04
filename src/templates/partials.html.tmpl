@@ -66,6 +66,7 @@
             <li><button type="button" commandfor="about-dialog" command="show-modal">About YAVCHN</button></li>
             <li>-</li>
             <li><a href="/settings" data-win-open="settings">Settings</a></li>
+            <li>-</li>
             <li><a href="/account?view={{ .View }}" data-win-open="account" data-account-link>Account</a></li>
           </ul>
         </li>
@@ -86,12 +87,14 @@
           <ul>
             <li><a href="/hn/">Hacker News</a></li>
             <li><a href="/lobsters/">Lobsters</a></li>
+            <li>-</li>
             <li><a href="/pinned/">Pinned stories</a></li>
             <li><a href="/collections/">Collections</a></li>
             <li><a href="/notes/">Notes</a></li>
+            <li>-</li>
             <li><a href="/find">Find the discussions of a link</a></li>
             <li>-</li>
-            <li><button type="button" data-feed-refresh disabled>Refresh feed</button></li>
+            <li><button type="button" data-feed-refresh disabled>Refresh the feed</button></li>
           </ul>
         </li>
         {{ end }}
@@ -186,7 +189,7 @@
         <span class="story-bar-spacer"></span>
         {{ if .HasArticle }}
         <a href="{{ .URL }}" target="_blank" rel="noopener">Open original</a>
-        <button type="button" class="icon-btn story-refresh" aria-label="Fetch the article again"></button>
+        <button type="button" class="icon-btn story-refresh" aria-label="Refresh the article"></button>
         {{ end }}
       </div>
       <div class="story-article-content">

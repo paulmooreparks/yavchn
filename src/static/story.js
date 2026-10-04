@@ -322,7 +322,7 @@
         { label: 'Open the original', disabled: !original, run: function () { window.open(original, '_blank', 'noopener'); } },
         { label: source ? source.textContent.trim() : 'Open on the source site', disabled: !source,
           run: function () { window.open(source.href, '_blank', 'noopener'); } },
-        { label: 'Fetch the article again', disabled: !original || !!(refreshBtn && refreshBtn.disabled), run: refresh }
+        { label: 'Refresh the article', disabled: !original || !!(refreshBtn && refreshBtn.disabled), run: refresh }
       ];
       if (lib.hiding) {
         story.push('-', { label: 'Hide this story', run: function () { lib.hiding.hide(d.storyId); } });

@@ -159,19 +159,36 @@
     root.addEventListener('submit', picture);
 
     return {
+      /* Signed out, the working menu is Sign in, with every way in the
+         panel offers. Signed in, it is Manage: the account's data, its
+         sessions, and deletion. Each command presses the panel's own
+         control, so the menu never offers what the panel does not. */
       menus: function () {
-        var items = [];
-        var login = root.querySelector('form[action="/auth/github"]');
-        var exported = root.querySelector('a[href="/account/export"]');
-        var imported = root.querySelector('[data-account-import]');
-        var logout = root.querySelector('form[action="/account/session"]');
-        var revoke = root.querySelector('form[action="/account/sessions"]');
-        if (login) items.push({ label: login.querySelector('button').textContent, run: function () { login.requestSubmit(); } });
-        if (imported && !imported.hidden) items.push({ label: "Import this browser's anonymous data", run: function () { imported.click(); } });
-        if (exported) items.push({ label: 'Export account data', run: function () { exported.click(); } });
-        if (revoke) items.push({ label: 'Sign out other devices', run: function () { revoke.requestSubmit(); } });
-        if (logout) items.push({ label: 'Sign out this browser', run: function () { logout.requestSubmit(); } });
         var titles = [{ label: 'Account', items: window.yavchn.identityMenu(root, 'Copy account link', '/account?view=classic') }];
+        var signedIn = !!document.querySelector('meta[name="yavchn-account"]');
+        var press = function (el) { return function () { if (el.tagName === 'FORM') el.requestSubmit(); else el.click(); }; };
+        var items = [];
+        if (!signedIn) {
+          var github = root.querySelector('form[action="/auth/github"]');
+          var passkey = root.querySelector('[data-passkey="signin"]:not([hidden])');
+          var email = root.querySelector('#account-email');
+          if (github) items.push({ label: 'Sign in with GitHub', run: press(github) });
+          if (passkey) items.push({ label: 'Sign in with a passkey', run: press(passkey) });
+          if (email) items.push({ label: 'Sign in with an email link…', run: function () { email.focus(); } });
+          if (items.length) titles.push({ label: 'Sign in', items: items });
+          return { titles: titles };
+        }
+        var imported = root.querySelector('[data-account-import]:not([hidden])');
+        var exported = root.querySelector('a[href="/account/export"]');
+        var revoke = root.querySelector('form[action="/account/sessions"]');
+        var logout = root.querySelector('form[action="/account/session"]');
+        var remove = root.querySelector('[commandfor="account-delete-dialog"]');
+        if (imported) items.push({ label: "Import this browser's anonymous data", run: press(imported) });
+        if (exported) items.push({ label: 'Export account data', run: press(exported) });
+        if (revoke || logout) items.push('-');
+        if (revoke) items.push({ label: 'Sign out other devices', run: press(revoke) });
+        if (logout) items.push({ label: 'Sign out this browser', run: press(logout) });
+        if (remove) items.push('-', { label: 'Delete my account…', run: press(remove) });
         if (items.length) titles.push({ label: 'Manage', items: items });
         return { titles: titles };
       },
