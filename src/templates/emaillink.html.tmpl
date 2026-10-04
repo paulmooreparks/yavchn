@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>{{ template "head" . }}</head>
+<body class="app-page" data-view="classic">
+{{ template "topbar" . }}
+<main class="app-page-main account-panel">
+  {{/* Opening the link only shows this page; pressing the button spends it,
+       so a mail scanner that fetches the link cannot use it up. */}}
+  {{ if .Valid }}
+  <h1>{{ if .Adding }}Add this email address{{ else }}Sign in to YAVCHN{{ end }}</h1>
+  <p>{{ if .Adding }}Press the button to add <strong>{{ .Email }}</strong> to the YAVCHN account signed in on this browser.{{ else }}Press the button to sign in as <strong>{{ .Email }}</strong>. If there is no YAVCHN account for this address yet, this creates one.{{ end }}</p>
+  <form method="post" action="/auth/email/link">
+    <input type="hidden" name="token" value="{{ .Token }}">
+    <button class="btn btn-primary" type="submit">{{ if .Adding }}Add the address{{ else }}Sign in{{ end }}</button>
+  </form>
+  {{ else }}
+  <h1>This link has expired</h1>
+  <p role="status">Sign-in links work once, within 15 minutes, and a newer link replaces an older one. Ask for a new link from your account.</p>
+  <p><a class="btn" href="/account">Go to your account</a></p>
+  {{ end }}
+</main>
+{{ template "dialogs" . }}
+{{ template "scripts" . }}
+</body>
+</html>

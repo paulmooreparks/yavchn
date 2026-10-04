@@ -8,7 +8,25 @@ The first login provider will be GitHub, using its documented authorization-code
 
 YAVCHN will use revocable server-side sessions with host-only Secure and HttpOnly cookies. State-changing requests will require protection against cross-site request forgery. Authentication and private account responses must not enter shared caches. Sessions and private data must remain isolated between production and beta.
 
-Passkeys are a later authentication option. Recovery must be designed before they are introduced.
+### Email links, passkeys, and recovery
+
+Paul approved email sign-in links, passkeys, and uploaded profile pictures on 2026-10-04, borrowing the parkscomputing.com design. Google and Microsoft sign-in are deferred, possibly for good.
+
+An account holds one or more identities, each a GitHub user or an email address, and any number of passkeys. An identity is a way back in when a device is lost, so every account keeps at least one, and passkeys are the convenience added on top of them. A reader cannot remove an account's last identity. An email address and a GitHub user that belong to different accounts stay separate. Linking one to an account happens only from inside that account, never by matching addresses.
+
+A reader who asks for an email link gives an address and receives a message holding a single-use link. YAVCHN stores only the link's SHA-256 hash, with the address, its purpose, and the destination to return to. The link expires after fifteen minutes and a newer link for the same address and purpose replaces it. Opening the link shows a confirmation page, and only pressing its button signs the reader in, so a mail scanner that fetches the link spends nothing. The first sign-in with an unknown address creates the account. Every request gets the same answer, whether or not the address has an account. Sending is limited to five messages an hour for each address, thirty an hour from each network address, and five hundred a day in all. A message that cannot be sent cancels its link.
+
+A signed-in reader can add an email address, which sends a link that attaches the address to the current account when it is confirmed. They can also link a GitHub user through the usual GitHub sign-in, which attaches the GitHub identity to the current account. Either is refused when the identity already belongs to another account.
+
+Mail goes through Resend's documented HTTP API, as on parkscomputing.com. The deployment supplies `YAVCHN_RESEND_API_KEY` (or `YAVCHN_RESEND_API_KEY_FILE`) and `YAVCHN_EMAIL_FROM`. Without both, email sign-in does not appear.
+
+Passkeys follow WebAuthn through the documented `github.com/go-webauthn/webauthn` library, with the public origin's host as the relying party. They are discoverable credentials, so signing in needs no address. A passkey's user handle is the account's internal identifier. The server keeps each ceremony's challenge for five minutes, bound to the browser by a cookie, and uses it once. A signed-in reader adds a passkey with a name of their choosing and can remove any of them. Passkeys belong to their site's relying party, so a passkey made on beta.yavchn.com does not work on yavchn.com.
+
+Signing in again within ten minutes, by any method, satisfies the confirmation that deleting an account asks for.
+
+### Profile pictures
+
+A reader can upload a profile picture, or use the copy of their GitHub picture described under the top bar. The browser crops a chosen picture to its centre square, draws it at no more than 256 pixels, and encodes it as WebP where it can, which leaves the photo's metadata behind. The server accepts only PNG, JPEG, or WebP, recognised by the image's own leading bytes, and at most 200 KB. It never decodes the image. An uploaded picture stays until the reader replaces or removes it, and a GitHub sign-in no longer replaces it. Removing it shows the placeholder until the reader chooses Use my GitHub picture or uploads another.
 
 ## Account features
 

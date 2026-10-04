@@ -1279,6 +1279,14 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .account-avatar { display: block; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
 .account-avatar-placeholder { color: var(--text); }
 .account-identity { display: flex; align-items: center; gap: var(--space-3); }
+.account-buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.account-buttons form { margin: 0; }
+.account-methods { width: 100%; margin-block: .75rem; }
+.account-methods td:last-child { width: 1%; white-space: nowrap; text-align: end; }
+.account-methods form { margin: 0; }
+.account-email-signin { margin-block-start: 1.25rem; }
+.account-panel .form-group { display: flex; flex-direction: column; gap: 4px; margin-block-end: .75rem; }
+.account-panel h1 { font-size: 1.4rem; }
 .account-identity .account-avatar { width: 48px; height: 48px; flex: none; }
 
 /* Applet identity follows the host's icon choice and PUDL's masked glyphs. */

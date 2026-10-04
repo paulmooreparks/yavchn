@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"os"
 	"regexp"
@@ -22,6 +23,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/go-webauthn/webauthn/webauthn"
 )
 
 const accountSchema = `
@@ -52,7 +55,54 @@ CREATE TABLE IF NOT EXISTS account_data (
 CREATE TABLE IF NOT EXISTS account_avatars (
  account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
  content_type TEXT NOT NULL, image BLOB NOT NULL, version TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS account_email_links (
+ token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, link_account TEXT NOT NULL,
+ return_to TEXT NOT NULL, expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS account_email_links_address ON account_email_links(email, link_account);
+CREATE TABLE IF NOT EXISTS account_email_budget (
+ bucket TEXT PRIMARY KEY, count INTEGER NOT NULL, expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS account_passkeys (
+ credential_id TEXT PRIMARY KEY,
+ account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+ name TEXT NOT NULL, credential TEXT NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS account_passkeys_owner ON account_passkeys(account_id);
+CREATE TABLE IF NOT EXISTS account_ceremonies (
+ token_hash TEXT PRIMARY KEY, kind TEXT NOT NULL, account_id TEXT NOT NULL,
+ session TEXT NOT NULL, return_to TEXT NOT NULL, expires_at INTEGER NOT NULL
 );`
+
+// accountColumns are columns added after their tables first shipped, which
+// CREATE TABLE IF NOT EXISTS does not add to a database that has the table.
+var accountColumns = [][3]string{
+	// The picture an account shows: "github" mirrors its GitHub picture,
+	// "upload" is one the reader chose, and "none" is the placeholder.
+	{"accounts", "picture", `TEXT NOT NULL DEFAULT 'github'`},
+	{"account_identities", "avatar_url", `TEXT NOT NULL DEFAULT ''`},
+	// A GitHub sign-in started from inside an account links to it.
+	{"account_login_flows", "link_account", `TEXT NOT NULL DEFAULT ''`},
+}
+
+func migrateAccounts(db *sql.DB) error {
+	if _, err := db.Exec(accountSchema); err != nil {
+		return err
+	}
+	for _, c := range accountColumns {
+		var n int
+		if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name=?`, c[0], c[1]).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			if _, err := db.Exec(`ALTER TABLE ` + c[0] + ` ADD COLUMN ` + c[1] + ` ` + c[2]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
 
 // avatarLimit bounds the copy of a GitHub profile picture, requested at 96 pixels.
 const avatarLimit = 256 * 1024
@@ -64,25 +114,54 @@ const accountBodyLimit = 4 * 1024 * 1024
 
 type accountConfig struct {
 	Origin, ClientID, ClientSecret string
+	// Email sign-in links go through Resend; both are needed to offer them.
+	ResendKey, EmailFrom string
 }
 
-func loadAccountConfig() (accountConfig, error) {
-	c := accountConfig{Origin: os.Getenv("YAVCHN_PUBLIC_ORIGIN"), ClientID: os.Getenv("YAVCHN_GITHUB_CLIENT_ID"), ClientSecret: os.Getenv("YAVCHN_GITHUB_CLIENT_SECRET")}
-	if path := os.Getenv("YAVCHN_GITHUB_CLIENT_SECRET_FILE"); path != "" {
-		if c.ClientSecret != "" {
-			return c, errors.New("configure one GitHub secret source")
+// GitHub, Email and Passkeys say which ways of signing in this deployment offers.
+func (c accountConfig) GitHub() bool   { return c.ClientID != "" }
+func (c accountConfig) Email() bool    { return c.ResendKey != "" && c.EmailFrom != "" && c.Origin != "" }
+func (c accountConfig) Passkeys() bool { return c.Origin != "" && (c.GitHub() || c.Email()) }
+func (c accountConfig) Enabled() bool  { return c.GitHub() || c.Email() }
+
+// secretFrom reads a secret from its variable or from the file another names, not both.
+func secretFrom(name string) (string, error) {
+	v := os.Getenv(name)
+	if path := os.Getenv(name + "_FILE"); path != "" {
+		if v != "" {
+			return "", fmt.Errorf("configure %s or %s_FILE, not both", name, name)
 		}
 		b, err := os.ReadFile(path)
 		if err != nil {
-			return c, fmt.Errorf("read GitHub secret file: %w", err)
+			return "", fmt.Errorf("read %s_FILE: %w", name, err)
 		}
-		c.ClientSecret = strings.TrimSpace(string(b))
+		v = strings.TrimSpace(string(b))
+	}
+	return v, nil
+}
+
+func loadAccountConfig() (accountConfig, error) {
+	c := accountConfig{Origin: os.Getenv("YAVCHN_PUBLIC_ORIGIN"), ClientID: os.Getenv("YAVCHN_GITHUB_CLIENT_ID"), EmailFrom: strings.TrimSpace(os.Getenv("YAVCHN_EMAIL_FROM"))}
+	var err error
+	if c.ClientSecret, err = secretFrom("YAVCHN_GITHUB_CLIENT_SECRET"); err != nil {
+		return c, err
+	}
+	if c.ResendKey, err = secretFrom("YAVCHN_RESEND_API_KEY"); err != nil {
+		return c, err
 	}
 	if (c.ClientID == "") != (c.ClientSecret == "") {
 		return c, errors.New("GitHub client ID and secret must both be configured")
 	}
-	if c.Origin == "" && c.ClientID != "" {
-		return c, errors.New("YAVCHN_PUBLIC_ORIGIN is required for GitHub login")
+	if (c.ResendKey == "") != (c.EmailFrom == "") {
+		return c, errors.New("YAVCHN_RESEND_API_KEY and YAVCHN_EMAIL_FROM must both be configured")
+	}
+	if c.EmailFrom != "" {
+		if _, err := mail.ParseAddress(c.EmailFrom); err != nil {
+			return c, errors.New("YAVCHN_EMAIL_FROM must be an email address")
+		}
+	}
+	if c.Origin == "" && (c.ClientID != "" || c.ResendKey != "") {
+		return c, errors.New("YAVCHN_PUBLIC_ORIGIN is required for sign-in")
 	}
 	if c.Origin != "" {
 		u, err := url.Parse(c.Origin)
@@ -285,13 +364,21 @@ type accountService struct {
 	client *http.Client
 	rate   *rateLimiter
 	writes *rateLimiter
+	// webauthn runs passkey ceremonies when the deployment offers them.
+	webauthn *webauthn.WebAuthn
 }
 
 func newAccountService(s *Server, cfg accountConfig) (*accountService, error) {
-	if _, err := s.db.Exec(accountSchema); err != nil {
+	if err := migrateAccounts(s.db); err != nil {
 		return nil, err
 	}
-	return &accountService{server: s, config: cfg, client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, rate: newRateLimiter(10, 5*time.Minute), writes: newRateLimiter(120, time.Minute)}, nil
+	a := &accountService{server: s, config: cfg, client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, rate: newRateLimiter(10, 5*time.Minute), writes: newRateLimiter(120, time.Minute)}
+	if cfg.Passkeys() {
+		if err := a.configurePasskeys(); err != nil {
+			return nil, err
+		}
+	}
+	return a, nil
 }
 func accountToken() (string, error) {
 	b := make([]byte, 32)
@@ -323,6 +410,18 @@ func (a *accountService) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /account/data", a.getData)
 	mux.HandleFunc("PUT /account/data", a.putData)
 	mux.HandleFunc("GET /account/avatar", a.avatar)
+	mux.HandleFunc("POST /account/avatar", a.uploadPicture)
+	mux.HandleFunc("POST /account/avatar/remove", a.removePicture)
+	mux.HandleFunc("POST /account/avatar/github", a.githubPicture)
+	mux.HandleFunc("POST /auth/email", a.requestEmail)
+	mux.HandleFunc("GET /auth/email/link", a.emailLink)
+	mux.HandleFunc("POST /auth/email/link", a.redeemEmail)
+	mux.HandleFunc("POST /auth/passkey/options", a.passkeyOptions)
+	mux.HandleFunc("POST /auth/passkey", a.passkeySignIn)
+	mux.HandleFunc("POST /account/passkeys/options", a.passkeyCreationOptions)
+	mux.HandleFunc("POST /account/passkeys", a.passkeyRegister)
+	mux.HandleFunc("POST /account/passkeys/remove", a.removePasskey)
+	mux.HandleFunc("POST /account/identities/remove", a.removeIdentity)
 }
 
 // avatar serves the signed-in reader their own picture. Its address
@@ -400,7 +499,8 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 			w.Header().Set("Cache-Control", "no-store")
 			// A no-referrer policy can make a form POST's Origin null.
 			// Suppress callback URL leakage without breaking account form checks.
-			if r.URL.Path == "/auth/github/callback" {
+			// Both carry a sign-in secret in their address.
+			if r.URL.Path == "/auth/github/callback" || r.URL.Path == "/auth/email/link" {
 				w.Header().Set("Referrer-Policy", "no-referrer")
 			} else {
 				w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -420,7 +520,7 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 		if c, err := r.Cookie(sessionCookie); err == nil && len(c.Value) == 43 {
 			user := &accountSession{}
 			var avatar string
-			err = a.server.db.QueryRowContext(r.Context(), `SELECT a.id,i.username,s.csrf,s.token_hash,s.created_at,d.revision,d.document,COALESCE(v.version,'') FROM account_sessions s JOIN accounts a ON a.id=s.account_id JOIN account_identities i ON i.account_id=a.id AND i.provider='github' JOIN account_data d ON d.account_id=a.id LEFT JOIN account_avatars v ON v.account_id=a.id WHERE s.token_hash=? AND s.expires_at>?`, tokenHash(c.Value), time.Now().Unix()).Scan(&user.ID, &user.Username, &user.CSRF, &user.TokenHash, &user.CreatedAt, &user.Revision, newAccountScan(&user.Data), &avatar)
+			err = a.server.db.QueryRowContext(r.Context(), `SELECT a.id,COALESCE((SELECT username FROM account_identities WHERE account_id=a.id ORDER BY provider<>'github',username LIMIT 1),'your account'),s.csrf,s.token_hash,s.created_at,d.revision,d.document,COALESCE(v.version,'') FROM account_sessions s JOIN accounts a ON a.id=s.account_id JOIN account_data d ON d.account_id=a.id LEFT JOIN account_avatars v ON v.account_id=a.id WHERE s.token_hash=? AND s.expires_at>?`, tokenHash(c.Value), time.Now().Unix()).Scan(&user.ID, &user.Username, &user.CSRF, &user.TokenHash, &user.CreatedAt, &user.Revision, newAccountScan(&user.Data), &avatar)
 			if err == nil {
 				if avatar != "" {
 					user.AvatarURL = "/account/avatar?v=" + avatar
@@ -435,10 +535,10 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 				return
 			}
 		}
-		if a.config.ClientID != "" {
+		if a.config.Enabled() {
 			r = r.WithContext(context.WithValue(r.Context(), accountSignInContextKey{}, true))
 		}
-		if accountUI && r.Method == "GET" && currentAccount(r) == nil && a.config.ClientID != "" {
+		if accountUI && r.Method == "GET" && currentAccount(r) == nil && a.config.Enabled() {
 			c, err := r.Cookie(loginCookie)
 			if err != nil || len(c.Value) != 43 {
 				token, err := accountToken()
@@ -474,28 +574,34 @@ func (s *accountScanner) Scan(v any) error {
 type accountPanelVM struct {
 	Account                       *accountSession
 	Message, LoginCSRF, ReturnURL string
-	LoginAvailable                bool
-	OtherSessions                 int
-	RecentLogin                   bool
+	// The ways of signing in this deployment offers.
+	LoginAvailable, EmailAvailable, PasskeysAvailable bool
+	OtherSessions                                     int
+	RecentLogin                                       bool
+	// The signed-in account's ways in and picture (signin.go).
+	Identities    []panelIdentity
+	Passkeys      []panelPasskey
+	HasGitHub     bool
+	GitHubPicture bool   // a GitHub picture the reader can return to
+	Email         string // an address of the account's, for signing in again
+	Picture       string // "github", "upload" or "none"
 }
 
 // panel supplies the same account content to the Classic page and PUDL window.
 func (a *accountService) panel(r *http.Request) (*accountPanelVM, error) {
-	vm := &accountPanelVM{Account: currentAccount(r), LoginAvailable: a.config.ClientID != "", ReturnURL: "/account"}
+	vm := &accountPanelVM{Account: currentAccount(r), LoginAvailable: a.config.GitHub(), EmailAvailable: a.config.Email(), PasskeysAvailable: a.webauthn != nil, ReturnURL: "/account"}
 	if r.URL.Path != "/account" {
 		vm.ReturnURL = "/hn/?view=window&open=account&top=account"
 		if target, ok := r.Context().Value(accountReturnContextKey{}).(string); ok {
 			vm.ReturnURL = target
 		}
 	}
-	switch r.URL.Query().Get("message") {
-	case "signed-out":
-		vm.Message = "You are signed out. Your anonymous browser data is available again."
-	case "deleted":
-		vm.Message = "Your account and synchronized data have been deleted."
-	}
+	vm.Message = accountMessages[r.URL.Query().Get("message")]
 	if user := currentAccount(r); user != nil {
 		if err := a.server.db.QueryRowContext(r.Context(), `SELECT count(*) FROM account_sessions WHERE account_id=? AND token_hash<>? AND expires_at>?`, user.ID, user.TokenHash, time.Now().Unix()).Scan(&vm.OtherSessions); err != nil {
+			return nil, err
+		}
+		if err := a.signInMethods(r.Context(), vm); err != nil {
 			return nil, err
 		}
 		vm.RecentLogin = time.Now().Unix()-user.CreatedAt < 600
@@ -510,7 +616,7 @@ func (a *accountService) panel(r *http.Request) (*accountPanelVM, error) {
 func (a *accountService) page(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("view") == "window" {
 		target := url.Values{"view": {"window"}, "open": {"account"}, "top": {"account"}}
-		if message := r.URL.Query().Get("message"); message == "signed-out" || message == "deleted" {
+		if message := r.URL.Query().Get("message"); accountMessages[message] != "" {
 			target.Set("message", message)
 		}
 		http.Redirect(w, r, "/hn/?"+target.Encode(), http.StatusSeeOther)
@@ -540,11 +646,7 @@ func accountReturn(r *http.Request, message string) string {
 		}
 	}
 	if message != "" {
-		u, _ := url.Parse(target)
-		q := u.Query()
-		q.Set("message", message)
-		u.RawQuery = q.Encode()
-		target = u.String()
+		target = withMessage(target, message)
 	}
 	return target
 }
@@ -561,15 +663,14 @@ func (a *accountService) start(w http.ResponseWriter, r *http.Request) {
 		accountError(w, 403, "Invalid sign-in request.")
 		return
 	}
-	csrf := ""
-	if user := currentAccount(r); user != nil {
-		csrf = user.CSRF
-	} else if c, err := r.Cookie(loginCookie); err == nil {
-		csrf = c.Value
-	}
-	if !sameToken(csrf, r.PostForm.Get("csrf")) {
+	if !sameToken(signInToken(r), r.PostForm.Get("csrf")) {
 		accountError(w, 403, "Reload the account page before signing in.")
 		return
+	}
+	// Linking attaches the GitHub user to the account that asked for it.
+	link := ""
+	if user := currentAccount(r); user != nil && r.PostForm.Get("link") == "1" {
+		link = user.ID
 	}
 	if !a.rate.Allow(clientIP(r)) {
 		w.Header().Set("Retry-After", "300")
@@ -589,7 +690,7 @@ func (a *accountService) start(w http.ResponseWriter, r *http.Request) {
 	// The return destination is limited to account views on this site.
 	_, err = a.server.db.ExecContext(r.Context(), `DELETE FROM account_login_flows WHERE expires_at<=?`, time.Now().Unix())
 	if err == nil {
-		_, err = a.server.db.ExecContext(r.Context(), `INSERT INTO account_login_flows(state_hash,verifier,return_to,expires_at)VALUES(?,?,?,?)`, tokenHash(state), verifier, accountReturn(r, ""), time.Now().Add(10*time.Minute).Unix())
+		_, err = a.server.db.ExecContext(r.Context(), `INSERT INTO account_login_flows(state_hash,verifier,return_to,expires_at,link_account)VALUES(?,?,?,?,?)`, tokenHash(state), verifier, accountReturn(r, ""), time.Now().Add(10*time.Minute).Unix(), link)
 	}
 	if err != nil {
 		accountError(w, 503, "Cannot start sign-in right now.")
@@ -611,8 +712,8 @@ func (a *accountService) callback(w http.ResponseWriter, r *http.Request) {
 		accountError(w, 400, "Sign-in did not match this browser. Please start again.")
 		return
 	}
-	var verifier, target string
-	err = a.server.db.QueryRowContext(r.Context(), `DELETE FROM account_login_flows WHERE state_hash=? AND expires_at>? RETURNING verifier,return_to`, tokenHash(state), time.Now().Unix()).Scan(&verifier, &target)
+	var verifier, target, linkAccount string
+	err = a.server.db.QueryRowContext(r.Context(), `DELETE FROM account_login_flows WHERE state_hash=? AND expires_at>? RETURNING verifier,return_to,link_account`, tokenHash(state), time.Now().Unix()).Scan(&verifier, &target, &linkAccount)
 	accountCookie(w, flowCookie, "", -1)
 	if err != nil {
 		accountError(w, 400, "Sign-in expired or was already used. Please start again.")
@@ -659,62 +760,25 @@ func (a *accountService) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Provider tokens are used for this request only and are never persisted.
-	session, err := accountToken()
-	if err != nil {
-		accountError(w, 500, "Cannot complete sign-in.")
-		return
-	}
-	csrf, err := accountToken()
-	if err != nil {
-		accountError(w, 500, "Cannot complete sign-in.")
-		return
-	}
-	id, err := accountToken()
-	if err != nil {
-		accountError(w, 500, "Cannot complete sign-in.")
-		return
-	}
-	tx, err := a.server.db.BeginTx(r.Context(), nil)
-	if err != nil {
-		accountError(w, 503, "Account storage is unavailable.")
-		return
-	}
-	defer tx.Rollback()
 	subject := strconv.FormatInt(identity.ID, 10)
-	err = tx.QueryRowContext(r.Context(), `SELECT account_id FROM account_identities WHERE provider='github' AND subject=?`, subject).Scan(&id)
-	if err == sql.ErrNoRows {
-		_, err = tx.ExecContext(r.Context(), `INSERT INTO accounts(id,created_at)VALUES(?,?)`, id, time.Now().Unix())
-		if err == nil {
-			_, err = tx.ExecContext(r.Context(), `INSERT INTO account_identities(provider,subject,account_id,username)VALUES('github',?,?,?)`, subject, id, identity.Login)
-		}
-		if err == nil {
-			_, err = tx.ExecContext(r.Context(), `INSERT INTO account_data(account_id)VALUES(?)`, id)
-		}
-	} else if err == nil {
-		_, err = tx.ExecContext(r.Context(), `UPDATE account_identities SET username=? WHERE provider='github' AND subject=?`, identity.Login, subject)
-	}
-	if err == nil {
-		if c, e := r.Cookie(sessionCookie); e == nil {
-			_, err = tx.ExecContext(r.Context(), `DELETE FROM account_sessions WHERE token_hash=?`, tokenHash(c.Value))
-		}
-	}
-	if err == nil {
-		_, err = tx.ExecContext(r.Context(), `DELETE FROM account_sessions WHERE expires_at<=?`, time.Now().Unix())
-	}
-	if err == nil {
-		_, err = tx.ExecContext(r.Context(), `INSERT INTO account_sessions(token_hash,account_id,csrf,created_at,expires_at,agent)VALUES(?,?,?,?,?,?)`, tokenHash(session), id, csrf, time.Now().Unix(), time.Now().Add(30*24*time.Hour).Unix(), limitedString(r.UserAgent(), 512))
-	}
-	if err == nil {
-		err = tx.Commit()
-	}
-	if err != nil {
-		slog.Error("account sign-in storage failed")
-		accountError(w, 503, "Cannot save your sign-in. Please try again.")
+	id, err := a.signInIdentity(w, r, "github", subject, identity.Login, linkAccount, func(tx *sql.Tx, id string) error {
+		_, err := tx.ExecContext(r.Context(), `UPDATE account_identities SET avatar_url=? WHERE provider='github' AND subject=?`, limitedString(identity.AvatarURL, 2048), subject)
+		return err
+	})
+	if errors.Is(err, errIdentityTaken) {
+		http.Redirect(w, r, withMessage(target, "identity-taken"), http.StatusSeeOther)
 		return
 	}
-	a.refreshAvatar(r.Context(), id, identity.AvatarURL)
-	accountCookie(w, sessionCookie, session, 30*24*3600)
-	accountCookie(w, loginCookie, "", -1)
+	if err != nil {
+		return
+	}
+	var picture string
+	if err := a.server.db.QueryRowContext(r.Context(), `SELECT picture FROM accounts WHERE id=?`, id).Scan(&picture); err == nil && picture == "github" {
+		a.refreshAvatar(r.Context(), id, identity.AvatarURL)
+	}
+	if linkAccount != "" {
+		target = withMessage(target, "github-linked")
+	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 func limitedString(s string, n int) string {
@@ -750,12 +814,26 @@ func (a *accountService) authorizedWrite(w http.ResponseWriter, r *http.Request)
 	}
 	csrf := r.Header.Get("X-CSRF-Token")
 	if r.Method == "POST" {
-		r.Body = http.MaxBytesReader(w, r.Body, 4096)
-		if r.ParseForm() != nil {
-			accountError(w, 400, "Invalid account request.")
-			return nil
+		// A script's JSON request carries its token in a header and leaves
+		// its body to the handler; a form, or an upload, carries it in a field.
+		switch kind := strings.Split(r.Header.Get("Content-Type"), ";")[0]; kind {
+		case "application/json":
+			r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+		case "multipart/form-data":
+			r.Body = http.MaxBytesReader(w, r.Body, uploadLimit)
+			if r.ParseMultipartForm(uploadLimit) != nil {
+				accountError(w, 400, "Invalid account request.")
+				return nil
+			}
+			csrf = r.PostFormValue("csrf")
+		default:
+			r.Body = http.MaxBytesReader(w, r.Body, 4096)
+			if r.ParseForm() != nil {
+				accountError(w, 400, "Invalid account request.")
+				return nil
+			}
+			csrf = r.PostForm.Get("csrf")
 		}
-		csrf = r.PostForm.Get("csrf")
 	}
 	if !sameToken(u.CSRF, csrf) {
 		accountError(w, 403, "Your session changed. Reload this page before trying again.")
