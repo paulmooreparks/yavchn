@@ -350,7 +350,10 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     const settings = page.locator('.win[data-win="settings"] [data-settings]');
     await settings.waitFor();
     assert.equal(await settings.locator('select').count(), 0);
-    // Like every window, Settings has its identity menu.
+    // Like every window, Settings has its identity menu, also when the
+    // window comes from the address as the page loads.
+    await page.goto(new URL('?view=window&open=settings&top=settings', page.url()).href);
+    await page.locator('.win[data-win="settings"] [data-settings]').waitFor();
     await page.locator('.menubar-front .menubar-title').filter({ hasText: /^Settings$/ }).click();
     for (const name of ['Open as a page', 'Copy settings link', 'Close window']) {
       await page.getByRole('menuitem', { name, exact: true }).waitFor();

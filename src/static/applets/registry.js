@@ -34,6 +34,9 @@
     ['profile', 'Profile', 'Copy profile link', '']].forEach(function (a) {
     window.pudlApplets.define(a[0], {});
     window.pudlApplets.register(a[0], { init: function (root) {
+      // These start as the page loads, which can be before the menu bar first
+      // reads its front menu, so they announce theirs through its refresh API.
+      requestAnimationFrame(function () { if (window.pudlMenubar) window.pudlMenubar.refresh(); });
       return { menus: function () {
         return { titles: [{ label: a[1], items: window.yavchn.identityMenu(root, a[2], a[3] || location.href) }] };
       } };
