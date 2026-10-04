@@ -36,11 +36,14 @@
       .catch(function (err) { if (!err || err.name !== 'AbortError') body.innerHTML = failed; });
   }
 
-  /* State is a query string, a=article scroll, d=discussion scroll and
-     c=the id of the top-level comment the keyboard reached. */
+  /* State is a query string, a=article scroll, d=discussion scroll,
+     c=the id of the top-level comment the keyboard reached, and note=open
+     or closed once the reader has opened or closed the note panel. */
   function parseState(s) {
     var q = new URLSearchParams(s || '');
-    return { a: parseInt(q.get('a') || '0', 10) || 0, d: parseInt(q.get('d') || '0', 10) || 0, c: q.get('c') || '', pane: q.get('pane') || '', ratio: q.get('ratio') || '' };
+    var note = q.get('note');
+    return { a: parseInt(q.get('a') || '0', 10) || 0, d: parseInt(q.get('d') || '0', 10) || 0, c: q.get('c') || '', pane: q.get('pane') || '', ratio: q.get('ratio') || '',
+      note: note === 'open' || note === 'closed' ? note : '' };
   }
 
   function init(root, opts) {
@@ -68,6 +71,8 @@
       if (positions.d) q.set('d', String(Math.round(positions.d)));
       var c = root.querySelector('.discussion-content > .thread > .comment.focused');
       if (c && c.dataset.id) q.set('c', c.dataset.id);
+      var note = root.querySelector('[data-note-panel]');
+      if (note && note.dataset.noteChosen) q.set('note', note.hidden ? 'closed' : 'open');
       return q.toString();
     }
 
@@ -156,6 +161,10 @@
       refreshBtn = root.querySelector('.story-refresh');
       wanted = parseState(stateText);
       var wantedState = wanted;
+      // library.js opens or closes the note panel as the reader left it.
+      if (wanted.note) root.dataset.noteWanted = wanted.note;
+      else delete root.dataset.noteWanted;
+      if (lib.library) lib.library.bindNotes();
       positions = { a: wanted.a, d: wanted.d };
       var urlState = opts.host === 'page' ? parseState(location.search.slice(1)) : null;
       if (urlState && validPane(urlState.pane)) paneMode = urlState.pane;
@@ -292,6 +301,7 @@
       if (paneMode === 'article') showPane('discussion', true);
     }, { signal: ctl.signal });
     root.addEventListener('yavchn:comment-focus', changedSoon, { signal: ctl.signal });
+    root.addEventListener('yavchn:note-toggle', changedSoon, { signal: ctl.signal });
     wire(opts.state);
     var unmountReader = lib.readers.mount(root, loadStory);
 

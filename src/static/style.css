@@ -1295,6 +1295,10 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .note-mark { margin-inline-end: 5px; }
 .story-note-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .story-note-toggle[hidden] { display: none; }
+/* The note's disclosure chevron points down to open and up to close. */
+.disclosure-chevron { width: 16px; height: 16px; flex: none; transition: transform .15s ease; }
+[aria-expanded="true"] > .disclosure-chevron { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .disclosure-chevron { transition: none; } }
 .story-note-panel { flex: none; padding: 8px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
 .story-note-panel[hidden] { display: none; }
 .story-note-panel .form-group { display: flex; flex-direction: column; gap: 4px; }

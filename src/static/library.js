@@ -322,10 +322,10 @@
     if (!toggle) return;
     var text = noteOf(storyOf(root));
     toggle.hidden = false;
-    toggle.setAttribute('aria-pressed', String(open));
+    toggle.setAttribute('aria-expanded', String(open));
     toggle.classList.toggle('has-note', !!text);
-    toggle.textContent = text ? 'Note' : 'Add note';
-    toggle.title = text ? (open ? 'Hide your note' : 'Show your note') : 'Write a note on this story';
+    toggle.querySelector('.story-note-label').textContent = text ? 'Note' : 'Add note';
+    toggle.title = open ? 'Hide your note' : text ? 'Show your note' : 'Write a note on this story';
   }
   function setOpen(root, open, focus) {
     var panel = root.querySelector('[data-note-panel]');
@@ -335,8 +335,19 @@
     if (open && focus) panel.querySelector('[data-note-text]').focus();
     if (window.pudlSplit) window.pudlSplit.refresh();
   }
-  /* Fill each story's panel for the story it now shows. A panel opens by
-     itself when the story has a note, so the reader sees why they kept it. */
+  /* The reader opening or closing the panel is remembered with the story's
+     other state (story.js), so a reload or the story opened again finds the
+     panel as it was left. */
+  function choose(root, open, focus) {
+    var panel = root.querySelector('[data-note-panel]');
+    if (!panel) return;
+    panel.dataset.noteChosen = 'true';
+    setOpen(root, open, focus);
+    root.dispatchEvent(new CustomEvent('yavchn:note-toggle', { bubbles: true }));
+  }
+  /* Fill each story's panel for the story it now shows. The panel is as the
+     reader left it on this story, and otherwise opens by itself when the
+     story has a note, so the reader sees why they kept it. */
   function bindPanels() {
     document.querySelectorAll('.story[data-story-key] [data-note-panel]').forEach(function (panel) {
       var root = storyRoot(panel), key = root.dataset.storyKey;
@@ -350,8 +361,17 @@
         var toggle = root.querySelector('[data-note-toggle]');
         if (toggle) toggle.setAttribute('aria-controls', panel.id);
         panel.dataset.noteFor = key;
+        delete panel.dataset.noteApplied;
         area.value = noteOf(storyOf(root));
         setOpen(root, !!area.value, false);
+      }
+      // story.js gives the remembered choice as its state comes in, which
+      // can be after the panel was first filled.
+      var wanted = root.dataset.noteWanted || '';
+      if (wanted && panel.dataset.noteApplied !== wanted) {
+        panel.dataset.noteApplied = wanted;
+        panel.dataset.noteChosen = 'true';
+        setOpen(root, wanted === 'open', false);
       } else if (document.activeElement !== area && !timers.get(area)) {
         // Another tab or device changed the note while this one was idle.
         area.value = noteOf(storyOf(root));
@@ -379,7 +399,7 @@
     if (!toggle) return;
     var root = storyRoot(toggle);
     var panel = root && root.querySelector('[data-note-panel]');
-    if (panel) setOpen(root, panel.hidden, panel.hidden);
+    if (panel) choose(root, panel.hidden, panel.hidden);
   });
   document.addEventListener('input', function (e) {
     if (!e.target.matches || !e.target.matches('[data-note-text]')) return;
@@ -409,7 +429,7 @@
     return [
       { label: 'Add to collection', items: items },
       { label: text ? (panel && !panel.hidden ? 'Hide the note' : 'Show the note') : 'Add a note…', disabled: !panel,
-        run: function () { setOpen(root, panel.hidden, panel.hidden); } }
+        run: function () { choose(root, panel.hidden, panel.hidden); } }
     ];
   }
 
@@ -419,7 +439,7 @@
     markRows();
     bindPanels();
   }
-  lib.library = { storyMenu: storyMenu, refresh: refresh };
+  lib.library = { storyMenu: storyMenu, refresh: refresh, bindNotes: bindPanels };
 
   /* A filter menu's checkbox applies at once, as on parkscomputing.com: it
      submits the filter form, which pudl-regions.js turns into a swap of the

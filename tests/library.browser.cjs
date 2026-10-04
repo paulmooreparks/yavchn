@@ -55,6 +55,25 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.locator('#row-hn-1 .note-mark[aria-label="Has a note"]').waitFor();
     assert.equal(await reader.locator('[data-note-toggle]').textContent(), 'Note');
 
+    // The toggle is a disclosure with an SVG chevron of a readable size, and
+    // the panel stays as the reader leaves it across a reload.
+    const toggle = reader.locator('[data-note-toggle]');
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+    assert.deepEqual(await toggle.locator('svg.disclosure-chevron').evaluate(svg => [svg.getBoundingClientRect().width, svg.getBoundingClientRect().height]), [16, 16]);
+    await toggle.click();
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(await reader.locator('[data-note-panel]').isHidden(), true);
+    await page.waitForTimeout(600);
+    await page.reload();
+    await page.locator('.win.active .story [data-note-toggle]:not([hidden])').waitFor();
+    assert.equal(await reader.locator('[data-note-toggle]').getAttribute('aria-expanded'), 'false');
+    assert.equal(await reader.locator('[data-note-panel]').isHidden(), true);
+    await reader.locator('[data-note-toggle]').click();
+    await page.waitForTimeout(600);
+    await page.reload();
+    await page.locator('.win.active .story [data-note-toggle][aria-expanded="true"]').waitFor();
+    assert.equal(await reader.locator('[data-note-panel]').isVisible(), true);
+
     // Saved holds the three lists as tabs, and the windows stay open.
     await page.locator('.source-seg a[data-source="pinned"]').click();
     await page.waitForURL(u => u.pathname === '/pinned/');
