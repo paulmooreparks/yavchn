@@ -85,8 +85,16 @@ func (f *signinFixture) loginToken() *http.Cookie {
 	return cookieNamed(f.t, f.request("GET", "/account", "", nil, nil), loginCookie)
 }
 
+// redeem presses the confirmation page's button as a browser would. The
+// Fetch standard sends Origin: null with a form posted from a page whose
+// referrer policy is no-referrer, so the page's own policy decides it.
 func (f *signinFixture) redeem(token string, cookies []*http.Cookie) *httptest.ResponseRecorder {
-	return f.request("POST", "/auth/email/link", url.Values{"token": {token}}.Encode(), cookies, nil)
+	page := f.request("GET", "/auth/email/link?token="+token, "", cookies, nil)
+	origin := "https://beta.yavchn.com"
+	if page.Header().Get("Referrer-Policy") == "no-referrer" {
+		origin = "null"
+	}
+	return f.request("POST", "/auth/email/link", url.Values{"token": {token}}.Encode(), cookies, map[string]string{"Origin": origin})
 }
 
 // github signs in with a GitHub user through this fixture's fake network.
@@ -149,7 +157,7 @@ func TestEmailLinkSignIn(t *testing.T) {
 	// Opening the link only shows its confirmation; the scanner's fetch spends nothing.
 	for range 2 {
 		page := f.request("GET", "/auth/email/link?token="+second, "", nil, nil)
-		if !strings.Contains(page.Body.String(), "reader@example.com") || !strings.Contains(page.Body.String(), `name="token" value="`+second+`"`) || page.Header().Get("Referrer-Policy") != "no-referrer" {
+		if !strings.Contains(page.Body.String(), "reader@example.com") || !strings.Contains(page.Body.String(), `name="token" value="`+second+`"`) || page.Header().Get("Referrer-Policy") != "strict-origin-when-cross-origin" {
 			t.Fatalf("confirmation page: %d", page.Code)
 		}
 	}

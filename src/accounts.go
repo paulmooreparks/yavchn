@@ -505,8 +505,9 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 			w.Header().Set("Cache-Control", "no-store")
 			// A no-referrer policy can make a form POST's Origin null.
 			// Suppress callback URL leakage without breaking account form checks.
-			// Both carry a sign-in secret in their address.
-			if r.URL.Path == "/auth/github/callback" || r.URL.Path == "/auth/email/link" {
+			// The email link's page keeps the default policy: its form must post
+			// with a real Origin, and other sites see only the origin anyway.
+			if r.URL.Path == "/auth/github/callback" {
 				w.Header().Set("Referrer-Policy", "no-referrer")
 			} else {
 				w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
