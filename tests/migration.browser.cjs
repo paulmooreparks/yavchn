@@ -41,6 +41,29 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     assert.equal(await page.locator('[data-migration-leaving]').isVisible(), false);
     assert.equal(await page.getByRole('button', { name: 'Save browser data to a file' }).isVisible(), false);
     assert.equal(await page.locator('[data-migration-import]').isVisible(), true);
+    // A disabled primary button keeps readable text in both themes: it reads
+    // as an ordinary disabled button, as does one disabled by its fieldset.
+    for (const theme of ['light', 'dark']) {
+      const looks = await page.evaluate(theme => {
+        document.documentElement.setAttribute('data-theme', theme);
+        const plain = document.createElement('button');
+        plain.className = 'btn';
+        plain.disabled = true;
+        const fieldset = document.createElement('fieldset');
+        fieldset.disabled = true;
+        const inner = document.createElement('button');
+        inner.className = 'btn';
+        fieldset.appendChild(inner);
+        document.body.append(plain, fieldset);
+        const style = el => { const s = getComputedStyle(el); return s.color + ' ' + s.opacity; };
+        const out = { primary: style(document.querySelector('[data-migration-apply]')), plain: style(plain), fieldset: style(inner) };
+        plain.remove(); fieldset.remove();
+        return out;
+      }, theme);
+      assert.equal(looks.primary, looks.plain, theme + ' disabled primary: ' + JSON.stringify(looks));
+      assert.equal(looks.fieldset, looks.plain, theme + ' fieldset-disabled button: ' + JSON.stringify(looks));
+    }
+    await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
     await page.evaluate(() => {
       localStorage.setItem('yavchn-roundtrip', 'previous');
       localStorage.setItem('destination-only', 'preserved');

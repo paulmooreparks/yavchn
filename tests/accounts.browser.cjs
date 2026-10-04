@@ -46,7 +46,8 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.locator('[data-win="reader-1"]').waitFor();
     await page.evaluate(() => { window.accountTestReader = document.querySelector('[data-win="reader-1"]'); });
     await page.locator('.menubar-title').filter({ hasText: /^\s*YAVCHN\s*$/ }).click();
-    await page.getByRole('menuitem', { name: /^Account \(/ }).click();
+    // The site menu names the account without its user name.
+    await page.locator('.menubar-panel').getByRole('menuitem', { name: 'Account', exact: true }).click();
     await page.locator('[data-win="account"] [data-account-import]:not([hidden])').waitFor();
     assert.equal(await page.locator('body').getAttribute('data-view'), 'window');
     await page.locator('[data-win-tab="account"] .task-icon').waitFor();

@@ -107,7 +107,7 @@
   if (legacy && window.pudlToast) {
     var toast = window.pudlToast('YAVCHN is now available on yavchn.com.', { sticky: true });
     var action = document.createElement('a');
-    action.className = 'btn primary migration-toast-action';
+    action.className = 'btn btn-primary migration-toast-action';
     action.href = '/settings?migration=1#browser-data';
     action.textContent = 'Start migration';
     toast.querySelector('.toast-text').appendChild(action);
@@ -117,7 +117,7 @@
     if (document.querySelector('meta[name="yavchn-account"]')) {
       var done = window.pudlToast('Browser data imported into this browser. Your account does not include it yet.', { kind: 'positive', sticky: true });
       var merge = document.createElement('a');
-      merge.className = 'btn primary migration-toast-action';
+      merge.className = 'btn btn-primary migration-toast-action';
       merge.href = '/account?view=' + (document.body.dataset.view || 'classic');
       merge.setAttribute('data-win-open', 'account');
       merge.textContent = 'Add it to your account';

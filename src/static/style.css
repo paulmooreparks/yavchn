@@ -38,6 +38,18 @@
   --yv-glyph-refresh: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 8a5 5 0 1 1-1.6-3.7'/%3E%3Cpath d='M12.2 1.8v3h-3'/%3E%3C/svg%3E");
 }
 
+/* Disabled buttons, until PUDL fixes two gaps (present through 0.44.0).
+   Its disabled rule gives a primary or danger button the neutral face but
+   keeps the on-accent text a primary button wears, which then has almost
+   no contrast in either theme; a disabled button reads alike whatever its
+   kind. And the rule matches [disabled] alone, so a button disabled by its
+   fieldset still looked pressable. */
+.btn:disabled, .btn.is-disabled, .btn[aria-disabled="true"] {
+  opacity: .45; cursor: not-allowed;
+  color: var(--text); border-color: var(--raise-border);
+  background: var(--raise-grad); box-shadow: var(--raise-shadow);
+}
+
 /* === The top bar ==========================================================
    The source switcher follows the menus so navigation stays together
    on wide displays. */
