@@ -113,7 +113,7 @@
     var input = document.querySelector('.pin-filter input[name="q"]');
     return {
       terms: parseTerms(input ? input.value : view.dataset.pinQ),
-      source: view.dataset.pinSource || '',
+      sources: (view.dataset.pinSources || '').split(' ').filter(Boolean),
       unread: view.hasAttribute('data-pin-unread'),
       sort: view.dataset.pinSort || ''
     };
@@ -145,7 +145,7 @@
       comments: function (a, b) { return (b.comments || 0) - (a.comments || 0); }
     };
     var shown = entries.filter(function (s) {
-      if (f.source && s.source !== f.source) return false;
+      if (f.sources.length && f.sources.indexOf(s.source) < 0) return false;
       if (f.unread && visited && visited.has(s.id)) return false;
       var text = ((s.title || '') + ' ' + (s.host || '') + ' ' + (s.by || '') + ' ' + (cfg.text ? cfg.text(s) : '')).toLowerCase();
       return f.terms.want.every(function (w) { return text.indexOf(w) >= 0; }) &&

@@ -156,7 +156,7 @@ func main() {
 		http.Redirect(w, r, "/collections/", http.StatusFound)
 	})
 	mux.HandleFunc("GET /collections/{$}", srv.Collections)
-	mux.HandleFunc("GET /collections/{id}/{$}", srv.Collections)
+	mux.HandleFunc("GET /collections/{id}/{$}", srv.CollectionRedirect)
 	mux.HandleFunc("GET /notes", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/notes/", http.StatusFound)
 	})

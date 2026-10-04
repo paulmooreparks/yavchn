@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"strings"
 )
 
 // Version the whole asset set so lazy applets and the shell always agree.
@@ -32,5 +33,6 @@ func parseTemplates() (*template.Template, error) {
 	return template.New("").Funcs(template.FuncMap{
 		"asset":        func(path string) string { return path + "?v=" + version },
 		"assetVersion": func() string { return version },
+		"join":         strings.Join,
 	}).ParseFS(assets, "templates/*.tmpl")
 }

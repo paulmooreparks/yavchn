@@ -9,7 +9,7 @@
      yavchn-notes        { "<source>-<story>": { source, id, title, url, host, by, score, comments, text, updated_at } }
 
    This script fills the Collections and Notes views, the Collections
-   view's chooser and Manage menu, the note panel in every story, the
+   view's collection menu, the note panel in every story, the
    note marks on story rows, and the collection and note commands of the
    story applet's Story menu (library.storyMenu). */
 (function () {
@@ -167,15 +167,22 @@
     deleteDialog.showModal();
   }
   if (deleteDialog) deleteDialog.addEventListener('close', function () {
-    if (deleteDialog.returnValue === 'delete' && deleting) { remove(deleting); deleting = null; go(''); }
+    if (deleteDialog.returnValue === 'delete' && deleting) { remove(deleting); go(''); }
     deleting = null;
   });
 
+  /* The collections the Collections view's address chooses, and the one it
+     shows alone, which the collection menu's commands and the rows' remove buttons act on. */
+  function chosen(view) { return (view && view.dataset.collections || '').split(' ').filter(Boolean); }
+  function single(view) { var c = chosen(view); return c.length === 1 ? c[0] : ''; }
+
   /* Move the Collections view to one collection, or to all of them, keeping
-     the filters and the windows in the address. */
+     the other filters and the windows in the address. */
   function go(id) {
     var url = new URL(location.href);
-    url.pathname = '/collections/' + (id ? id + '/' : '');
+    url.pathname = '/collections/';
+    url.searchParams.delete('c');
+    if (id) url.searchParams.append('c', id);
     var link = document.createElement('a');
     link.href = url.pathname + url.search;
     link.setAttribute('data-region-link', '');
@@ -188,8 +195,7 @@
   document.addEventListener('click', function (e) {
     var action = e.target.closest && e.target.closest('[data-collection-action]');
     if (action) {
-      var view = collectionsView();
-      var id = view ? view.dataset.collection : '';
+      var id = single(collectionsView());
       var panel = action.closest('[popover]');
       if (panel && panel.hidePopover) panel.hidePopover();
       if (action.dataset.collectionAction === 'new') openDialog('new', '', null);
@@ -200,8 +206,8 @@
     var uncollect = e.target.closest && e.target.closest('.story-row .story-uncollect');
     if (uncollect) {
       e.preventDefault();
-      var v = collectionsView();
-      if (v && v.dataset.collection) setHeld(v.dataset.collection, storyOf(uncollect.closest('.story-row')), false);
+      var one = single(collectionsView());
+      if (one) setHeld(one, storyOf(uncollect.closest('.story-row')), false);
       refresh();
     }
   });
@@ -210,38 +216,50 @@
   function collectionsView() { return document.querySelector('.story-list[data-source="collections"]'); }
   function notesView() { return document.querySelector('.story-list[data-source="notes"]'); }
 
+  /* The Collections menu's checkboxes, which belong to the filter form as
+     the Show menu's do, and the chips' names, which only the browser knows. */
   function renderChooser(view) {
-    var nav = document.querySelector('[data-collection-choice]');
-    if (!nav) return;
-    var current = view.dataset.collection || '';
-    var search = location.search;
-    var links = [{ id: '', name: 'All' }].concat(collections()).map(function (c) {
-      return '<a href="/collections/' + (c.id ? esc(c.id) + '/' : '') + esc(search) + '" data-collection-link' +
-        (c.id === current ? ' aria-current="page"' : '') + '>' + esc(c.name) + '</a>';
+    var panel = document.querySelector('[data-collection-choice]');
+    var picked = chosen(view), all = read(COLLECTIONS);
+    if (panel) {
+      var list = collections();
+      panel.innerHTML = list.length ? list.map(function (c) {
+        return '<label class="check menu-check"><input type="checkbox" form="pin-filter" name="c" value="' + esc(c.id) + '"' +
+          (picked.indexOf(c.id) >= 0 ? ' checked' : '') + '> ' + esc(c.name) + '</label>';
+      }).join('') : '<p class="menu-empty">No collections yet.</p>';
+    }
+    var label = document.querySelector('[data-collection-menu-label]');
+    if (label && picked.length === 1) label.textContent = all[picked[0]] ? all[picked[0]].name : 'A missing collection';
+    document.querySelectorAll('[data-collection-chip]').forEach(function (chip) {
+      var c = all[chip.dataset.collectionChip];
+      var name = c ? c.name : 'A collection not in this browser';
+      chip.querySelector('.filter-chip-label').textContent = name;
+      chip.querySelector('.filter-chip-x').setAttribute('aria-label', 'Remove the filter ' + name);
     });
-    nav.innerHTML = links.join('');
-    if (window.pudlMenu) window.pudlMenu.refresh();
-    if (window.pudlRegions) window.pudlRegions.refresh();
   }
 
   function renderCollections() {
     var view = collectionsView();
     if (!view) return;
     renderChooser(view);
-    var id = view.dataset.collection || '';
     var all = read(COLLECTIONS), entries = read(COLLECTED);
-    if (id && !has(all, id)) {
+    var picked = chosen(view).filter(function (c) { return has(all, c); });
+    var id = picked.length === 1 && chosen(view).length === 1 ? picked[0] : '';
+    if (chosen(view).length && !picked.length) {
       var box = view.querySelector('.stories');
-      if (box) box.innerHTML = '<div class="empty-state list-empty"><p class="empty-state-title">This collection is not here</p>' +
-        '<p class="empty-state-body">It may have been deleted, or it belongs to an account that is not signed in on this browser.</p>' +
-        '<div class="empty-state-actions"><a class="btn btn-sm" href="/collections/' + esc(location.search) + '">Show every collection</a></div></div>';
+      var every = new URL(location.href);
+      every.searchParams.delete('c');
+      if (box) box.innerHTML = '<div class="empty-state list-empty"><p class="empty-state-title">' +
+        (chosen(view).length === 1 ? 'This collection is not here' : 'These collections are not here') + '</p>' +
+        '<p class="empty-state-body">They may have been deleted, or they belong to an account that is not signed in on this browser.</p>' +
+        '<div class="empty-state-actions"><a class="btn btn-sm" href="' + esc(every.pathname + every.search) + '">Show every collection</a></div></div>';
       return;
     }
     document.title = (id ? all[id].name : 'Collections') + ' · YAVCHN';
     var byStory = {};
     Object.keys(entries).forEach(function (key) {
       var cid = key.split(':')[0], e = entries[key];
-      if ((id && cid !== id) || !has(all, cid)) return;
+      if ((picked.length && picked.indexOf(cid) < 0) || !has(all, cid)) return;
       var s = byStory[e.source + '-' + e.id];
       if (!s) s = byStory[e.source + '-' + e.id] = Object.assign({}, e, { at: e.added_at, names: [] });
       s.at = Math.max(s.at || 0, e.added_at || 0);
@@ -252,7 +270,7 @@
     stored.render(view, list, {
       noun: 'collected stories', time: 'added',
       emptyTitle: none ? 'No collections yet' : id ? 'This collection is empty' : 'Your collections are empty',
-      emptyBody: none ? 'Choose Manage, then New collection, or use Story > Add to collection in a story’s window.' :
+      emptyBody: none ? 'Choose New collection in the collection menu, or use Story > Add to collection in a story’s window.' :
         'Use Story > Add to collection in a story’s window to file it here.',
       remove: id ? 'Remove from this collection' : '',
       extra: id ? null : function (s) { return '<span class="md-meta collection-names">In ' + esc(s.names.sort().join(', ')) + '</span>'; }
@@ -402,6 +420,30 @@
     bindPanels();
   }
   lib.library = { storyMenu: storyMenu, refresh: refresh };
+
+  /* A filter menu's checkbox applies at once, as on parkscomputing.com: it
+     submits the filter form, which pudl-regions.js turns into a swap of the
+     list bar. The menu that was open opens again on the new bar with focus
+     on the same box, so several boxes can be ticked in a row. */
+  var reopen = null;
+  document.addEventListener('change', function (e) {
+    var panel = e.target.closest && e.target.closest('[data-filter-menu]');
+    if (!panel || !e.target.form) return;
+    reopen = { panel: panel.id, name: e.target.name, value: e.target.value };
+    e.target.form.requestSubmit();
+  });
+  document.addEventListener('pudl:regions-swap', function () {
+    var was = reopen;
+    reopen = null;
+    // After every swap listener, library.js's own included, has rebuilt the bar.
+    if (was) requestAnimationFrame(function () {
+      var panel = document.getElementById(was.panel);
+      if (!panel || !panel.showPopover) return;
+      panel.showPopover();
+      var box = panel.querySelector('input[name="' + CSS.escape(was.name) + '"][value="' + CSS.escape(was.value) + '"]');
+      if (box) box.focus();
+    });
+  });
 
   // The words filter narrows these lists as the reader types, as in Pinned.
   var typing = 0;

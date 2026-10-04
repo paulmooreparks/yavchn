@@ -45,19 +45,34 @@ func TestAuthorLink(t *testing.T) {
 
 func TestRender_PinnedFilters(t *testing.T) {
 	_, mux := testServer(t)
-	body := get(t, mux, "/pinned/?q=rust&source=hn&show=unread&sort=points&source=bogus&open=hn-1").Body.String()
+	body := get(t, mux, "/pinned/?q=rust&source=hn&source=lobsters&show=unread&sort=points&source=bogus&open=hn-1").Body.String()
 	for _, want := range []string{
-		`data-pin-q="rust" data-pin-source="hn" data-pin-sort="points" data-pin-unread`,
-		`<span class="filter-chip-kind">Words</span> rust`,
-		// Removing one filter keeps the others, the order and the windows.
-		`href="/pinned/?show=unread&amp;sort=points&amp;source=hn&amp;open=hn-1"`,
+		`data-pin-q="rust" data-pin-sources="hn lobsters" data-pin-sort="points" data-pin-unread`,
+		`<span class="filter-chip-kind">Words</span> <span class="filter-chip-label">rust</span>`,
+		// Removing one site keeps the other sites, the filters, the order and the windows.
+		`href="/pinned/?q=rust&amp;show=unread&amp;sort=points&amp;source=hn&amp;open=hn-1"`,
 		// Clearing them keeps only the order and the windows.
 		`<a class="md-chips-clear" href="/pinned/?sort=points&amp;open=hn-1">`,
-		`<a href="/pinned/?q=rust&amp;show=unread&amp;sort=points&amp;open=hn-1">All</a>`,
+		// The site and reading boxes belong to the filter form, so they work without script.
+		`<input type="checkbox" form="pin-filter" name="source" value="lobsters" checked> Lobsters`,
+		`<input type="checkbox" form="pin-filter" name="show" value="unread" checked>`,
+		// The Order menu names the current order and keeps every filter in its links.
+		`aria-label="Order: Points">Points</button>`,
+		`<a class="menu-action seg-choice" href="/pinned/?q=rust&amp;show=unread&amp;source=hn&amp;source=lobsters&amp;open=hn-1">Newest pin</a>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Pinned lacks %q", want)
 		}
+	}
+	if strings.Contains(body, `value="bogus"`) {
+		t.Error("an unknown site became a filter control")
+	}
+	collections := get(t, mux, "/collections/?c=abcdef123456&c=Bad&c=abcdef123456")
+	if b := collections.Body.String(); !strings.Contains(b, `data-collections="abcdef123456"`) || !strings.Contains(b, `data-collection-chip="abcdef123456"`) || !strings.Contains(b, `data-collection-action="rename"`) {
+		t.Error("Collections did not take its one valid collection")
+	}
+	if rec := get(t, mux, "/collections/abcdef123456/?q=x"); rec.Code != 301 || rec.Header().Get("Location") != "/collections/?c=abcdef123456&q=x" {
+		t.Errorf("an old collection address should redirect, got %d %s", rec.Code, rec.Header().Get("Location"))
 	}
 	if !strings.Contains(get(t, mux, "/hn/").Body.String(), `<div class="md-chips" data-region="chips">`) {
 		t.Error("every list needs the chips region, empty or not, for region swaps")

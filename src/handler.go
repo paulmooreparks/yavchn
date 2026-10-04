@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -78,7 +79,6 @@ type listVM struct {
 	FindHost      string
 	FindNote      string       // why the finder's list is empty, when it is
 	Pin           *pinFilterVM // a stored list's filters, from its address
-	Collection    string       // the collection /collections/{id}/ shows
 	Win           windowsVM
 }
 
@@ -87,16 +87,28 @@ type listVM struct {
 // reads them from the address and renders the controls and chips, so a
 // filtered view is an address like any other.
 type pinFilterVM struct {
-	Q      string
-	Source string // "", "hn" or "lobsters"
-	Unread bool   // only the stories the reader has not opened
-	Sort   string // "" (newest first), "oldest", "points" or "comments"
+	Q           string
+	Sources     []string // the sites chosen, "hn" and "lobsters"; none means every site
+	Unread      bool     // only the stories the reader has not opened
+	Sort        string   // "" (newest first), "oldest", "points" or "comments"
+	Collections []string // the collections chosen in the Collections view; none means all
 
-	Sources, Shows, Sorts []choiceVM
-	Chips                 []chipVM
-	ClearURL              string
-	Base                  string // the view's own address, such as /pinned/
-	Noun                  string // what the words filter narrows, such as "pinned stories"
+	Sites     []checkVM  // the Show menu's site checkboxes
+	Sorts     []choiceVM // the Order menu's choices
+	SortLabel string     // the current order, which labels the Order menu's button
+	Chips     []chipVM
+	ClearURL  string
+	Base      string // the view's own address, such as /pinned/
+	Noun      string // what the words filter narrows, such as "pinned stories"
+}
+
+// One collection chosen alone is the collection on display, which the
+// Manage menu renames or deletes and whose rows offer removal.
+func (f *pinFilterVM) OneCollection() string {
+	if len(f.Collections) == 1 {
+		return f.Collections[0]
+	}
+	return ""
 }
 
 // storedList names one browser-stored list: Pinned, Collections or Notes.
@@ -107,22 +119,22 @@ type storedList struct {
 
 var pinnedView = storedList{"/pinned/", "pinned stories", "Newest pin", "Oldest pin"}
 var notesView = storedList{"/notes/", "notes", "Recently edited", "Oldest edit"}
-
-func collectionsView(id string) storedList {
-	base := "/collections/"
-	if id != "" {
-		base += id + "/"
-	}
-	return storedList{base, "collected stories", "Recently added", "Oldest added"}
-}
+var collectedView = storedList{"/collections/", "collected stories", "Recently added", "Oldest added"}
 
 type choiceVM struct {
 	Label, URL string
 	Current    bool
 }
 
+type checkVM struct {
+	Value, Label string
+	Checked      bool
+}
+
+// A chip's ID names the collection a Collection chip removes, whose name
+// only the browser knows.
 type chipVM struct {
-	Kind, Label, RemoveURL string
+	Kind, Label, RemoveURL, ID string
 }
 
 // params is the filters as the address writes them, from their checked
@@ -132,14 +144,17 @@ func (f *pinFilterVM) params() url.Values {
 	if f.Q != "" {
 		v.Set("q", f.Q)
 	}
-	if f.Source != "" {
-		v.Set("source", f.Source)
+	for _, s := range f.Sources {
+		v.Add("source", s)
 	}
 	if f.Unread {
 		v.Set("show", "unread")
 	}
 	if f.Sort != "" {
 		v.Set("sort", f.Sort)
+	}
+	for _, c := range f.Collections {
+		v.Add("c", c)
 	}
 	return v
 }
@@ -150,48 +165,61 @@ func pinFilter(r *http.Request, view storedList) *pinFilterVM {
 	if len([]rune(f.Q)) > 100 {
 		f.Q = string([]rune(f.Q)[:100])
 	}
-	if s := q.Get("source"); s == "hn" || s == "lobsters" {
-		f.Source = s
+	sites := [][2]string{{"hn", "Hacker News"}, {"lobsters", "Lobsters"}}
+	for _, s := range sites {
+		if slices.Contains(q["source"], s[0]) {
+			f.Sources = append(f.Sources, s[0])
+		}
+		f.Sites = append(f.Sites, checkVM{s[0], s[1], slices.Contains(q["source"], s[0])})
 	}
 	f.Unread = q.Get("show") == "unread"
 	if s := q.Get("sort"); s == "oldest" || s == "points" || s == "comments" {
 		f.Sort = s
 	}
-	// The view's address with one filter set, or removed when value is
-	// empty, keeping the others and the windows.
+	if view.Base == collectedView.Base {
+		for _, c := range q["c"] {
+			if collectionID.MatchString(c) && !slices.Contains(f.Collections, c) && len(f.Collections) < 100 {
+				f.Collections = append(f.Collections, c)
+			}
+		}
+	}
+	// The view's address with one value of a filter removed, keeping the
+	// others, the order and the windows.
 	wins := parseWinState(q)
-	pinnedHref := func(name, value string) string {
+	without := func(name, value string) string {
 		v := f.params()
-		if value == "" {
-			v.Del(name)
-		} else {
-			v.Set(name, value)
+		kept := slices.DeleteFunc(slices.Clone(v[name]), func(s string) bool { return value == "" || s == value })
+		v.Del(name)
+		for _, s := range kept {
+			v.Add(name, s)
 		}
 		return winURL(view.Base, v, wins)
 	}
-	choices := func(name, current string, opts [][2]string) []choiceVM {
-		out := make([]choiceVM, len(opts))
-		for i, o := range opts {
-			out[i] = choiceVM{Label: o[1], URL: pinnedHref(name, o[0]), Current: o[0] == current}
+	for _, o := range [][2]string{{"", view.Newest}, {"oldest", view.Oldest}, {"points", "Points"}, {"comments", "Comments"}} {
+		v := f.params()
+		v.Del("sort")
+		if o[0] != "" {
+			v.Set("sort", o[0])
 		}
-		return out
+		f.Sorts = append(f.Sorts, choiceVM{Label: o[1], URL: winURL(view.Base, v, wins), Current: o[0] == f.Sort})
+		if o[0] == f.Sort {
+			f.SortLabel = o[1]
+		}
 	}
-	f.Sources = choices("source", f.Source, [][2]string{{"", "All"}, {"hn", "Hacker News"}, {"lobsters", "Lobsters"}})
-	show := ""
-	if f.Unread {
-		show = "unread"
-	}
-	f.Shows = choices("show", show, [][2]string{{"", "All"}, {"unread", "Unread"}})
-	f.Sorts = choices("sort", f.Sort, [][2]string{{"", view.Newest}, {"oldest", view.Oldest}, {"points", "Points"}, {"comments", "Comments"}})
 
 	if f.Q != "" {
-		f.Chips = append(f.Chips, chipVM{"Words", f.Q, pinnedHref("q", "")})
+		f.Chips = append(f.Chips, chipVM{Kind: "Words", Label: f.Q, RemoveURL: without("q", "")})
 	}
-	if f.Source != "" {
-		f.Chips = append(f.Chips, chipVM{"Source", map[string]string{"hn": "Hacker News", "lobsters": "Lobsters"}[f.Source], pinnedHref("source", "")})
+	for _, c := range f.Collections {
+		f.Chips = append(f.Chips, chipVM{Kind: "Collection", Label: "a collection", RemoveURL: without("c", c), ID: c})
+	}
+	for _, s := range f.Sites {
+		if s.Checked {
+			f.Chips = append(f.Chips, chipVM{Kind: "Site", Label: s.Label, RemoveURL: without("source", s.Value)})
+		}
 	}
 	if f.Unread {
-		f.Chips = append(f.Chips, chipVM{"Show", "Unread", pinnedHref("show", "")})
+		f.Chips = append(f.Chips, chipVM{Kind: "Show", Label: "Unread", RemoveURL: without("show", "")})
 	}
 	// Clearing the filters keeps the order, which is not one.
 	rest := url.Values{}
@@ -292,10 +320,8 @@ func (s *Server) renderList(w http.ResponseWriter, r *http.Request, vm *listVM, 
 			vm.RetryURL = viewURL(vm.RetryURL, vm.View)
 		}
 		if vm.Pin != nil {
-			for _, choices := range [][]choiceVM{vm.Pin.Sources, vm.Pin.Shows, vm.Pin.Sorts} {
-				for i := range choices {
-					choices[i].URL = viewURL(choices[i].URL, vm.View)
-				}
+			for i := range vm.Pin.Sorts {
+				vm.Pin.Sorts[i].URL = viewURL(vm.Pin.Sorts[i].URL, vm.View)
 			}
 			for i := range vm.Pin.Chips {
 				vm.Pin.Chips[i].RemoveURL = viewURL(vm.Pin.Chips[i].RemoveURL, vm.View)
@@ -414,27 +440,35 @@ func externalLabelForSource(sourceName string) string {
 // server-rendered page; pinned.js fills it from localStorage, so the
 // server keeps no per-reader state.
 func (s *Server) Pinned(w http.ResponseWriter, r *http.Request) {
-	s.storedList(w, r, "pinned", "Pinned", "", pinnedView)
+	s.storedList(w, r, "pinned", "Pinned", pinnedView)
 }
 
-// Collections serves every collected story, or one collection's at
-// /collections/{id}/. Collection names live in the browser, as pins do,
-// so library.js names the collection and fills the list.
+// Collections serves the collected stories, of every collection or of
+// those its c parameters choose. Collection names live in the browser, as
+// pins do, so library.js names the collections and fills the list.
 func (s *Server) Collections(w http.ResponseWriter, r *http.Request) {
+	s.storedList(w, r, "collections", "Collections", collectedView)
+}
+
+// CollectionRedirect sends the first form of a collection's address,
+// /collections/{id}/, to the Collections view with that collection chosen.
+func (s *Server) CollectionRedirect(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if id != "" && !collectionID.MatchString(id) {
+	if !collectionID.MatchString(id) {
 		http.NotFound(w, r)
 		return
 	}
-	s.storedList(w, r, "collections", "Collections", id, collectionsView(id))
+	q := r.URL.Query()
+	q.Add("c", id)
+	http.Redirect(w, r, "/collections/?"+q.Encode(), http.StatusMovedPermanently)
 }
 
 // Notes serves the stories that carry the reader's notes.
 func (s *Server) Notes(w http.ResponseWriter, r *http.Request) {
-	s.storedList(w, r, "notes", "Notes", "", notesView)
+	s.storedList(w, r, "notes", "Notes", notesView)
 }
 
-func (s *Server) storedList(w http.ResponseWriter, r *http.Request, source, label, collection string, view storedList) {
+func (s *Server) storedList(w http.ResponseWriter, r *http.Request, source, label string, view storedList) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	vm := listVM{
@@ -446,7 +480,6 @@ func (s *Server) storedList(w http.ResponseWriter, r *http.Request, source, labe
 		Page:        pageParam(r),
 		RetryURL:    r.URL.RequestURI(),
 		Pin:         pinFilter(r, view),
-		Collection:  collection,
 	}
 	for _, t := range [][3]string{{"pinned", "Pinned", "/pinned/"}, {"collections", "Collections", "/collections/"}, {"notes", "Notes", "/notes/"}} {
 		vm.Tabs = append(vm.Tabs, tabVM{Label: t[1], URL: t[2], Active: t[0] == source})

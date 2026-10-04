@@ -531,10 +531,7 @@ func accountReturn(r *http.Request, message string) string {
 	u, err := url.Parse(raw)
 	if err == nil && len(raw) <= 4096 && strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "//") && !strings.Contains(raw, "\\") && u.Host == "" && u.Scheme == "" && u.User == nil {
 		q := u.Query()
-		collection, inCollections := strings.CutPrefix(u.Path, "/collections/")
-		collection = strings.TrimSuffix(collection, "/")
-		inCollections = inCollections && (collection == "" || (collectionID.MatchString(collection) && strings.HasSuffix(u.Path, "/")))
-		workspace := u.Path == "/hn/" || u.Path == "/lobsters/" || u.Path == "/pinned/" || u.Path == "/notes/" || u.Path == "/find" || inCollections
+		workspace := u.Path == "/hn/" || u.Path == "/lobsters/" || u.Path == "/pinned/" || u.Path == "/collections/" || u.Path == "/notes/" || u.Path == "/find"
 		if u.Path == "/account" || (workspace && q.Get("view") == "window" && slices.Contains(strings.Split(q.Get("open"), ","), "account")) {
 			u.Fragment = ""
 			q.Del("message")

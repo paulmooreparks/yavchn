@@ -63,19 +63,33 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.waitForURL(u => u.pathname === '/collections/');
     await page.locator('#row-hn-1 .collection-names').filter({ hasText: 'In Reading list' }).waitFor();
     assert.equal(await page.locator('.win.story-win').count(), 1);
-    await page.locator('[data-collection-choice]').getByRole('link', { name: 'Reading list', exact: true }).click();
-    await page.waitForURL(u => u.pathname === '/collections/' + id + '/');
+    // Collections is a menu of checkboxes; ticking one filters at once and the menu stays open.
+    await page.getByRole('button', { name: 'All collections', exact: true }).click();
+    await page.locator('#collection-filter-menu').getByLabel('Reading list').check();
+    await page.waitForURL(u => u.pathname === '/collections/' && u.searchParams.getAll('c').join() === id);
+    await page.waitForFunction(() => document.getElementById('collection-filter-menu')?.matches(':popover-open'));
+    assert.equal(await page.locator('#collection-filter-menu').getByLabel('Reading list').isChecked(), true);
     assert.ok(new URL(page.url()).searchParams.get('open'), 'the windows left the address');
     await page.locator('#row-hn-1 .story-uncollect').waitFor();
+    await page.locator('[data-collection-chip] .filter-chip-label').filter({ hasText: 'Reading list' }).waitFor();
+    await page.keyboard.press('Escape');
+    // The Show menu's site boxes narrow the list the same way.
+    await page.getByRole('button', { name: 'Show', exact: true }).click();
+    await page.locator('#show-filter-menu').getByLabel('Lobsters').check();
+    await page.locator('.story-list .empty-state-title').filter({ hasText: 'Nothing matches' }).waitFor();
+    await page.locator('#show-filter-menu').getByLabel('Lobsters').uncheck();
+    await page.locator('#row-hn-1').waitFor();
+    await page.keyboard.press('Escape');
     assert.equal(await page.title(), 'Reading list · YAVCHN');
     if (process.env.YAVCHN_SHOTS) await page.screenshot({ path: process.env.YAVCHN_SHOTS + '/saved-wide.png' });
 
-    // Rename through the Manage menu.
-    await page.getByRole('button', { name: 'Manage', exact: true }).click();
+    // Rename through the collection menu, whose button then names the collection.
+    await page.locator('[data-collection-menu-label]').click();
     await page.getByRole('button', { name: 'Rename this collection…', exact: true }).click();
     await dialog.getByLabel('Name').fill('Later');
     await dialog.getByRole('button', { name: 'Rename', exact: true }).click();
-    await page.locator('[data-collection-choice] a[aria-current="page"]').filter({ hasText: 'Later' }).waitFor();
+    await page.locator('[data-collection-chip] .filter-chip-label').filter({ hasText: 'Later' }).waitFor();
+    assert.equal(await page.locator('[data-collection-menu-label]').textContent(), 'Later');
 
     // Notes lists the note and its words filter searches the note's text.
     await page.locator('.list-tabs').getByRole('link', { name: 'Notes', exact: true }).click();
@@ -95,13 +109,15 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.locator('.story-list .empty-state-title').filter({ hasText: 'No notes yet' }).waitFor();
 
     // Removing the last story, then deleting the collection.
+    // The first form of a collection's address still reaches it.
     await page.goto(origin + '/collections/' + id + '/?view=window');
+    await page.waitForURL(u => u.pathname === '/collections/' && u.searchParams.get('c') === id);
     await page.locator('#row-hn-1 .story-uncollect').click();
     await page.locator('.story-list .empty-state-title').filter({ hasText: 'This collection is empty' }).waitFor();
-    await page.getByRole('button', { name: 'Manage', exact: true }).click();
+    await page.locator('[data-collection-menu-label]').click();
     await page.getByRole('button', { name: 'Delete this collection…', exact: true }).click();
     await page.locator('#collection-delete-dialog').getByRole('button', { name: /Delete the collection/ }).click();
-    await page.waitForURL(u => u.pathname === '/collections/');
+    await page.waitForURL(u => u.pathname === '/collections/' && !u.searchParams.has('c'));
     assert.deepEqual(await stored('yavchn-collections'), {});
     await page.locator('.story-list .empty-state-title').filter({ hasText: 'No collections yet' }).waitFor();
 

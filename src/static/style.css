@@ -1301,5 +1301,14 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .story-note-text { width: 100%; max-height: 40vh; }
 .story-row .md-item .note-excerpt, .story-row .md-item .collection-names { display: block; white-space: normal; }
 .story-row .md-item .note-excerpt { font-style: italic; }
-.collection-choice { min-width: 0; overflow-x: auto; }
 .collection-manage { flex: none; }
+
+/* A stored list's filter menus' checkbox rows, after parkscomputing.com. */
+.menu-panel .menu-check {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.menu-panel .menu-check:hover { background: var(--menu-row-hover, var(--surface-alt)); }
