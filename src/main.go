@@ -30,6 +30,25 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// withCanonicalHost sends every request for the www form of the public
+// origin's host, such as www.yavchn.com, permanently to the same path and
+// query on the origin. Other hostnames, such as the old domain, are left
+// alone. Without a public origin it does nothing.
+func withCanonicalHost(origin string, next http.Handler) http.Handler {
+	u, err := url.Parse(origin)
+	if origin == "" || err != nil || u.Host == "" {
+		return next
+	}
+	www := "www." + u.Host
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.EqualFold(r.Host, www) {
+			http.Redirect(w, r, origin+r.URL.RequestURI(), http.StatusMovedPermanently)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -167,7 +186,7 @@ func main() {
 
 	httpSrv := &http.Server{
 		Addr:              ":8080",
-		Handler:           withSecurityHeaders(srv.accounts.middleware(mux)),
+		Handler:           withSecurityHeaders(withCanonicalHost(accountCfg.Origin, srv.accounts.middleware(mux))),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {

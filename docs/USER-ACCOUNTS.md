@@ -52,7 +52,7 @@ Before authentication can be exercised, a separate GitHub OAuth application must
 
 Paul selected `yavchn.com` as the production domain for user accounts on 2026-10-03. The tunnel configuration routes `yavchn.com` and `www.yavchn.com` to the existing production container on port 8086. The original `yavchn.parkscomputing.com` route remains available. Login development continues on `beta.yavchn.com`, with its separate container and database.
 
-Accounts reached production on 2026-10-04, with GitHub, email links, and passkeys on `yavchn.com`. Production uses its own GitHub OAuth registration and Resend configuration, deployed from `.env` outside the repository. The database was backed up before the release to `C:\Users\paul\yavchn-backups\prod-2026-10-04-before-accounts`. Only `yavchn.com` offers sign-in. On `www.yavchn.com` and the old domain, the Account entry links to `yavchn.com`, and account addresses redirect there.
+Accounts reached production on 2026-10-04, with GitHub, email links, and passkeys on `yavchn.com`. Production uses its own GitHub OAuth registration and Resend configuration, deployed from `.env` outside the repository. The database was backed up before the release to `C:\Users\paul\yavchn-backups\prod-2026-10-04-before-accounts`. Only `yavchn.com` offers sign-in. Every request for `www.yavchn.com` redirects permanently to the same address on `yavchn.com` (Paul, 2026-10-04). On the old domain, the Account entry links to `yavchn.com`, and account addresses redirect there.
 
 The production GitHub OAuth callback will be `https://yavchn.com/auth/github/callback`. Production sessions must use host-only cookies on `yavchn.com`. Authentication return URLs must not be derived from an unvalidated request hostname.
 

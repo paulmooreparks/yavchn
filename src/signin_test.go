@@ -345,6 +345,23 @@ func TestStalePagesChangeNothing(t *testing.T) {
 	}
 }
 
+func TestWWWRedirectsToTheOrigin(t *testing.T) {
+	h := withCanonicalHost("https://yavchn.com", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
+	serve := func(target string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", target, nil))
+		return w
+	}
+	if w := serve("https://www.yavchn.com/hn/new/?view=window&open=reader-1"); w.Code != 301 || w.Header().Get("Location") != "https://yavchn.com/hn/new/?view=window&open=reader-1" {
+		t.Fatalf("www: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	for _, target := range []string{"https://yavchn.com/hn/", "https://yavchn.parkscomputing.com/hn/", "https://beta.yavchn.com/hn/"} {
+		if w := serve(target); w.Code != 204 {
+			t.Fatalf("%s was redirected: %d", target, w.Code)
+		}
+	}
+}
+
 func TestOtherHostnamesSendAccountsToTheOrigin(t *testing.T) {
 	f := signinForTest(t)
 	get := func(target string) *httptest.ResponseRecorder {
