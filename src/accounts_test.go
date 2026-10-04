@@ -499,11 +499,19 @@ func TestAccountAppletViews(t *testing.T) {
 	}
 }
 func TestAccountReturnDestinations(t *testing.T) {
-	for _, raw := range []string{"https://evil.example/", "//evil.example/", "/\\evil.example/", "/auth/github/callback", "/hn/?view=classic", "/hn/?view=window&open=reader-1", "/unknown?view=window&open=account"} {
+	for _, raw := range []string{"https://evil.example/", "//evil.example/", "/\\evil.example/", "/auth/github/callback", "/hn/?view=classic", "/hn/?view=window&open=reader-1", "/unknown?view=window&open=account", "/hn/?view=classic&open=account"} {
 		r := httptest.NewRequest("POST", "/auth/github", nil)
 		r.PostForm = url.Values{"return_to": {raw}}
 		if got := accountReturn(r, ""); got != "/account" {
 			t.Fatalf("accepted return %q: %s", raw, got)
 		}
+	}
+	// A Windowed workspace whose address names no view, as one usually does
+	// when the view comes from the saved preference, returns to that
+	// workspace, explicitly Windowed.
+	r := httptest.NewRequest("POST", "/auth/github", nil)
+	r.PostForm = url.Values{"return_to": {"/hn/?open=reader-1,account&top=account&r.reader-1=hn-1"}}
+	if got := accountReturn(r, ""); got != "/hn/?open=reader-1%2Caccount&r.reader-1=hn-1&top=account&view=window" {
+		t.Fatalf("Windowed workspace without a view: %s", got)
 	}
 }

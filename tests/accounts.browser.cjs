@@ -116,7 +116,10 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
         return JSON.parse(window.yavchnStorage.getItem('yavchn-blocked-domains'))[0];
       } finally { Storage.prototype.setItem = original; }
     }), 'quota.example');
-    await secondPage.goto(origin + '/hn/?view=window&open=reader-1,account&top=account');
+    // A Windowed workspace whose address names no view, as when the view
+    // comes from the saved preference, is where the reader returns.
+    await secondPage.goto(origin + '/hn/?open=reader-1,account&top=account');
+    assert.equal(await secondPage.locator('body').getAttribute('data-view'), 'window');
     await secondPage.locator('[data-win="account"] [data-account-import]:not([hidden])').waitFor();
     await secondPage.getByRole('button', { name: 'Sign out this browser', exact: true }).click();
     await secondPage.waitForURL(url => url.pathname === '/hn/' && url.searchParams.get('message') === 'signed-out');

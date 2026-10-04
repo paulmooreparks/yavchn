@@ -666,7 +666,14 @@ func accountReturn(r *http.Request, message string) string {
 	if err == nil && len(raw) <= 4096 && strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "//") && !strings.Contains(raw, "\\") && u.Host == "" && u.Scheme == "" && u.User == nil {
 		q := u.Query()
 		workspace := u.Path == "/hn/" || u.Path == "/lobsters/" || u.Path == "/pinned/" || u.Path == "/collections/" || u.Path == "/notes/" || u.Path == "/find"
-		if u.Path == "/account" || (workspace && q.Get("view") == "window" && slices.Contains(strings.Split(q.Get("open"), ","), "account")) {
+		// A Windowed workspace's address often names no view, which then comes
+		// from the reader's saved preference; one with the Account window open
+		// is Windowed by definition, so the return says so.
+		windowed := workspace && q.Get("view") != "classic" && slices.Contains(strings.Split(q.Get("open"), ","), "account")
+		if u.Path == "/account" || windowed {
+			if windowed {
+				q.Set("view", "window")
+			}
 			u.Fragment = ""
 			q.Del("message")
 			u.RawQuery = q.Encode()
