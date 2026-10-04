@@ -67,7 +67,8 @@
             <li>-</li>
             <li><a href="/settings" data-win-open="settings">Settings</a></li>
             <li>-</li>
-            <li><a href="/account?view={{ .View }}" data-win-open="account" data-account-link>Account</a></li>
+            {{/* Accounts live on the public origin; another hostname links there. */}}
+            <li>{{ if .AccountURL }}<a href="{{ .AccountURL }}">Account</a>{{ else }}<a href="/account?view={{ .View }}" data-win-open="account" data-account-link>Account</a>{{ end }}</li>
           </ul>
         </li>
         <li data-menubar-id="go">Go

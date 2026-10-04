@@ -345,6 +345,27 @@ func TestStalePagesChangeNothing(t *testing.T) {
 	}
 }
 
+func TestOtherHostnamesSendAccountsToTheOrigin(t *testing.T) {
+	f := signinForTest(t)
+	get := func(target string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		f.h.ServeHTTP(w, httptest.NewRequest("GET", target, nil))
+		return w
+	}
+	page := get("https://old.example/hn/").Body.String()
+	if strings.Contains(page, "account-signin") || !strings.Contains(page, `<a href="https://beta.yavchn.com/account">Account</a>`) {
+		t.Fatal("another hostname offered sign-in, or its Account entry stayed local")
+	}
+	for _, target := range []string{"/account?view=classic", "/hn/?view=window&open=account&top=account", "/auth/email/link?token=x"} {
+		if w := get("https://www.example" + target); w.Code != 302 || w.Header().Get("Location") != "https://beta.yavchn.com"+target {
+			t.Fatalf("%s on another hostname: %d %s", target, w.Code, w.Header().Get("Location"))
+		}
+	}
+	if w := get("https://beta.yavchn.com/hn/"); !strings.Contains(w.Body.String(), "account-signin") {
+		t.Fatal("the origin lost its Sign in pill")
+	}
+}
+
 func TestAccountFeedbackSitsBesideItsControl(t *testing.T) {
 	f := signinForTest(t)
 	page := f.request("GET", "/account?message=email-sent", "", nil, nil).Body.String()

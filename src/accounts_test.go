@@ -396,8 +396,9 @@ func TestAccountUnavailableAndConfiguredOrigin(t *testing.T) {
 	r := httptest.NewRequest("GET", "https://attacker.example/account", nil)
 	rec := httptest.NewRecorder()
 	f.h.ServeHTTP(rec, r)
-	if rec.Code != 421 {
-		t.Fatal("request host trusted for account URL")
+	// Another hostname is sent to the configured origin, never trusted itself.
+	if rec.Code != 302 || rec.Header().Get("Location") != f.a.config.Origin+"/account" {
+		t.Fatalf("request host trusted for account URL: %d %s", rec.Code, rec.Header().Get("Location"))
 	}
 }
 

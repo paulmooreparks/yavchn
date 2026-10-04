@@ -351,10 +351,26 @@ type accountContextKey struct{}
 type accountReturnContextKey struct{}
 type accountSignInContextKey struct{}
 
-// signInAvailable reports whether this deployment offers GitHub sign-in.
+type accountElsewhereContextKey struct{}
+
+// signInAvailable reports whether this deployment offers sign-in on the
+// hostname the request came to.
 func signInAvailable(r *http.Request) bool {
 	on, _ := r.Context().Value(accountSignInContextKey{}).(bool)
 	return on
+}
+
+// accountElsewhere is the account page on the public origin, for a request
+// that came to another hostname the site answers to; otherwise it is empty.
+func accountElsewhere(r *http.Request) string {
+	u, _ := r.Context().Value(accountElsewhereContextKey{}).(string)
+	return u
+}
+
+// onOrigin reports whether a request came to the public origin's hostname.
+func (a *accountService) onOrigin(r *http.Request) bool {
+	origin, err := url.Parse(a.config.Origin)
+	return a.config.Origin == "" || (err == nil && strings.EqualFold(r.Host, origin.Host))
 }
 
 func currentAccount(r *http.Request) *accountSession {
@@ -513,8 +529,11 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 			if a.config.Origin != "" {
 				origin, _ := url.Parse(a.config.Origin)
 				if !strings.EqualFold(r.Host, origin.Host) {
-					if origin.Host == "yavchn.com" && strings.EqualFold(r.Host, "www.yavchn.com") && r.Method == "GET" && r.URL.Path == "/account" {
-						http.Redirect(w, r, a.config.Origin+"/account", http.StatusFound)
+					// Sessions and passkeys belong to the public origin alone, so
+					// another hostname the site answers to, such as www or the old
+					// domain, sends a reader looking at their account there.
+					if r.Method == "GET" || r.Method == "HEAD" {
+						http.Redirect(w, r, a.config.Origin+r.URL.RequestURI(), http.StatusFound)
 						return
 					}
 					accountError(w, 421, "Use "+a.config.Origin+"/account for your account.")
@@ -541,7 +560,11 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 			}
 		}
 		if a.config.Enabled() {
-			r = r.WithContext(context.WithValue(r.Context(), accountSignInContextKey{}, true))
+			if a.onOrigin(r) {
+				r = r.WithContext(context.WithValue(r.Context(), accountSignInContextKey{}, true))
+			} else {
+				r = r.WithContext(context.WithValue(r.Context(), accountElsewhereContextKey{}, a.config.Origin+"/account"))
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

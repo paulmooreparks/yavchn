@@ -9,7 +9,8 @@ import (
 // menuContext describes the rendered page, independently of screen width.
 type menuContext struct {
 	Account    *accountSession
-	SignIn     bool // the top bar offers Sign in: accounts are on and nobody is signed in
+	SignIn     bool   // the top bar offers Sign in: accounts are on and nobody is signed in
+	AccountURL string // the account page on the public origin, for another hostname
 	View       string
 	WindowView bool
 	HasList    bool
@@ -57,7 +58,7 @@ func savedView(r *http.Request) string {
 func listMenu(r *http.Request, feed bool) menuContext {
 	v := listView(r)
 	return menuContext{View: v, WindowView: v == "window", HasList: true, HasFeed: feed,
-		Account: currentAccount(r), SignIn: currentAccount(r) == nil && signInAvailable(r),
+		Account: currentAccount(r), SignIn: currentAccount(r) == nil && signInAvailable(r), AccountURL: accountElsewhere(r),
 		WindowURL: viewURL(r.URL.RequestURI(), "window"), ClassicURL: viewURL(r.URL.RequestURI(), "classic")}
 }
 
@@ -69,7 +70,7 @@ func pageMenu(r *http.Request, key, source string) menuContext {
 	q.Set("view", "window")
 	q.Set("open", key)
 	q.Set("top", key)
-	return menuContext{Account: currentAccount(r), SignIn: currentAccount(r) == nil && signInAvailable(r), View: "classic", WindowURL: "/" + source + "/?" + q.Encode(), ClassicURL: r.URL.RequestURI()}
+	return menuContext{Account: currentAccount(r), SignIn: currentAccount(r) == nil && signInAvailable(r), AccountURL: accountElsewhere(r), View: "classic", WindowURL: "/" + source + "/?" + q.Encode(), ClassicURL: r.URL.RequestURI()}
 }
 
 // ViewSetting changes only this browser's preferred browsing view.
