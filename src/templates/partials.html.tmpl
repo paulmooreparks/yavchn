@@ -65,7 +65,7 @@
             <li><a href="/">Home</a></li>
             <li><button type="button" commandfor="about-dialog" command="show-modal">About YAVCHN</button></li>
             <li>-</li>
-            <li><a href="/settings" data-win-open="settings">Settings&hellip;</a></li>
+            <li><a href="/settings" data-win-open="settings">Settings</a></li>
             <li><a href="/account?view={{ .View }}" data-win-open="account" data-account-link>Account</a></li>
           </ul>
         </li>
@@ -101,7 +101,7 @@
             <li><button type="submit" form="view-classic-form" aria-checked="{{ not .WindowView }}">Classic</button></li>
             <li>-</li>
             {{ if .WindowView }}<li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>{{ end }}
-            <li><button type="button" commandfor="filters-dialog" command="show-modal">Blocked domains across feeds&hellip;</button></li>
+            <li><button type="button" commandfor="filters-dialog" command="show-modal">Blocked domains across feeds</button></li>
             <li>-</li>
             <li>Theme
               <ul>
@@ -115,7 +115,7 @@
         {{ if .WindowView }}<li data-menubar-id="window" data-menubar-windows>Window<ul><li><a href="{{ .NewReaderHref }}" data-reader-new>New reader window</a></li><li>-</li></ul></li>{{ end }}
         <li data-menubar-id="help">Help
           <ul>
-            <li><button type="button" commandfor="help-dialog" command="show-modal">Keyboard and help&hellip;</button></li>
+            <li><button type="button" commandfor="help-dialog" command="show-modal">Keyboard and help</button></li>
           </ul>
         </li>
       </ul>

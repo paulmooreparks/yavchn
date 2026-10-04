@@ -165,3 +165,7 @@ The browsing-view selector remains visible at phone widths. Classic articles pla
 ## Installable web app
 
 The shared page head links a web app manifest with a stable root identity, root scope, and standalone display. Launching at the root respects the existing browsing preference. PNG install icons derive from the existing logo, with a separate Apple touch icon. Installation uses the browser's native controls. No service worker intercepts requests or caches user-specific HTML; feeds and articles continue using the existing network and server-cache behavior. The app does not promise offline reading. This follows the current [installation requirements](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).
+
+# Command labels
+
+YAVCHN follows PUDL's menu guidance for ellipses, which matches the core of Apple's and Microsoft's: a command's label ends in an ellipsis only when the command needs more input before its operation proceeds (Paul, 2026-10-04). New collection, Rename this collection, Look up a user, Add a note, and Watch another user ask for a name or text, and Delete this collection and Delete my account ask for confirmation, so they carry one. Settings, Account, Blocked domains across feeds, and Keyboard and help only show a window or dialog, so they do not.
