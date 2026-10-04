@@ -58,6 +58,18 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     }, src);
     assert.deepEqual(sent, { type: 'image/webp', width: 256, height: 256 });
 
+    if (process.env.YAVCHN_SHOTS) {
+      await page.setViewportSize({ width: 1600, height: 1000 });
+      for (const key of ['account', 'settings']) {
+        await page.goto(origin + '/hn/?view=window&open=' + key + '&top=' + key);
+        await page.locator('[data-win="' + key + '"] .settings-panel').waitFor();
+        await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+        await page.waitForTimeout(400);
+        await page.screenshot({ path: process.env.YAVCHN_SHOTS + '/' + key + '-window.png' });
+      }
+      await page.goto(origin + '/account?view=classic');
+    }
+
     // Removing the passkey leaves the account's other way in.
     await page.getByRole('button', { name: 'Remove the passkey Test laptop', exact: true }).click();
     await page.waitForURL(u => u.searchParams.get('message') === 'passkey-removed');

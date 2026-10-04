@@ -24,6 +24,8 @@
       root.dataset.migrationReady = 'true';
       root.querySelector('[data-migration-export]').disabled = false;
       root.querySelector('[data-migration-leaving]').hidden = !legacy;
+      // On the old domain moving the data is why Settings was opened, so it comes first.
+      if (legacy && root.parentNode) root.parentNode.prepend(root);
       root.querySelector('[data-migration-import]').hidden = legacy;
       root.querySelector('[data-migration-file]').disabled = false;
     });

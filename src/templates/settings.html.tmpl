@@ -1,62 +1,12 @@
+{{/* Settings, after parkscomputing.com's: a column of PUDL cards, one for
+     each choice, each with its title, a line saying what it does, and its
+     control. Every choice applies only to this browser and saves at once. */}}
 {{ define "settings" }}
 <div class="settings-panel" data-settings>
-  <p class="settings-intro">These preferences apply only to this browser. Changes save immediately.</p>
-  <section class="settings-section" id="browser-data" data-migration>
-    <h2>Move your browser data</h2>
-    {{/* migration.js shows the half that belongs to the site the reader is
-         on: saving a backup on the old domain, importing one elsewhere. */}}
-    <div data-migration-leaving hidden>
-      <p>YAVCHN is now available on <a href="https://yavchn.com/">yavchn.com</a>. Each domain has its own browser storage. You can carry your pinned stories, reading history, blocked domains, theme, and saved applet state across with a backup file.</p>
-      <p>First save a backup here, then open yavchn.com and choose that file to import it. The file stays on your device and is never uploaded. Your data on this domain stays intact. Browsing view and new-window placement preferences use cookies and must be set again.</p>
-      <button class="btn" type="button" data-migration-export disabled>Save browser data to a file</button>
-      <p><a class="btn primary" href="https://yavchn.com/settings?migration=1#browser-data">Continue to yavchn.com</a></p>
-    </div>
-    <div data-migration-import hidden>
-      <p>If you used YAVCHN at yavchn.parkscomputing.com, open its Settings there and save a backup file, then choose that file here. The file is read on your device and is never uploaded. Browsing view and new-window placement preferences must be set again.</p>
-      <p>Import replaces entries with matching names, including whole lists of pinned and visited stories. Other entries remain.</p>
-      <label class="form-label">Choose a YAVCHN backup file <input class="form-input" type="file" accept="application/json,.json" data-migration-file disabled></label>
-      <p data-migration-preview></p>
-      <button class="btn primary" type="button" data-migration-apply disabled>Import browser data</button>
-    </div>
-    <p role="status" aria-live="polite" data-migration-status></p>
-    <noscript><p>Saving and importing browser data requires JavaScript.</p></noscript>
-  </section>
-  <section class="settings-section">
-    <h2>Reading</h2>
-    <form action="/settings/view" method="post" class="settings-view-form" data-saved-view="{{ .SettingsView }}">
-      <input type="hidden" name="target" value="/settings">
-      <fieldset>
-        <legend class="form-label">Default browsing view</legend>
-        <div class="seg">
-          <button type="submit" name="view" value="window" aria-pressed="{{ eq .SettingsView "window" }}">Windowed</button>
-          <button type="submit" name="view" value="classic" aria-pressed="{{ eq .SettingsView "classic" }}">Classic</button>
-        </div>
-      </fieldset>
-      <p class="settings-hint">Used when a link does not specify a view. Your current page stays open.</p>
-    </form>
-    <form action="/settings/reader-placement" method="post" class="settings-placement-form">
-      <fieldset>
-        <legend class="form-label">New article windows</legend>
-        <div class="seg">
-          <button type="submit" name="placement" value="floating" aria-pressed="{{ eq .SettingsPlacement "floating" }}">Floating</button>
-          <button type="submit" name="placement" value="maximized" aria-pressed="{{ eq .SettingsPlacement "maximized" }}">Maximized</button>
-        </div>
-      </fieldset>
-      <p class="settings-hint">Applies to new readers. Existing windows keep their placement. Narrow screens always maximize readers.</p>
-    </form>
+  <section class="card settings-card">
+    <h2 class="card-title">Theme</h2>
     <fieldset data-settings-js disabled>
-      <legend class="form-label">Default comment order</legend>
-      <div class="seg">
-        <button type="button" data-setting="sort" value="best" aria-pressed="false">Best first</button>
-        <button type="button" data-setting="sort" value="newest" aria-pressed="false">Newest first</button>
-        <button type="button" data-setting="sort" value="oldest" aria-pressed="false">Oldest first</button>
-      </div>
-    </fieldset>
-  </section>
-  <section class="settings-section">
-    <h2>Appearance</h2>
-    <fieldset data-settings-js disabled>
-      <legend class="form-label">Theme</legend>
+      <legend class="visually-hidden">Theme</legend>
       <div class="seg">
         <button type="button" data-setting="theme" value="light" aria-pressed="false">Light</button>
         <button type="button" data-setting="theme" value="dark" aria-pressed="false">Dark</button>
@@ -64,11 +14,73 @@
       </div>
     </fieldset>
   </section>
-  <section class="settings-section">
-    <h2>Blocked domains</h2>
+  <section class="card settings-card">
+    <h2 class="card-title">View</h2>
+    <p class="card-desc">The view a link opens in when it does not name one. The page you are on stays open.</p>
+    <form action="/settings/view" method="post" class="settings-view-form" data-saved-view="{{ .SettingsView }}">
+      <input type="hidden" name="target" value="/settings">
+      <fieldset>
+        <legend class="visually-hidden">Default browsing view</legend>
+        <div class="seg">
+          <button type="submit" name="view" value="window" aria-pressed="{{ eq .SettingsView "window" }}">Windowed</button>
+          <button type="submit" name="view" value="classic" aria-pressed="{{ eq .SettingsView "classic" }}">Classic</button>
+        </div>
+      </fieldset>
+    </form>
+  </section>
+  <section class="card settings-card">
+    <h2 class="card-title">New article windows</h2>
+    <p class="card-desc">How a new reader opens. Open windows keep their placement, and a narrow screen always maximizes readers.</p>
+    <form action="/settings/reader-placement" method="post" class="settings-placement-form">
+      <fieldset>
+        <legend class="visually-hidden">New article windows</legend>
+        <div class="seg">
+          <button type="submit" name="placement" value="floating" aria-pressed="{{ eq .SettingsPlacement "floating" }}">Floating</button>
+          <button type="submit" name="placement" value="maximized" aria-pressed="{{ eq .SettingsPlacement "maximized" }}">Maximized</button>
+        </div>
+      </fieldset>
+    </form>
+  </section>
+  <section class="card settings-card">
+    <h2 class="card-title">Comments</h2>
+    <p class="card-desc">The order a discussion opens in. Each discussion's own sort buttons change it there.</p>
+    <fieldset data-settings-js disabled>
+      <legend class="visually-hidden">Default comment order</legend>
+      <div class="seg">
+        <button type="button" data-setting="sort" value="best" aria-pressed="false">Best first</button>
+        <button type="button" data-setting="sort" value="newest" aria-pressed="false">Newest first</button>
+        <button type="button" data-setting="sort" value="oldest" aria-pressed="false">Oldest first</button>
+      </div>
+    </fieldset>
+  </section>
+  <section class="card settings-card">
+    <h2 class="card-title">Blocked domains</h2>
     <fieldset data-settings-js disabled>{{ template "domainfilters" "settings" }}</fieldset>
   </section>
-  <noscript><p>Theme, comment order, and blocked domains need JavaScript to access this browser's preferences.</p></noscript>
+  <section class="card settings-card" id="browser-data" data-migration>
+    <h2 class="card-title">Move your browser data</h2>
+    {{/* migration.js shows the half that belongs to the site the reader is
+         on: saving a backup on the old domain, importing one elsewhere. */}}
+    <div data-migration-leaving hidden>
+      <p class="card-desc">YAVCHN is now available on <a href="https://yavchn.com/">yavchn.com</a>, and each domain has its own browser storage. Save a backup of your pinned stories, reading history, blocked domains, theme, and saved applet state here, then open yavchn.com and import it. The file stays on your device, and your data here stays intact. Browsing view and new-window placement must be chosen again.</p>
+      <div class="settings-actions">
+        <button class="btn" type="button" data-migration-export disabled>Save browser data to a file</button>
+        <a class="btn btn-primary" href="https://yavchn.com/settings?migration=1#browser-data">Continue to yavchn.com</a>
+      </div>
+    </div>
+    <div data-migration-import hidden>
+      <p class="card-desc">If you used YAVCHN at yavchn.parkscomputing.com, open its Settings there and save a backup file, then choose that file here. The file is read on your device and never uploaded. Import replaces entries with matching names, including whole lists of pinned and visited stories, and keeps the rest. Browsing view and new-window placement must be chosen again.</p>
+      <div class="form-group">
+        <label class="form-label" for="migration-file">Choose a YAVCHN backup file</label>
+        <input class="form-input" id="migration-file" type="file" accept="application/json,.json" data-migration-file disabled>
+      </div>
+      <p class="card-desc" data-migration-preview></p>
+      <div class="settings-actions"><button class="btn btn-primary" type="button" data-migration-apply disabled>Import browser data</button></div>
+    </div>
+    <p role="status" aria-live="polite" data-migration-status></p>
+    <noscript><p class="card-desc">Saving and importing browser data requires JavaScript.</p></noscript>
+  </section>
+  <noscript><p class="card-desc">Theme, comment order, and blocked domains need JavaScript to reach this browser's preferences.</p></noscript>
   <p class="settings-status" role="status" aria-live="polite"></p>
 </div>
 {{ end }}

@@ -1143,14 +1143,19 @@ kbd {
 .classic-list .md-sidebar { width: 100%; max-width: none; flex: 1; display: block; }
 .classic-list .md-layout { --md-sidebar-w: 100%; }
 
-.settings-panel { max-width: 640px; margin-inline: auto; padding: var(--space-4); }
-.settings-intro, .settings-hint { color: var(--text-muted); }
-.settings-section { margin-block: var(--space-4); }
-.settings-section h2 { font-size: var(--text-sm); margin-block: 0 var(--space-3); }
-.settings-section fieldset { border: 0; padding: 0; margin: var(--space-3) 0; min-width: 0; }
-.settings-section .seg { margin-top: var(--space-2); max-width: 100%; flex-wrap: wrap; }
-.settings-hint { font-size: var(--text-xs); margin-block: var(--space-2); }
-.settings-status { min-height: 1.5em; font-size: var(--text-sm); }
+/* Settings and Account, after parkscomputing.com: a column of PUDL cards,
+   each a title, a line of what it does in muted type, and its controls. */
+.settings-panel { display: flex; flex-direction: column; gap: var(--space-3); max-width: 720px; margin-inline: auto; padding: var(--space-3); font-size: var(--text-sm); }
+.settings-panel > .settings-card { margin: 0; }
+.settings-card .card-title { margin-bottom: var(--space-2); }
+.settings-card > :last-child { margin-bottom: 0; }
+.settings-card fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.settings-card .seg { max-width: 100%; flex-wrap: wrap; }
+.settings-card .check { display: flex; margin: 4px 0; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+.settings-actions form { margin: 0; }
+.settings-status { min-height: 1.5em; }
+.settings-status:empty { display: none; }
 
 /* Responsive reader presentation. The controls remain available through menus
    when narrow windows put content ahead of secondary window chrome. */
@@ -1239,8 +1244,8 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .migration-toast-action { display: block; width: fit-content; margin-top: var(--space-3); }
 /* The account panel takes the Settings panel's layout; these are only the
    parts Settings has no counterpart for. */
-.account-panel .form-group { display: flex; flex-direction: column; gap: 4px; margin-block: var(--space-3); }
-.account-panel .notice { margin-block: var(--space-3); }
+.settings-panel .form-group { display: flex; flex-direction: column; gap: 4px; margin-block: var(--space-3) 0; }
+.settings-panel .notice { margin-block: var(--space-3) 0; }
 .account-panel h1 { font-size: var(--text-lg); }
 
 /* The account at the far right of the top bar: Sign in, or the reader's
@@ -1249,11 +1254,10 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .account-pill:has(.account-avatar) { padding: 2px; border-radius: 999px; }
 .account-avatar { display: block; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
 .account-avatar-placeholder { color: var(--text); }
-.account-identity { display: flex; align-items: center; gap: var(--space-3); margin-block-end: var(--space-3); }
-.account-identity p { margin: 0; }
-.account-identity .account-avatar { width: 48px; height: 48px; flex: none; }
-.account-buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-2); }
-.account-buttons form { margin: 0; }
+.account-identity { display: flex; align-items: center; gap: var(--space-4); }
+.account-identity .card-desc { margin: 0; }
+.account-identity .account-avatar { width: 72px; height: 72px; flex: none; }
+.account-profile { width: 100%; }
 .account-methods { width: 100%; margin-block: var(--space-2); }
 .account-methods td:last-child { width: 1%; white-space: nowrap; text-align: end; }
 .account-methods form { margin: 0; }

@@ -9,7 +9,7 @@
   {{ if .Valid }}
   <h1>{{ if .Adding }}Add this email address{{ else }}Sign in to YAVCHN{{ end }}</h1>
   <p>{{ if .Adding }}Press the button to add <strong>{{ .Email }}</strong> to the YAVCHN account signed in on this browser.{{ else }}Press the button to sign in as <strong>{{ .Email }}</strong>. If there is no YAVCHN account for this address yet, this creates one.{{ end }}</p>
-  <form method="post" action="/auth/email/link" class="account-buttons">
+  <form method="post" action="/auth/email/link" class="settings-actions">
     <input type="hidden" name="token" value="{{ .Token }}">
     <button class="btn btn-primary" type="submit">{{ if .Adding }}Add the address{{ else }}Sign in{{ end }}</button>
   </form>
