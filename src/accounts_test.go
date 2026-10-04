@@ -356,3 +356,51 @@ func TestAccountBrowser(t *testing.T) {
 		t.Log(string(out))
 	}
 }
+
+func TestAccountAppletViews(t *testing.T) {
+	f := accountsForTest(t)
+	page := f.request("GET", "/account?view=classic", "", nil, nil)
+	if page.Code != 200 || !strings.Contains(page.Body.String(), `data-applet="account"`) || !strings.Contains(page.Body.String(), `data-view="classic"`) {
+		t.Fatalf("Classic account: %d", page.Code)
+	}
+	win := f.request("GET", "/window/account", "", nil, nil)
+	if win.Code != 200 || !strings.Contains(win.Body.String(), `data-win="account"`) || !strings.Contains(win.Body.String(), `data-win-size="content"`) {
+		t.Fatalf("Account window: %d %s", win.Code, win.Body)
+	}
+	csrf := cookieNamed(t, win, loginCookie)
+	if !strings.Contains(win.Body.String(), `value="`+csrf.Value+`"`) || win.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("window login token or private cache policy missing")
+	}
+	target := "/lobsters/?view=window&open=reader-1,account&top=account"
+	started := f.request("POST", "/auth/github", url.Values{"csrf": {csrf.Value}, "return_to": {target}}.Encode(), []*http.Cookie{csrf}, nil)
+	if started.Code != 303 {
+		t.Fatalf("window login start: %d", started.Code)
+	}
+	u, _ := url.Parse(started.Header().Get("Location"))
+	var stored string
+	if err := f.a.server.db.QueryRow(`SELECT return_to FROM account_login_flows WHERE state_hash=?`, tokenHash(u.Query().Get("state"))).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	expected, _ := url.Parse(target)
+	expected.RawQuery = expected.Query().Encode()
+	if stored != expected.String() {
+		t.Fatalf("workspace return: %s", stored)
+	}
+	workspace := f.request("GET", "/hn/?view=window&open=reader-1,account&top=account", "", nil, nil)
+	if workspace.Code != 200 || !strings.Contains(workspace.Body.String(), `name="return_to" value="/hn/?open=reader-1%2Caccount&amp;top=account&amp;view=window"`) {
+		t.Fatal("server-rendered workspace return missing")
+	}
+	windowed := f.request("GET", "/account?view=window", "", nil, nil)
+	if windowed.Code != 303 || !strings.Contains(windowed.Header().Get("Location"), "open=account") {
+		t.Fatal("Windowed account link does not launch its applet")
+	}
+}
+func TestAccountReturnDestinations(t *testing.T) {
+	for _, raw := range []string{"https://evil.example/", "//evil.example/", "/\\evil.example/", "/auth/github/callback", "/hn/?view=classic", "/hn/?view=window&open=reader-1", "/unknown?view=window&open=account"} {
+		r := httptest.NewRequest("POST", "/auth/github", nil)
+		r.PostForm = url.Values{"return_to": {raw}}
+		if got := accountReturn(r, ""); got != "/account" {
+			t.Fatalf("accepted return %q: %s", raw, got)
+		}
+	}
+}

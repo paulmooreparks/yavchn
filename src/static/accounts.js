@@ -7,6 +7,7 @@
   var csrf = document.querySelector('meta[name="yavchn-csrf"]');
   var baseline = user && user.data, revision = user && user.revision;
   var dataURL = user && user.links.self.href;
+  var syncStatus = 'Account data loaded.';
   var timer = 0, running = false, applying = false, memory = Object.create(null);
   function copy(value) { return JSON.parse(JSON.stringify(value)); }
   function ordered(value) {
@@ -57,6 +58,7 @@
     return out;
   }
   function status(text) {
+    syncStatus = text;
     document.querySelectorAll('[data-account-sync-status]').forEach(function (el) { el.textContent = text; });
     document.querySelectorAll('[data-account-link]').forEach(function (el) { el.title = text; });
   }
@@ -81,6 +83,29 @@
     setItem: function (key, value) { rawSet(physical(key), value); if (keys[key]) schedule(); }
   };
   window.addEventListener('pageshow', function (event) { if (event.persisted) location.reload(); });
+  window.yavchnAccountUI = function (root) {
+    if (user) root.querySelectorAll('[data-account-sync-status]').forEach(function (el) { el.textContent = syncStatus; });
+    root.querySelectorAll('[data-account-import]').forEach(function (button) {
+      if (!user || button.dataset.accountBound) return;
+      button.dataset.accountBound = "true";
+      button.hidden = false;
+      button.addEventListener('click', function () {
+        var data = documentData(), anonymous = { pins: {}, domains: [], progress: {} };
+        Object.keys(keys).forEach(function (key) { try { anonymous[keys[key]] = JSON.parse(rawGet(key)) || anonymous[keys[key]]; } catch (e) {} });
+        Object.keys(anonymous.pins).forEach(function (key) {
+          if (!data.pins[key]) {
+            data.pins[key] = anonymous.pins[key];
+            if (!data.pins[key].source) data.pins[key].source = 'hn';
+          }
+        });
+        data.domains = Array.from(new Set(data.domains.concat(anonymous.domains))).sort();
+        Object.keys(anonymous.progress).forEach(function (key) { if (!data.progress[key]) data.progress[key] = anonymous.progress[key]; });
+        data = rebase(baseline, data, baseline);
+        install(data, true); schedule();
+        button.textContent = 'Import anonymous data again';
+      });
+    });
+  };
   if (!user) return;
 
   // Retain edits whose earlier upload failed, including navigation while offline.
@@ -146,22 +171,5 @@
       }
     });
   });
-  document.querySelectorAll('[data-account-import]').forEach(function (button) {
-    button.hidden = false;
-    button.addEventListener('click', function () {
-      var data = documentData(), anonymous = { pins: {}, domains: [], progress: {} };
-      Object.keys(keys).forEach(function (key) { try { anonymous[keys[key]] = JSON.parse(rawGet(key)) || anonymous[keys[key]]; } catch (e) {} });
-      Object.keys(anonymous.pins).forEach(function (key) {
-        if (!data.pins[key]) {
-          data.pins[key] = anonymous.pins[key];
-          if (!data.pins[key].source) data.pins[key].source = 'hn';
-        }
-      });
-      data.domains = Array.from(new Set(data.domains.concat(anonymous.domains))).sort();
-      Object.keys(anonymous.progress).forEach(function (key) { if (!data.progress[key]) data.progress[key] = anonymous.progress[key]; });
-      data = rebase(baseline, data, baseline);
-      install(data, true); schedule();
-      button.textContent = 'Import anonymous data again';
-    });
-  });
+
 })();

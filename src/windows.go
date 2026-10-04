@@ -530,8 +530,11 @@ func (s *Server) startWindows(ctx context.Context, r *http.Request) func() windo
 	// A window built for a list page reads its own parameters, not the
 	// list's, so an applet such as the hiring filter starts as its markup
 	// says rather than from the list's ?q=.
-	bare := r.Clone(ctx)
+	bare := r.Clone(context.WithValue(ctx, accountReturnContextKey{}, viewURL(r.URL.RequestURI(), "window")))
 	readerQuery := url.Values{}
+	if message := q.Get("message"); message == "signed-out" || message == "deleted" {
+		readerQuery.Set("message", message)
+	}
 	for k, article := range st.reader {
 		readerQuery.Set("r."+k, article)
 	}

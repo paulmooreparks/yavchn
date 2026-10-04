@@ -66,7 +66,7 @@
             <li><button type="button" commandfor="about-dialog" command="show-modal">About YAVCHN</button></li>
             <li>-</li>
             <li><a href="/settings" data-win-open="settings">Settings&hellip;</a></li>
-            <li><a href="/account" data-account-link>{{ if .Account }}Account ({{ .Account.Username }}){{ else }}Sign in / Account{{ end }}</a></li>
+            <li><a href="/account?view={{ .View }}" data-win-open="account" data-account-link>{{ if .Account }}Account ({{ .Account.Username }}){{ else }}Sign in / Account{{ end }}</a></li>
           </ul>
         </li>
         <li data-menubar-id="go">Go

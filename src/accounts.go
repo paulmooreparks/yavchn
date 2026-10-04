@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -172,6 +173,8 @@ func (u *accountSession) setLinks() {
 }
 
 type accountContextKey struct{}
+type accountLoginContextKey struct{}
+type accountReturnContextKey struct{}
 
 func currentAccount(r *http.Request) *accountSession {
 	a, _ := r.Context().Value(accountContextKey{}).(*accountSession)
@@ -228,7 +231,8 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		private := strings.HasPrefix(r.URL.Path, "/account") || strings.HasPrefix(r.URL.Path, "/auth/")
+		accountUI := r.URL.Path == "/account" || r.URL.Path == "/window/account" || slices.Contains(strings.Split(r.URL.Query().Get("open"), ","), "account")
+		private := accountUI || strings.HasPrefix(r.URL.Path, "/account") || strings.HasPrefix(r.URL.Path, "/auth/")
 		if private {
 			w.Header().Set("Cache-Control", "no-store")
 			// A no-referrer policy can make a form POST's Origin null.
@@ -264,6 +268,18 @@ func (a *accountService) middleware(next http.Handler) http.Handler {
 				return
 			}
 		}
+		if accountUI && r.Method == "GET" && currentAccount(r) == nil && a.config.ClientID != "" {
+			c, err := r.Cookie(loginCookie)
+			if err != nil || len(c.Value) != 43 {
+				token, err := accountToken()
+				if err != nil {
+					accountError(w, 500, "Cannot start sign-in.")
+					return
+				}
+				accountCookie(w, loginCookie, token, 600)
+				r = r.WithContext(context.WithValue(r.Context(), accountLoginContextKey{}, token))
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -282,42 +298,82 @@ func (s *accountScanner) Scan(v any) error {
 	}
 }
 
-type accountPageVM struct {
-	menuContext
-	Title, NewReaderHref, Message, LoginCSRF string
-	AllSources                               []sourceOptVM
-	LoginAvailable                           bool
-	OtherSessions                            int
-	RecentLogin                              bool
+type accountPanelVM struct {
+	Account                       *accountSession
+	Message, LoginCSRF, ReturnURL string
+	LoginAvailable                bool
+	OtherSessions                 int
+	RecentLogin                   bool
 }
 
-func (a *accountService) page(w http.ResponseWriter, r *http.Request) {
-	vm := accountPageVM{menuContext: menuContext{Account: currentAccount(r), View: "classic", WindowURL: "/hn/?view=window", ClassicURL: "/account"}, Title: "Account · YAVCHN", NewReaderHref: "/hn/?open=reader-1&top=reader-1", AllSources: a.server.buildSourceOpts(""), LoginAvailable: a.config.ClientID != ""}
-	if r.URL.Query().Get("message") == "signed-out" {
-		vm.Message = "You are signed out. Your anonymous browser data is available again."
+// panel supplies the same account content to the Classic page and PUDL window.
+func (a *accountService) panel(r *http.Request) (*accountPanelVM, error) {
+	vm := &accountPanelVM{Account: currentAccount(r), LoginAvailable: a.config.ClientID != "", ReturnURL: "/account"}
+	if r.URL.Path != "/account" {
+		vm.ReturnURL = "/hn/?view=window&open=account&top=account"
+		if target, ok := r.Context().Value(accountReturnContextKey{}).(string); ok {
+			vm.ReturnURL = target
+		}
 	}
-	if r.URL.Query().Get("message") == "deleted" {
+	switch r.URL.Query().Get("message") {
+	case "signed-out":
+		vm.Message = "You are signed out. Your anonymous browser data is available again."
+	case "deleted":
 		vm.Message = "Your account and synchronized data have been deleted."
 	}
 	if user := currentAccount(r); user != nil {
 		if err := a.server.db.QueryRowContext(r.Context(), `SELECT count(*) FROM account_sessions WHERE account_id=? AND token_hash<>? AND expires_at>?`, user.ID, user.TokenHash, time.Now().Unix()).Scan(&vm.OtherSessions); err != nil {
-			accountError(w, 503, "Account storage is unavailable.")
-			return
+			return nil, err
 		}
 		vm.RecentLogin = time.Now().Unix()-user.CreatedAt < 600
-	} else if vm.LoginAvailable {
-		csrf, err := accountToken()
-		if err != nil {
-			accountError(w, 500, "Cannot start sign-in.")
-			return
+	} else if c, err := r.Cookie(loginCookie); err == nil {
+		vm.LoginCSRF = c.Value
+	}
+	if token, ok := r.Context().Value(accountLoginContextKey{}).(string); ok {
+		vm.LoginCSRF = token
+	}
+	return vm, nil
+}
+func (a *accountService) page(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("view") == "window" {
+		target := url.Values{"view": {"window"}, "open": {"account"}, "top": {"account"}}
+		if message := r.URL.Query().Get("message"); message == "signed-out" || message == "deleted" {
+			target.Set("message", message)
 		}
-		vm.LoginCSRF = csrf
-		accountCookie(w, loginCookie, csrf, 600)
+		http.Redirect(w, r, "/hn/?"+target.Encode(), http.StatusSeeOther)
+		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := a.server.tpl.ExecuteTemplate(w, "account.html.tmpl", vm); err != nil {
-		slog.Error("render account page failed")
+	win, ok := a.server.appletWindow(r.Context(), r, "account")
+	if !ok {
+		accountError(w, 503, "Account storage is unavailable.")
+		return
 	}
+	a.server.renderAppPage(w, r, win)
+}
+
+// Account returns are limited to the account page or a known Windowed workspace.
+func accountReturn(r *http.Request, message string) string {
+	target := "/account"
+	raw := r.PostForm.Get("return_to")
+	u, err := url.Parse(raw)
+	if err == nil && len(raw) <= 4096 && strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "//") && !strings.Contains(raw, "\\") && u.Host == "" && u.Scheme == "" && u.User == nil {
+		q := u.Query()
+		workspace := u.Path == "/hn/" || u.Path == "/lobsters/" || u.Path == "/pinned/" || u.Path == "/find"
+		if u.Path == "/account" || (workspace && q.Get("view") == "window" && slices.Contains(strings.Split(q.Get("open"), ","), "account")) {
+			u.Fragment = ""
+			q.Del("message")
+			u.RawQuery = q.Encode()
+			target = u.String()
+		}
+	}
+	if message != "" {
+		u, _ := url.Parse(target)
+		q := u.Query()
+		q.Set("message", message)
+		u.RawQuery = q.Encode()
+		target = u.String()
+	}
+	return target
 }
 func (a *accountService) sameOrigin(r *http.Request) bool {
 	return a.config.Origin != "" && r.Header.Get("Origin") == a.config.Origin
@@ -357,10 +413,10 @@ func (a *accountService) start(w http.ResponseWriter, r *http.Request) {
 		accountError(w, 500, "Cannot start sign-in.")
 		return
 	}
-	// The account page is the fixed return destination. No request host or return URL is trusted.
+	// The return destination is limited to account views on this site.
 	_, err = a.server.db.ExecContext(r.Context(), `DELETE FROM account_login_flows WHERE expires_at<=?`, time.Now().Unix())
 	if err == nil {
-		_, err = a.server.db.ExecContext(r.Context(), `INSERT INTO account_login_flows(state_hash,verifier,return_to,expires_at)VALUES(?,?,?,?)`, tokenHash(state), verifier, "/account", time.Now().Add(10*time.Minute).Unix())
+		_, err = a.server.db.ExecContext(r.Context(), `INSERT INTO account_login_flows(state_hash,verifier,return_to,expires_at)VALUES(?,?,?,?)`, tokenHash(state), verifier, accountReturn(r, ""), time.Now().Add(10*time.Minute).Unix())
 	}
 	if err != nil {
 		accountError(w, 503, "Cannot start sign-in right now.")
@@ -546,7 +602,7 @@ func (a *accountService) logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accountCookie(w, sessionCookie, "", -1)
-	http.Redirect(w, r, "/account?message=signed-out", http.StatusSeeOther)
+	http.Redirect(w, r, accountReturn(r, "signed-out"), http.StatusSeeOther)
 }
 func (a *accountService) revokeOthers(w http.ResponseWriter, r *http.Request) {
 	u := a.authorizedWrite(w, r)
@@ -557,7 +613,7 @@ func (a *accountService) revokeOthers(w http.ResponseWriter, r *http.Request) {
 		accountError(w, 503, "Cannot revoke other sessions right now.")
 		return
 	}
-	http.Redirect(w, r, "/account", http.StatusSeeOther)
+	http.Redirect(w, r, accountReturn(r, ""), http.StatusSeeOther)
 }
 func (a *accountService) remove(w http.ResponseWriter, r *http.Request) {
 	u := a.authorizedWrite(w, r)
@@ -577,7 +633,7 @@ func (a *accountService) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accountCookie(w, sessionCookie, "", -1)
-	http.Redirect(w, r, "/account?message=deleted", http.StatusSeeOther)
+	http.Redirect(w, r, accountReturn(r, "deleted"), http.StatusSeeOther)
 }
 func (a *accountService) export(w http.ResponseWriter, r *http.Request) {
 	u := currentAccount(r)

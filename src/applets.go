@@ -38,6 +38,7 @@ const whoIsHiringUser = "whoishiring"
 
 // appVM is the body of an applet's window or page.
 type appVM struct {
+	AccountPanel      *accountPanelVM
 	SettingsView      string
 	SettingsPlacement string
 	Kind              string    // "replies", "hiring", "lookup" or "profile"
@@ -142,6 +143,14 @@ func (s *Server) appletWindow(ctx context.Context, r *http.Request, key string) 
 	w := windowVM{Key: key, MinHref: "?", MaxHref: "?", CloseHref: "?"}
 	q := r.URL.Query()
 	switch {
+	case key == "account":
+		panel, err := s.accounts.panel(r)
+		if err != nil {
+			return windowVM{}, false
+		}
+		w.ContentSized = true
+		w.Title, w.PageURL, w.Def = "Your YAVCHN account", "/account?view=classic", floatingAt(0.12, 0.05, 0.48, 0.86)
+		w.App = &appVM{Kind: "account", AccountPanel: panel}
 	case key == "settings":
 		w.ContentSized = true
 		w.Title, w.PageURL, w.Def = "Settings", "/settings", floatingAt(0.12, 0.05, 0.48, 0.86)
