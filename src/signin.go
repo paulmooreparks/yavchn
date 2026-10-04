@@ -223,7 +223,11 @@ func (a *accountService) emailBudget(ctx context.Context, address, ip string) bo
 
 // sendMail sends plain text through Resend's documented HTTP API.
 func (a *accountService) sendMail(ctx context.Context, to, subject, text string) bool {
-	body, err := json.Marshal(map[string]any{"from": a.config.EmailFrom, "to": []string{to}, "subject": subject, "text": text})
+	message := map[string]any{"from": a.config.EmailFrom, "to": []string{to}, "subject": subject, "text": text}
+	if a.config.EmailReplyTo != "" {
+		message["reply_to"] = a.config.EmailReplyTo
+	}
+	body, err := json.Marshal(message)
 	if err != nil {
 		return false
 	}

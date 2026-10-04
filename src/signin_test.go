@@ -29,7 +29,7 @@ type signinFixture struct {
 
 func signinForTest(t *testing.T) *signinFixture {
 	f := &signinFixture{accountFixture: accountsForTest(t), mailStatus: 200}
-	f.a.config.ResendKey, f.a.config.EmailFrom = "re_test", "YAVCHN <signin@example.com>"
+	f.a.config.ResendKey, f.a.config.EmailFrom, f.a.config.EmailReplyTo = "re_test", "YAVCHN <signin@example.com>", "help@example.com"
 	f.a.client.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		switch r.URL.Host {
 		case "api.resend.com":
@@ -139,7 +139,7 @@ func TestEmailLinkSignIn(t *testing.T) {
 		t.Fatal("email request accepted without the page's token")
 	}
 	msg, first := f.requestLink(" Reader@Example.com ", []*http.Cookie{login}, login.Value, false)
-	if msg != "email-sent" || first == "" || f.mails[0]["to"].([]any)[0] != "reader@example.com" {
+	if msg != "email-sent" || first == "" || f.mails[0]["to"].([]any)[0] != "reader@example.com" || f.mails[0]["reply_to"] != "help@example.com" {
 		t.Fatalf("sign-in link: %s %v", msg, f.mails)
 	}
 	_, second := f.requestLink("reader@example.com", []*http.Cookie{login}, login.Value, false)

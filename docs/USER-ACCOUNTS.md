@@ -18,7 +18,7 @@ A reader who asks for an email link gives an address and receives a message hold
 
 A signed-in reader can add an email address, which sends a link that attaches the address to the current account when it is confirmed. They can also link a GitHub user through the usual GitHub sign-in, which attaches the GitHub identity to the current account. Either is refused when the identity already belongs to another account.
 
-Mail goes through Resend's documented HTTP API, as on parkscomputing.com. The deployment supplies `YAVCHN_RESEND_API_KEY` (or `YAVCHN_RESEND_API_KEY_FILE`) and `YAVCHN_EMAIL_FROM`. Without both, email sign-in does not appear.
+Mail goes through Resend's documented HTTP API, as on parkscomputing.com. The deployment supplies `YAVCHN_RESEND_API_KEY` (or `YAVCHN_RESEND_API_KEY_FILE`) and `YAVCHN_EMAIL_FROM`, and may supply `YAVCHN_EMAIL_REPLY_TO`. Without both, email sign-in does not appear.
 
 Passkeys follow WebAuthn through the documented `github.com/go-webauthn/webauthn` library, with the public origin's host as the relying party. They are discoverable credentials, so signing in needs no address. A passkey's user handle is the account's internal identifier. The server keeps each ceremony's challenge for five minutes, bound to the browser by a cookie, and uses it once. A signed-in reader adds a passkey with a name of their choosing and can remove any of them. Passkeys belong to their site's relying party, so a passkey made on beta.yavchn.com does not work on yavchn.com.
 

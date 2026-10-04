@@ -116,6 +116,7 @@ type accountConfig struct {
 	Origin, ClientID, ClientSecret string
 	// Email sign-in links go through Resend; both are needed to offer them.
 	ResendKey, EmailFrom string
+	EmailReplyTo         string // optional; where replies to sign-in mail go
 }
 
 // GitHub, Email and Passkeys say which ways of signing in this deployment offers.
@@ -141,7 +142,7 @@ func secretFrom(name string) (string, error) {
 }
 
 func loadAccountConfig() (accountConfig, error) {
-	c := accountConfig{Origin: os.Getenv("YAVCHN_PUBLIC_ORIGIN"), ClientID: os.Getenv("YAVCHN_GITHUB_CLIENT_ID"), EmailFrom: strings.TrimSpace(os.Getenv("YAVCHN_EMAIL_FROM"))}
+	c := accountConfig{Origin: os.Getenv("YAVCHN_PUBLIC_ORIGIN"), ClientID: os.Getenv("YAVCHN_GITHUB_CLIENT_ID"), EmailFrom: strings.TrimSpace(os.Getenv("YAVCHN_EMAIL_FROM")), EmailReplyTo: strings.TrimSpace(os.Getenv("YAVCHN_EMAIL_REPLY_TO"))}
 	var err error
 	if c.ClientSecret, err = secretFrom("YAVCHN_GITHUB_CLIENT_SECRET"); err != nil {
 		return c, err
@@ -158,6 +159,11 @@ func loadAccountConfig() (accountConfig, error) {
 	if c.EmailFrom != "" {
 		if _, err := mail.ParseAddress(c.EmailFrom); err != nil {
 			return c, errors.New("YAVCHN_EMAIL_FROM must be an email address")
+		}
+	}
+	if c.EmailReplyTo != "" {
+		if _, err := mail.ParseAddress(c.EmailReplyTo); err != nil {
+			return c, errors.New("YAVCHN_EMAIL_REPLY_TO must be an email address")
 		}
 	}
 	if c.Origin == "" && (c.ClientID != "" || c.ResendKey != "") {
