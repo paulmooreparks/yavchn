@@ -90,6 +90,15 @@ docker run --rm -p 8080:8080 yavchn
 
 YAVCHN is a single-binary distroless image. The SQLite article cache is in `/home/nonroot/yavchn.db` inside the container and rebuilds from scratch after a container replace.
 
+When a publisher asks for an article's readable copy to be removed, exclude it from the reader with the same binary. Give one article's address, or a host to exclude a whole site and its subdomains:
+
+```
+docker exec yavchn /yavchn takedown add https://example.com/post
+docker exec yavchn /yavchn takedown add example.com
+docker exec yavchn /yavchn takedown list
+docker exec yavchn /yavchn takedown remove example.com
+```
+
 ## License
 
 [MIT](LICENSE). Feel free to use it, fork it, embed it, learn from it, whatever. Just keep the copyright notice intact.

@@ -50,6 +50,10 @@ func withCanonicalHost(origin string, next http.Handler) http.Handler {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "takedown" {
+		takedownMain(os.Args[2:])
+		return
+	}
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})))

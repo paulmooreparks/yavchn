@@ -34,7 +34,7 @@ func OpenDB(ctx context.Context, path string) (*sql.DB, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	if _, err := db.ExecContext(ctx, schema); err != nil {
+	if _, err := db.ExecContext(ctx, schema+takedownSchema); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

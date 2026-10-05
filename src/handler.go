@@ -580,6 +580,22 @@ func articleErrorHTML(rawURL string, err error) string {
 	return buf.String()
 }
 
+// excludedTmpl stands in for an article whose publisher asked YAVCHN not to
+// show a copy (takedown.go). It offers no archived copy, which would defeat
+// the request.
+var excludedTmpl = template.Must(template.New("excluded").Parse(
+	`<div class="empty-state story-note">
+  <p class="empty-state-title">Read this article on its own site</p>
+  <p class="empty-state-body">Its publisher asked YAVCHN not to show a copy of it here.</p>
+  {{ if . }}<div class="empty-state-actions"><a class="btn btn-sm" href="{{ . }}" target="_blank" rel="noopener">Open the article</a></div>{{ end }}
+</div>`))
+
+func excludedHTML(rawURL string) string {
+	var buf bytes.Buffer
+	_ = excludedTmpl.Execute(&buf, rawURL)
+	return buf.String()
+}
+
 func rateLimitedHTML(rawURL string) string {
 	var buf bytes.Buffer
 	_ = rateLimitedTmpl.Execute(&buf, rawURL)
@@ -781,6 +797,10 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 			slog.Info("article extract rate-limited", "url", rawURL)
 			w.Header().Set("Retry-After", "60")
 			writeFragment(w, http.StatusTooManyRequests, rateLimitedHTML(rawURL))
+			return
+		}
+		if errors.Is(err, errExcluded) {
+			writeFragment(w, http.StatusOK, excludedHTML(rawURL))
 			return
 		}
 		slog.Warn("article extract failed", "url", rawURL, "err", err)

@@ -102,6 +102,9 @@ func (e *Extractor) Get(ctx context.Context, rawURL, requesterIP string) (*Artic
 	if !isAllowedURL(rawURL) {
 		return nil, errors.New("url scheme not allowed")
 	}
+	if err := e.checkExcluded(ctx, rawURL); err != nil {
+		return nil, err
+	}
 	hash := articleKey(rawURL)
 
 	if a, fetchedAt, err := e.fromCacheWithAge(ctx, hash); err == nil {
@@ -137,6 +140,9 @@ func (e *Extractor) ForceGet(ctx context.Context, rawURL, requesterIP string) (*
 	if !isAllowedURL(rawURL) {
 		return nil, errors.New("url scheme not allowed")
 	}
+	if err := e.checkExcluded(ctx, rawURL); err != nil {
+		return nil, err
+	}
 	hash := articleKey(rawURL)
 	v, err, _ := e.sf.Do("force:"+hash, func() (interface{}, error) {
 		if !e.rate.Allow(requesterIP) {
@@ -169,6 +175,20 @@ func (e *Extractor) kickRevalidate(hash, rawURL string) {
 			return a, err
 		})
 	}()
+}
+
+// checkExcluded reports errExcluded for an article its publisher asked the
+// reader not to show (takedown.go). Failing to read the list refuses the
+// article too, since showing an excluded one breaks a promise.
+func (e *Extractor) checkExcluded(ctx context.Context, rawURL string) error {
+	no, err := excluded(ctx, e.db, rawURL)
+	if err != nil {
+		return fmt.Errorf("checking the reader's exclusions: %w", err)
+	}
+	if no {
+		return errExcluded
+	}
+	return nil
 }
 
 func (e *Extractor) fromCacheWithAge(ctx context.Context, hash string) (*Article, int64, error) {
@@ -242,6 +262,10 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 		Title:   firstNonEmpty(parsed.Title, parsedURL.Host),
 		Byline:  parsed.Byline,
 		Content: template.HTML(sanitized),
+	}
+	// An exclusion added while this fetch ran must not be undone by it.
+	if err := e.checkExcluded(ctx, rawURL); err != nil {
+		return nil, err
 	}
 	// The cache saves the next reader a fetch; failing to write it costs
 	// this reader nothing, so the article is served either way.
