@@ -55,11 +55,11 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.locator('#row-hn-1 .note-mark[aria-label="Has a note"]').waitFor();
     assert.equal(await reader.locator('[data-note-toggle]').textContent(), 'Note');
 
-    // The toggle is a disclosure with an SVG chevron of a readable size, and
-    // the panel stays as the reader leaves it across a reload.
+    // The toggle is PUDL's disclosure button, whose chevron is 16 pixels,
+    // and the panel stays as the reader leaves it across a reload.
     const toggle = reader.locator('[data-note-toggle]');
     assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
-    assert.deepEqual(await toggle.locator('svg.disclosure-chevron').evaluate(svg => [svg.getBoundingClientRect().width, svg.getBoundingClientRect().height]), [16, 16]);
+    assert.deepEqual(await toggle.evaluate(b => { const s = getComputedStyle(b, '::after'); return [s.width, s.height, s.maskImage.includes('svg') || s.webkitMaskImage.includes('svg')]; }), ['16px', '16px', true]);
     await toggle.click();
     assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
     assert.equal(await reader.locator('[data-note-panel]').isHidden(), true);

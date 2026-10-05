@@ -164,7 +164,7 @@
             </div>
             {{ end }}
           </div>
-          <div class="win-layer" data-win-layer data-win-src="/window/{key}" data-win-menu{{ if .Win.LayerStyle }} style="{{ .Win.LayerStyle }}"{{ end }}>
+          <div class="win-layer" data-win-layer data-win-src="/window/{key}" data-win-params="r" data-win-menu{{ if .Win.LayerStyle }} style="{{ .Win.LayerStyle }}"{{ end }}>
             {{ range .Win.List }}{{ template "window" . }}{{ end }}
           </div>
         </main>

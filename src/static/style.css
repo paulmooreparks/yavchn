@@ -1162,19 +1162,9 @@ kbd {
 .classic-list .md-sidebar { width: 100%; max-width: none; flex: 1; display: block; }
 .classic-list .md-layout { --md-sidebar-w: 100%; }
 
-/* Settings and Account, after parkscomputing.com: a column of PUDL cards,
-   each a title, a line of what it does in muted type, and its controls. */
-.settings-panel { display: flex; flex-direction: column; gap: var(--space-3); max-width: 720px; margin-inline: auto; padding: var(--space-3); font-size: var(--text-sm); }
-.settings-panel > .settings-card { margin: 0; }
-.settings-card .card-title { margin-bottom: var(--space-2); }
-.settings-card > :last-child { margin-bottom: 0; }
-.settings-card fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
-.settings-card .seg { max-width: 100%; flex-wrap: wrap; }
-.settings-card .check { display: flex; margin: 4px 0; }
-.settings-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
-.settings-actions form { margin: 0; }
-.settings-status { min-height: 1.5em; }
-.settings-status:empty { display: none; }
+/* Settings and Account are PUDL settings panels. A setting's fieldset only
+   groups its controls for assistive technology, so it draws nothing. */
+.settings-panel > .card fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 
 /* Responsive reader presentation. The controls remain available through menus
    when narrow windows put content ahead of secondary window chrome. */
@@ -1261,36 +1251,18 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .stories-button svg { width: 16px; height: 16px; flex: none; }
 /* Keep the migration action within the toast on narrow screens. */
 .migration-toast-action { display: block; width: fit-content; margin-top: var(--space-3); }
-/* The account panel takes the Settings panel's layout; these are only the
-   parts Settings has no counterpart for. */
-.settings-panel .form-group { display: flex; flex-direction: column; gap: 4px; margin-block: var(--space-3) 0; }
+/* The account panel's form fields, and its notices, which a settings
+   panel has no counterpart for. */
+.settings-panel .form-group { display: flex; flex-direction: column; gap: 4px; }
 .settings-panel .notice { margin-block: var(--space-3) 0; }
 .account-panel h1 { font-size: var(--text-lg); }
 
-/* The account is a status item, which PUDL draws; the picture, or the
-   placeholder drawn in the bar's text colour, takes the item's 24 pixels. */
-.account-avatar { display: block; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
-.account-avatar-placeholder { color: var(--text); }
-.status-item > .account-avatar { width: 24px; height: 24px; flex: none; }
-.status-item > .account-avatar-placeholder { color: currentColor; }
-/* A stopgap until PUDL draws its status area as it draws a menu bar's
-   groups (PUDL-PROPOSAL.md, B7). In 0.49.0 the area takes the topbar's
-   chip gradient and stands 2 pixels taller than the groups beside it, and
-   its items are in the muted chrome colour, so here it takes a group's
-   surface, height and title colours, from tokens a site may read. */
-.topbar .status-area {
-  padding: 1px;
-  border-color: var(--raise-border);
-  background: var(--recess-bg);
-  box-shadow: var(--raise-shadow);
-}
-.topbar .status-item { min-height: 26px; padding-block: 0; color: var(--text); }
-.topbar .status-item:has(> img, > .account-avatar) { padding-inline: 1px; }
-.topbar .status-item:hover { color: var(--text); background: color-mix(in srgb, var(--text) 12%, transparent); }
-.topbar .status-item:active { color: var(--text); background: var(--raise-active-bg); box-shadow: var(--raise-active-shadow); }
+/* The account is a status item, which PUDL draws, as are its picture and
+   the account glyph that stands in for one. The picture is round. */
+img.account-avatar { border-radius: 50%; }
 .account-identity { display: flex; align-items: center; gap: var(--space-4); }
 .account-identity .card-desc { margin: 0; }
-.account-identity .account-avatar { width: 72px; height: 72px; flex: none; }
+.account-identity .account-avatar { display: block; width: 72px; height: 72px; flex: none; object-fit: cover; --glyph-size: 72px; }
 .account-profile { width: 100%; }
 .account-methods { width: 100%; margin-block: var(--space-2); }
 .account-methods td:last-child { width: 1%; white-space: nowrap; text-align: end; }
@@ -1310,10 +1282,6 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .note-mark { margin-inline-end: 5px; }
 .story-note-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .story-note-toggle[hidden] { display: none; }
-/* The note's disclosure chevron points down to open and up to close. */
-.disclosure-chevron { width: 16px; height: 16px; flex: none; transition: transform .15s ease; }
-[aria-expanded="true"] > .disclosure-chevron { transform: rotate(180deg); }
-@media (prefers-reduced-motion: reduce) { .disclosure-chevron { transition: none; } }
 .story-note-panel { flex: none; padding: 8px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
 .story-note-panel[hidden] { display: none; }
 .story-note-panel .form-group { display: flex; flex-direction: column; gap: 4px; }
@@ -1321,13 +1289,3 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .story-row .md-item .note-excerpt, .story-row .md-item .collection-names { display: block; white-space: normal; }
 .story-row .md-item .note-excerpt { font-style: italic; }
 .collection-manage { flex: none; }
-
-/* A stored list's filter menus' checkbox rows, after parkscomputing.com. */
-.menu-panel .menu-check {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 14px;
-  font-size: var(--text-sm);
-  white-space: nowrap;
-  cursor: pointer;
-}
-.menu-panel .menu-check:hover { background: var(--menu-row-hover, var(--surface-alt)); }

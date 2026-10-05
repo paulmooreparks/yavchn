@@ -1,15 +1,18 @@
 {{/* The account, in a window or on its Classic page. It follows the
-     Settings applet's layout. After PUDL, a passing confirmation is a toast
-     (account.js raises it), and anything the reader must act on is a notice
-     beside the control it concerns. */}}
+     Settings applet's layout. After PUDL, a passing confirmation is a toast,
+     and anything the reader must act on is a notice beside the control it
+     concerns. In a window the panel carries the toast hidden, and PUDL moves
+     it into the toast region; the Classic page renders it in the region. */}}
+{{ define "accountpagetoast" }}{{ with .AccountPanel }}{{ if .OnPage }}{{ with .Toast }}<div class="toast-region"><div class="toast{{ if .Kind }} {{ .Kind }}{{ end }}"><p class="toast-text">{{ .Text }}</p></div></div>{{ end }}{{ end }}{{ end }}{{ end }}
+
 {{ define "accountnotice" }}{{ with . }}<div class="notice{{ if .Kind }} {{ .Kind }}{{ end }} account-notice" role="{{ if eq .Kind "danger" "warn" }}alert{{ else }}status{{ end }}"><div class="notice-content"><p class="notice-body">{{ .Text }}</p></div></div>{{ end }}{{ end }}
 
 {{ define "accountpanel" }}
 <div class="settings-panel account-panel" data-applet="account" data-applet-page="/account?view=classic">
-  {{ with .Toast }}<p data-account-toast="{{ .Kind }}" hidden>{{ .Text }}</p><noscript>{{ template "accountnotice" . }}</noscript>{{ end }}
+  {{ if not .OnPage }}{{ with .Toast }}<div class="toast{{ if .Kind }} {{ .Kind }}{{ end }}" hidden><p class="toast-text">{{ .Text }}</p></div>{{ end }}{{ end }}
   {{ template "accountnotice" (.NoticeAt "page") }}
   {{ if .Account }}
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">Profile</h2>
     <table class="kv-table account-profile">
       <tbody>
@@ -21,7 +24,7 @@
     </table>
   </section>
 
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">Profile picture</h2>
     <div class="account-identity">{{ template "avatar" .Account.AvatarURL }}
       <p class="card-desc">Shown at the top of every page while you are signed in. Any picture works; it is cropped to a square and made small before it is sent.</p>
@@ -51,7 +54,7 @@
     </div>
   </section>
 
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">Ways to sign in</h2>
     <p class="card-desc">Each of these signs you in to this account, and any of them gets you back in if you lose a device, so the last one cannot be removed.</p>
     {{ template "accountnotice" (.NoticeAt "methods") }}
@@ -91,7 +94,7 @@
     </form>{{ end }}
   </section>
 
-  {{ if .PasskeysAvailable }}<section class="card settings-card" data-passkeys>
+  {{ if .PasskeysAvailable }}<section class="card" data-passkeys>
     <h2 class="card-title">Passkeys</h2>
     <p class="card-desc">A passkey signs you in with this device's own lock, such as Windows Hello, Touch ID, your phone's screen lock, or a security key.</p>
     {{ if .Passkeys }}<table class="kv-table account-methods">
@@ -117,20 +120,20 @@
     <noscript><p class="card-desc">Adding a passkey requires JavaScript.</p></noscript>
   </section>{{ end }}
 
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">Browser data</h2>
     <p class="card-desc">Your anonymous pins and preferences are kept separately. You can merge them into this account when you choose.</p>
     <div class="settings-actions"><button type="button" class="btn" data-account-import hidden>Import this browser's anonymous data</button></div>
     <noscript><p class="card-desc">Importing existing browser data and live reading synchronization require JavaScript. Account export and management work without it.</p></noscript>
   </section>
 
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">Account data</h2>
     <p class="card-desc">YAVCHN never sees a password. It keeps no GitHub access token, and it does not connect to your HN or Lobsters account.</p>
     <div class="settings-actions"><a class="btn" href="/account/export" download="yavchn-account.json">Export your account data</a></div>
   </section>
 
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">Sign-in sessions</h2>
     <p class="card-desc">You have {{ .OtherSessions }} other active sign-in sessions. Sessions expire after 30 days.</p>
     <div class="settings-actions">
@@ -147,7 +150,7 @@
     </div>
   </section>
 
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">Delete your account</h2>
     <p class="card-desc">This permanently deletes your account, synchronized data, picture, passkeys, and active sessions. Your anonymous browser data remains available.</p>
     {{ if .RecentLogin }}<div class="settings-actions"><button class="btn" type="button" commandfor="account-delete-dialog" command="show-modal">Delete my account&hellip;</button></div>
@@ -179,7 +182,7 @@
   {{ else }}
   <p class="card-desc">Sign in to keep your pinned stories, collections, notes, blocked domains, and reading progress across devices. You can keep reading without an account.</p>
   {{ if or .LoginAvailable .EmailAvailable }}
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">Sign in</h2>
     <div class="settings-actions">
       {{ if .LoginAvailable }}<form method="post" action="/auth/github">
@@ -191,7 +194,7 @@
     <p class="form-error" role="alert" data-passkey-status hidden></p>
     <p class="card-desc">GitHub sign-in shares only your public GitHub identity, with no access to your repositories.</p>
   </section>
-  {{ if .EmailAvailable }}<section class="card settings-card">
+  {{ if .EmailAvailable }}<section class="card">
     <h2 class="card-title">Sign in with an email link</h2>
     <form method="post" action="/auth/email">
       <input type="hidden" name="return_to" value="{{ .ReturnURL }}">

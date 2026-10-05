@@ -7,18 +7,18 @@
 {{ else if eq .Kind "settings" }}{{ template "settings" . }}
 {{ else if eq .Kind "privacy" }}{{ template "privacy" . }}
 {{ else if eq .Kind "terms" }}{{ template "terms" . }}
-{{/* Profiles and the lookup have no working commands; their applets, on
-     elements the layout already has, give them the identity menu every
-     window has. */}}
+{{/* Settings, the legal pages, profiles and the lookup have no working
+     commands, so they are no applets, and PUDL gives each window the
+     identity menu every window has. */}}
 {{ else if eq .Kind "profile" }}{{ template "lookupbar" .Lookup }}{{ template "profile" .Profile }}
 {{ else if eq .Kind "lookup" }}{{ template "lookupbar" .Lookup }}
-<p class="app-note lookup-note" data-applet="lookup">Enter a user name and choose the site. A commenter's name in any discussion opens their profile too.</p>
+<p class="app-note lookup-note">Enter a user name and choose the site. A commenter's name in any discussion opens their profile too.</p>
 {{ else if eq .Kind "replies" }}{{ template "repliesapp" .Replies }}
 {{ else if eq .Kind "hiring" }}{{ template "hiringapp" .Hiring }}{{ end }}
 {{ end }}
 
 {{ define "profile" }}
-<div class="app profile" data-applet="profile">
+<div class="app profile">
 {{ if .Error }}
   <div class="empty-state story-note">
     <p class="empty-state-title">{{ .Name }}</p>

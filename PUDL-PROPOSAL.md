@@ -1,5 +1,7 @@
 # Proposal: what PUDL should take over from YAVCHN
 
+PUDL 0.50.0 and 0.51.0 implemented every item below, and YAVCHN adopted both releases on 5 October 2026, deleting its patches and its own copies. The proposal is kept as the record of what was asked.
+
 This proposal is for the PUDL agent. YAVCHN wrote it on 4 October 2026, against PUDL 0.44.1. Every gap below was checked against the v0.44.1 tag that day, so please check current PUDL before implementing, in case a later release covers some of them. B3 and B7 were revised on 5 October 2026, against PUDL 0.49.0.
 
 The proposal has two parts. Part A covers four runtime features that YAVCHN has patched into its bundled copies of `pudl-regions.js` and `pudl-windows.js`. Those patches are why YAVCHN cannot simply copy a release, and why its 0.44.1 upgrade had to take files one at a time. The adoption guide asks sites to use tagged releases rather than patching PUDL, so these are the most pressing. Part B covers patterns that YAVCHN and parkscomputing.com now implement separately, in their own stylesheets and scripts, which belong in PUDL so both can drop their copies.

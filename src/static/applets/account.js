@@ -58,13 +58,8 @@
 
   window.pudlApplets.register('account', { init: function (root, opts) {
     window.yavchnAccountUI(root);
-    // A passing confirmation is a toast, raised once; the address loses its
-    // message so a reload or a bookmark does not raise it again.
-    var toast = root.querySelector('[data-account-toast]');
-    if (toast && window.pudlToast) {
-      window.pudlToast(toast.textContent, toast.dataset.accountToast ? { kind: toast.dataset.accountToast } : {});
-      toast.remove();
-    }
+    // PUDL raises the panel's toast. The address loses its message, so a
+    // reload or a bookmark does not raise it again.
     if (new URLSearchParams(location.search).has('message')) {
       var clean = new URL(location.href);
       clean.searchParams.delete('message');

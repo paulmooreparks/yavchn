@@ -390,7 +390,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.goto(new URL('?view=window&open=settings&top=settings', page.url()).href);
     await page.locator('.win[data-win="settings"] [data-settings]').waitFor();
     await page.locator('.menubar-front .menubar-title').filter({ hasText: /^Settings$/ }).click();
-    for (const name of ['Open as a page', 'Copy settings link', 'Close window']) {
+    for (const name of ['Open as a page', 'Copy link to this content', 'Close window']) {
       await page.getByRole('menuitem', { name, exact: true }).waitFor();
     }
     await page.keyboard.press('Escape');
@@ -462,7 +462,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.getByRole('menuitem', { name: 'Privacy policy', exact: true }).click();
     await page.locator('.win[data-win="privacy"] .legal h2').first().waitFor();
     await page.locator('.menubar-front .menubar-title').filter({ hasText: /^Privacy policy$/ }).click();
-    await page.getByRole('menuitem', { name: 'Copy privacy policy link', exact: true }).waitFor();
+    await page.getByRole('menuitem', { name: 'Copy link to this content', exact: true }).waitFor();
     await page.keyboard.press('Escape');
     await page.locator('.menubar-title').filter({ hasText: /^\s*YAVCHN\s*$/ }).click();
     await page.getByRole('menuitem', { name: 'About YAVCHN', exact: true }).click();

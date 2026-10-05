@@ -2,8 +2,8 @@
      each choice, each with its title, a line saying what it does, and its
      control. Every choice applies only to this browser and saves at once. */}}
 {{ define "settings" }}
-<div class="settings-panel" data-settings data-applet="settings" data-applet-page="/settings">
-  <section class="card settings-card">
+<div class="settings-panel" data-settings>
+  <section class="card">
     <h2 class="card-title">Theme</h2>
     <fieldset data-settings-js disabled>
       <legend class="visually-hidden">Theme</legend>
@@ -14,7 +14,7 @@
       </div>
     </fieldset>
   </section>
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">View</h2>
     <p class="card-desc">The view a link opens in when it does not name one. The page you are on stays open.</p>
     <form action="/settings/view" method="post" class="settings-view-form" data-saved-view="{{ .SettingsView }}">
@@ -28,7 +28,7 @@
       </fieldset>
     </form>
   </section>
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">New article windows</h2>
     <p class="card-desc">How a new reader opens. Open windows keep their placement, and a narrow screen always maximizes readers.</p>
     <form action="/settings/reader-placement" method="post" class="settings-placement-form">
@@ -41,7 +41,7 @@
       </fieldset>
     </form>
   </section>
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">Comments</h2>
     <p class="card-desc">The order a discussion opens in. Each discussion's own sort buttons change it there.</p>
     <fieldset data-settings-js disabled>
@@ -53,11 +53,11 @@
       </div>
     </fieldset>
   </section>
-  <section class="card settings-card">
+  <section class="card">
     <h2 class="card-title">Blocked domains</h2>
     <fieldset data-settings-js disabled>{{ template "domainfilters" "settings" }}</fieldset>
   </section>
-  <section class="card settings-card" id="browser-data" data-migration>
+  <section class="card" id="browser-data" data-migration>
     <h2 class="card-title">Move your browser data</h2>
     {{/* migration.js shows the half that belongs to the site the reader is
          on: saving a backup on the old domain, importing one elsewhere. */}}

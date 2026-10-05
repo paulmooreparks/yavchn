@@ -265,7 +265,7 @@ func TestRender_LegalPages(t *testing.T) {
 	_, mux := testServer(t)
 	for _, c := range []struct{ path, key, title string }{{"/privacy", "privacy", "Privacy policy"}, {"/terms", "terms", "Terms of use"}} {
 		page := get(t, mux, c.path)
-		if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `<h1 class="story-page-title">`+c.title+`</h1>`) || !strings.Contains(page.Body.String(), `data-applet="`+c.key+`"`) {
+		if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `<h1 class="story-page-title">`+c.title+`</h1>`) || !strings.Contains(page.Body.String(), `<article class="app legal">`) {
 			t.Errorf("%s page: %d", c.path, page.Code)
 		}
 		win := get(t, mux, "/window/"+c.key)

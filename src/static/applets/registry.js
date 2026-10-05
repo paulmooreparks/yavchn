@@ -26,11 +26,8 @@
   };
   var version = document.querySelector('script[data-asset-version]').getAttribute('data-asset-version');
   window.pudlApplets.define('story', {});
-  // Settings, the legal pages, the user lookup and profiles share one small
-  // script that gives each the identity menu every window has.
-  ['settings', 'privacy', 'terms', 'lookup', 'profile'].forEach(function (name) {
-    window.pudlApplets.define(name, { src: '/static/applets/identity.js?v=' + version, ver: '1' });
-  });
+  // Settings, the legal pages, the user lookup and profiles are no applets:
+  // PUDL gives their windows the identity menu every window has.
   window.pudlApplets.define('account', { src: '/static/applets/account.js?v=' + version, page: '/account?view=classic', ver: '1' });
   window.pudlApplets.define('replies', { src: '/static/applets/replies.js?v=' + version, page: '/applets/replies', ver: '1' });
   window.pudlApplets.define('hiring', { src: '/static/applets/hiring.js?v=' + version, page: '/applets/hiring', ver: '1' });

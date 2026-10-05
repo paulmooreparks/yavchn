@@ -625,6 +625,9 @@ type accountPanelVM struct {
 	Account   *accountSession
 	Message   accountMessage // what the last action reported, if anything
 	ReturnURL string
+	// OnPage is true on the Classic account page, which puts a toast in the
+	// page's toast region, and false in a window, whose content carries it.
+	OnPage bool
 	// The ways of signing in this deployment offers.
 	LoginAvailable, EmailAvailable, PasskeysAvailable bool
 	OtherSessions                                     int
@@ -640,8 +643,8 @@ type accountPanelVM struct {
 
 // panel supplies the same account content to the Classic page and PUDL window.
 func (a *accountService) panel(r *http.Request) (*accountPanelVM, error) {
-	vm := &accountPanelVM{Account: currentAccount(r), LoginAvailable: a.config.GitHub(), EmailAvailable: a.config.Email(), PasskeysAvailable: a.webauthn != nil, ReturnURL: "/account"}
-	if r.URL.Path != "/account" {
+	vm := &accountPanelVM{Account: currentAccount(r), LoginAvailable: a.config.GitHub(), EmailAvailable: a.config.Email(), PasskeysAvailable: a.webauthn != nil, ReturnURL: "/account", OnPage: r.URL.Path == "/account"}
+	if !vm.OnPage {
 		vm.ReturnURL = "/hn/?view=window&open=account&top=account"
 		if target, ok := r.Context().Value(accountReturnContextKey{}).(string); ok {
 			vm.ReturnURL = target

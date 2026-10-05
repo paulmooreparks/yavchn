@@ -105,6 +105,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     const logoutResponse = await loggedOut;
     if (logoutResponse.status() !== 303) assert.fail(await logoutResponse.text());
     await page.waitForURL(url => url.pathname === '/account' && url.searchParams.get('message') === 'signed-out');
+    await page.locator('.toast-region .toast.positive', { hasText: 'You are signed out.' }).waitFor();
     assert.equal(await page.locator('meta[name="yavchn-account"]').count(), 0);
     assert.equal(await page.evaluate(() => JSON.parse(window.yavchnStorage.getItem('yavchn-pinned'))['hn-99'].title), pin.title);
     // A quota failure must not return an older stored value after a successful edit.
@@ -125,7 +126,10 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await secondPage.waitForURL(url => url.pathname === '/hn/' && url.searchParams.get('message') === 'signed-out');
     await secondPage.locator('[data-win="account"] [data-applet="account"]').waitFor();
     assert.equal(await secondPage.locator('body').getAttribute('data-view'), 'window');
-    assert.ok(await secondPage.locator('[data-win="account"]').textContent().then(s => s.includes('You are signed out.')));
+    // The confirmation the window carried is now a toast, announced in the
+    // toast region and gone from the window.
+    await secondPage.locator('.toast-region .toast.positive', { hasText: 'You are signed out.' }).waitFor();
+    assert.equal(await secondPage.locator('[data-win="account"] .toast').count(), 0);
     assert.equal(await secondPage.locator('[data-win="reader-1"]').count(), 1);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(origin + '/account?view=window');

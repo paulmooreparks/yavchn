@@ -441,29 +441,8 @@
   }
   lib.library = { storyMenu: storyMenu, refresh: refresh, bindNotes: bindPanels };
 
-  /* A filter menu's checkbox applies at once, as on parkscomputing.com: it
-     submits the filter form, which pudl-regions.js turns into a swap of the
-     list bar. The menu that was open opens again on the new bar with focus
-     on the same box, so several boxes can be ticked in a row. */
-  var reopen = null;
-  document.addEventListener('change', function (e) {
-    var panel = e.target.closest && e.target.closest('[data-filter-menu]');
-    if (!panel || !e.target.form) return;
-    reopen = { panel: panel.id, name: e.target.name, value: e.target.value };
-    e.target.form.requestSubmit();
-  });
-  document.addEventListener('pudl:regions-swap', function () {
-    var was = reopen;
-    reopen = null;
-    // After every swap listener, library.js's own included, has rebuilt the bar.
-    if (was) requestAnimationFrame(function () {
-      var panel = document.getElementById(was.panel);
-      if (!panel || !panel.showPopover) return;
-      panel.showPopover();
-      var box = panel.querySelector('input[name="' + CSS.escape(was.name) + '"][value="' + CSS.escape(was.value) + '"]');
-      if (box) box.focus();
-    });
-  });
+  /* The filter menus are PUDL's (data-filter-menu): a ticked box sends the
+     filter form, and the menu opens again on the swapped bar. */
 
   // The words filter narrows these lists as the reader types, as in Pinned.
   var typing = 0;

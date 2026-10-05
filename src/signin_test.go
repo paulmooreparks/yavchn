@@ -390,10 +390,15 @@ func TestAccountFeedbackSitsBesideItsControl(t *testing.T) {
 	if button < 0 || notice < button || strings.Count(page, "a sign-in link is on its way") != 1 {
 		t.Fatalf("the email notice is not below its button: %d %d", button, notice)
 	}
-	// A passing confirmation is a toast for account.js to raise, not a notice.
+	// A passing confirmation is a toast, not a notice: in the toast region on
+	// the Classic page, and hidden in a window's content, where PUDL finds it.
 	page = f.request("GET", "/account?message=signed-out", "", nil, nil).Body.String()
-	if !strings.Contains(page, `<p data-account-toast="positive" hidden>You are signed out.`) {
-		t.Fatal("the sign-out confirmation is not a toast")
+	if !strings.Contains(page, `<div class="toast-region"><div class="toast positive"><p class="toast-text">You are signed out.`) || strings.Contains(page, "account-notice") {
+		t.Fatal("the sign-out confirmation is not a toast on the page")
+	}
+	page = f.request("GET", "/hn/?view=window&open=account&top=account&message=signed-out", "", nil, nil).Body.String()
+	if !strings.Contains(page, `<div class="toast positive" hidden><p class="toast-text">You are signed out.`) || strings.Contains(page, `<div class="toast-region">`) {
+		t.Fatal("the sign-out confirmation is not a hidden toast in the window")
 	}
 }
 
