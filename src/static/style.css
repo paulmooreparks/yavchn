@@ -1172,6 +1172,10 @@ kbd {
 .reader-toolbar { display: flex; flex: none; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
 .reader-toolbar[hidden] { display: none; }
 .reader-panes { flex: none; box-sizing: border-box; height: 30px; align-items: center; }
+/* The note and Next story stay together, so on a narrow reader they wrap
+   below the pane selector as one row. */
+.reader-actions { display: flex; flex: 1 0 auto; align-items: center; gap: inherit; align-self: stretch; }
+.reader-actions:not(:has(> :not([hidden]))) { display: none; }
 .reader-toolbar .story-next { margin-left: auto; white-space: nowrap; align-self: stretch; }
 .story-next[aria-disabled="true"] { opacity: .45; cursor: default; }
 .story[data-reader-pane] .story-bar-label { display: none; }
@@ -1189,9 +1193,14 @@ kbd {
 .win-bar-dock .win-tab { flex: 0 0 auto; max-width: 250px; }
 body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 @container reader (max-width: 600px) {
-  .reader-toolbar { padding: 6px; gap: 6px; }
-  .reader-panes { flex: 1; min-width: 0; display: flex; }
-  .reader-panes button { flex: 1; }
+  /* The pane selector never shrinks below its words; when the note and
+     Next story do not fit beside it, they wrap to a row of their own. */
+  .reader-toolbar { padding: 6px; gap: 6px; flex-wrap: wrap; }
+  /* The selector and each of its buttons keep their words' width, so a
+     wide font grows the selector instead of spilling past it, and a
+     wrapped row leaves the selector its own size. */
+  .reader-panes { flex: none; display: flex; }
+  .reader-panes button { flex: none; }
   .article-info, .discussion-info { padding: 10px 14px; }
   .discussion-info .story-bar-meta { flex-basis: 100%; }
   .discussion-info .story-bar-spacer { display: none; }

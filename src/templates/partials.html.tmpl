@@ -177,8 +177,10 @@
       <button type="button" data-reader-pane="discussion" aria-pressed="false">Discussion</button>
       <button type="button" data-reader-pane="split" aria-pressed="true">Split</button>
     </div>
+    <div class="reader-actions">
     <button type="button" class="btn btn-sm disclosure story-note-toggle" data-note-toggle aria-expanded="false" aria-controls="note-{{ .Key }}-{{ .StoryKey }}" hidden><span class="story-note-label">Add note</span></button>
     <a class="btn btn-sm story-next" href="{{ .PageURL }}" data-win-replace hidden>Next story</a>
+    </div>
   </div>
   <section class="story-note-panel" id="note-{{ .Key }}-{{ .StoryKey }}" data-note-panel aria-label="Your note" hidden>
     <div class="form-group">

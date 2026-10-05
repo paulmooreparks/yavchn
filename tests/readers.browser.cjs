@@ -255,6 +255,16 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.goto(process.argv[2] + '/hn/');
     await clickRow('1');
     await story('reader-1', 'hn-1');
+    // On a phone the pane buttons keep their width, and the note and Next
+    // story wrap below them instead of covering them.
+    const toolbar = await page.evaluate(() => {
+      const bar = document.querySelector('.win[data-win="reader-1"] .reader-toolbar');
+      bar.querySelectorAll('[data-note-toggle], .story-next').forEach(b => { b.hidden = false; });
+      const boxes = [...bar.querySelectorAll('.reader-panes button, [data-note-toggle], .story-next')].map(b => b.getBoundingClientRect());
+      const overlap = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+      return { overlaps: boxes.some((a, i) => boxes.some((b, j) => i < j && overlap(a, b))), inside: boxes.every(b => b.right <= bar.getBoundingClientRect().right + 0.5) };
+    });
+    assert.deepEqual(toolbar, { overlaps: false, inside: true });
     await page.locator('.md-resize').focus();
     await page.keyboard.press('End');
     assert.equal(await page.locator('.story-list').isVisible(), true);
