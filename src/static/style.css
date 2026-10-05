@@ -1267,12 +1267,27 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 .settings-panel .notice { margin-block: var(--space-3) 0; }
 .account-panel h1 { font-size: var(--text-lg); }
 
-/* The account at the far right of the top bar: Sign in, or the reader's
-   picture in a round raised pill, as on parkscomputing.com. */
-.account-pill { flex: none; margin-inline-start: auto; }
-.account-pill:has(.account-avatar) { padding: 2px; border-radius: 999px; }
+/* The account is a status item, which PUDL draws; the picture, or the
+   placeholder drawn in the bar's text colour, takes the item's 24 pixels. */
 .account-avatar { display: block; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
 .account-avatar-placeholder { color: var(--text); }
+.status-item > .account-avatar { width: 24px; height: 24px; flex: none; }
+.status-item > .account-avatar-placeholder { color: currentColor; }
+/* A stopgap until PUDL draws its status area as it draws a menu bar's
+   groups (PUDL-PROPOSAL.md, B7). In 0.49.0 the area takes the topbar's
+   chip gradient and stands 2 pixels taller than the groups beside it, and
+   its items are in the muted chrome colour, so here it takes a group's
+   surface, height and title colours, from tokens a site may read. */
+.topbar .status-area {
+  padding: 1px;
+  border-color: var(--raise-border);
+  background: var(--recess-bg);
+  box-shadow: var(--raise-shadow);
+}
+.topbar .status-item { min-height: 26px; padding-block: 0; color: var(--text); }
+.topbar .status-item:has(> img, > .account-avatar) { padding-inline: 1px; }
+.topbar .status-item:hover { color: var(--text); background: color-mix(in srgb, var(--text) 12%, transparent); }
+.topbar .status-item:active { color: var(--text); background: var(--raise-active-bg); box-shadow: var(--raise-active-shadow); }
 .account-identity { display: flex; align-items: center; gap: var(--space-4); }
 .account-identity .card-desc { margin: 0; }
 .account-identity .account-avatar { width: 72px; height: 72px; flex: none; }

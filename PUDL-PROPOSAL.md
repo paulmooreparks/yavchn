@@ -1,6 +1,6 @@
 # Proposal: what PUDL should take over from YAVCHN
 
-This proposal is for the PUDL agent. YAVCHN wrote it on 4 October 2026, against PUDL 0.44.1. Every gap below was checked against the v0.44.1 tag that day, so please check current PUDL before implementing, in case a later release covers some of them.
+This proposal is for the PUDL agent. YAVCHN wrote it on 4 October 2026, against PUDL 0.44.1. Every gap below was checked against the v0.44.1 tag that day, so please check current PUDL before implementing, in case a later release covers some of them. B3 and B7 were revised on 5 October 2026, against PUDL 0.49.0.
 
 The proposal has two parts. Part A covers four runtime features that YAVCHN has patched into its bundled copies of `pudl-regions.js` and `pudl-windows.js`. Those patches are why YAVCHN cannot simply copy a release, and why its 0.44.1 upgrade had to take files one at a time. The adoption guide asks sites to use tagged releases rather than patching PUDL, so these are the most pressing. Part B covers patterns that YAVCHN and parkscomputing.com now implement separately, in their own stylesheets and scripts, which belong in PUDL so both can drop their copies.
 
@@ -50,11 +50,20 @@ Both sites now lay out Settings, and YAVCHN its Account window, as a column of P
 
 Please add the pattern to PUDL with documented classes: the column, the card in it, and the action row. Add a reference example. YAVCHN would rename its classes to match and delete its copy.
 
-### B3. The account pill and avatar
+### B3. The account placeholder
 
-Both sites end the top bar with the same account control. A signed-out reader sees a Sign in pill. A signed-in reader sees their picture in a round raised pill, or a head-and-shoulders placeholder drawn as an SVG in the text colour. YAVCHN's styles are `.account-pill`, `.account-avatar`, and `.account-avatar-placeholder` in `style.css`, and its placeholder SVG is the `avatar` template in `src/templates/partials.html.tmpl`. Both were copied from parkscomputing.com.
+PUDL 0.48.0's status area covers most of this, and since 0.49.0 YAVCHN's account is a status item in it: the reader's picture, or the placeholder with Sign in beside it. One part is left. The head-and-shoulders placeholder is still YAVCHN's own SVG, the `avatar` template in `src/templates/partials.html.tmpl`, copied from parkscomputing.com. Please provide it as a glyph, so a status item for an account without a picture looks the same on every site.
 
-Please make this a top-bar component, with the placeholder as a glyph or a documented SVG, so its look and size stay one decision.
+### B7. The status area should match the menu bar's groups
+
+The reference says the status area is one raised group whose items press in as a menu bar's titles do, and it stands beside the menu bar's groups on the same topbar, but in 0.49.0 it is drawn differently from them. Measured on YAVCHN in Edge, light and dark themes:
+
+- The groups' surface is `--recess-bg` with `--raise-border` and `--raise-shadow`. The status area's is the topbar chip, `--tb-chip` with `--tb-border` and `--tb-chip-shadow`, a gradient that in the dark theme is clearly lighter than the groups beside it.
+- A group is 30 pixels tall, a 26-pixel title inside 1 pixel of padding and a 1-pixel border. The status area is 32, because its items are 28: a 26-pixel minimum height plus 2 pixels of padding above and below.
+- Titles are in `--text`, but status items are in `--tb-chrome-fg`, so Sign in reads greyer than the menu titles.
+- A title presses in with `--raise-active-bg` and `--raise-active-shadow`; a status item uses its own mix.
+
+Please draw `.status-area` and `.status-item` with the menu bar group's surface, height and title colours, or give both one shared set of tokens. YAVCHN carries a stopgap at the end of the account styles in `src/static/style.css` that does this from tokens a site may read, and will delete it when a release fixes the area.
 
 ### B4. A disclosure button
 
@@ -80,7 +89,7 @@ YAVCHN's browser suites already cover the behavior above and can serve as accept
 
 - `tests/readers.browser.cjs` covers reader parameters, re-keying, feed reload, and collapsed segment links.
 - `tests/library.browser.cjs` covers the filter menus that stay open, and the settings layout at phone width.
-- `tests/signin.browser.cjs` and `tests/accounts.browser.cjs` cover the account pill.
+- `tests/signin.browser.cjs` and `tests/accounts.browser.cjs` cover the account's status item, signed in and signed out, and `tests/accounts.browser.cjs` checks that it fits a phone's width.
 - `TestAccountFeedbackSitsBesideItsControl` in `src/signin_test.go` covers the toast markup; no browser test yet checks that the toast appears.
 
 When a release covers Part A, YAVCHN will replace its patched files with the release's and delete the patches. It will adopt Part B items as they ship.

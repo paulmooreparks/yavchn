@@ -291,11 +291,11 @@ func TestAccountCollectionsAndNotes(t *testing.T) {
 }
 func TestAccountTopBarAndAvatar(t *testing.T) {
 	f := accountsForTest(t)
-	if w := f.request("GET", "/hn/", "", nil, nil); !strings.Contains(w.Body.String(), `account-pill account-signin" href="/account?view=window" data-win-open="account">Sign in</a>`) {
+	if w := f.request("GET", "/hn/", "", nil, nil); !strings.Contains(w.Body.String(), `<nav class="status-area" aria-label="Status">`) || !strings.Contains(w.Body.String(), `account-signin" href="/account?view=window" data-win-open="account">`) || !strings.Contains(w.Body.String(), `<span>Sign in</span></a>`) {
 		t.Fatal("signed-out top bar lacks Sign in")
 	}
 	plain := f.login(6)
-	if w := f.request("GET", "/hn/", "", []*http.Cookie{plain}, nil); !strings.Contains(w.Body.String(), `account-avatar-placeholder`) || strings.Contains(w.Body.String(), ">Sign in</a>") {
+	if w := f.request("GET", "/hn/", "", []*http.Cookie{plain}, nil); !strings.Contains(w.Body.String(), `account-avatar-placeholder`) || strings.Contains(w.Body.String(), "Sign in</span>") {
 		t.Fatal("an account without a picture lacks the placeholder")
 	}
 	png := "\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 64)

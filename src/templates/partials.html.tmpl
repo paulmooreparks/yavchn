@@ -143,11 +143,15 @@
         {{ range .AllSources }}<a href="{{ .URL }}" data-source="{{ .Name }}"{{ if .Active }} aria-current="page"{{ end }}>{{ template "sourceicon" .Name }}<span class="source-label">{{ .Label }}</span></a>{{ end }}
       </nav>
     </div>{{ end }}
-    {{/* The account, at the far right where a site's account usually is:
-         Sign in when nobody is, and otherwise the reader's picture, which
-         opens their account. Both are raised pills, because both are pressed. */}}
-    {{ if .Account }}<a class="topbar-pill account-pill" href="/account?view={{ .View }}" data-win-open="account" aria-label="Your account ({{ .Account.Username }})" title="Your account ({{ .Account.Username }})">{{ template "avatar" .Account.AvatarURL }}</a>
-    {{ else if .SignIn }}<a class="topbar-pill account-pill account-signin" href="/account?view={{ .View }}" data-win-open="account">Sign in</a>{{ end }}
+    {{/* The account, last in PUDL's status area at the far right, where a
+         site's account usually is: the reader's picture, which opens their
+         account, or Sign in beside the placeholder when nobody is. */}}
+    {{ if or .Account .SignIn }}<div class="topbar-chrome">
+      <nav class="status-area" aria-label="Status">
+        {{ if .Account }}<a class="status-item account-status" href="/account?view={{ .View }}" data-win-open="account" aria-label="Your account ({{ .Account.Username }})" title="Your account ({{ .Account.Username }})">{{ template "avatar" .Account.AvatarURL }}</a>
+        {{ else }}<a class="status-item account-status account-signin" href="/account?view={{ .View }}" data-win-open="account">{{ template "avatar" "" }}<span>Sign in</span></a>{{ end }}
+      </nav>
+    </div>{{ end }}
   </div>
 </header>
 {{ end }}

@@ -50,7 +50,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.getByLabel('Choose a picture').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(png) });
     await page.getByRole('button', { name: 'Save picture', exact: true }).click();
     await page.waitForURL(u => u.searchParams.get('message') === 'picture-saved');
-    const src = await page.locator('.topbar .account-pill img.account-avatar').getAttribute('src');
+    const src = await page.locator('.topbar .status-area .account-status img.account-avatar').getAttribute('src');
     const sent = await page.evaluate(async src => {
       const r = await fetch(src);
       const bitmap = await createImageBitmap(await r.blob());

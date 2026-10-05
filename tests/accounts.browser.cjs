@@ -33,7 +33,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     assert.equal(imported.data.notes['hn-99'].text, 'Anonymous note');
     // Signed in without a picture, the top bar's account pill shows the placeholder.
     await page.goto(origin + '/hn/');
-    await page.locator('.topbar .account-pill .account-avatar-placeholder').waitFor();
+    await page.locator('.topbar .status-area .account-status .account-avatar-placeholder').waitFor();
     if (process.env.YAVCHN_SHOTS) await page.screenshot({ path: process.env.YAVCHN_SHOTS + '/avatar-wide.png', clip: { x: 0, y: 0, width: 1280, height: 60 } });
 
     // A backup imported while signed in points to the account's explicit import.
