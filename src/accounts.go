@@ -101,7 +101,41 @@ func migrateAccounts(db *sql.DB) error {
 			}
 		}
 	}
-	return nil
+	// Sessions once recorded the browser's user agent, which nothing read.
+	_, err := db.Exec(`UPDATE account_sessions SET agent='' WHERE agent<>''`)
+	return err
+}
+
+// sweepInterval is how often expired sign-in records are deleted. The
+// privacy policy says they go within an hour of expiring.
+const sweepInterval = 15 * time.Minute
+
+// StartSweep deletes expired sessions, sign-in flows, email links, passkey
+// ceremonies and email budgets now and every sweepInterval, so none
+// outlives its purpose, including one left by an account since deleted.
+func (a *accountService) StartSweep(ctx context.Context) {
+	go func() {
+		a.sweep(ctx)
+		t := time.NewTicker(sweepInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				a.sweep(ctx)
+			}
+		}
+	}()
+}
+
+func (a *accountService) sweep(ctx context.Context) {
+	now := time.Now().Unix()
+	for _, table := range []string{"account_sessions", "account_login_flows", "account_email_links", "account_ceremonies", "account_email_budget"} {
+		if _, err := a.server.db.ExecContext(ctx, `DELETE FROM `+table+` WHERE expires_at<=?`, now); err != nil && ctx.Err() == nil {
+			slog.Warn("account sweep", "table", table, "err", err)
+		}
+	}
 }
 
 // avatarLimit bounds the copy of a GitHub profile picture, requested at 96 pixels.
@@ -940,8 +974,124 @@ func (a *accountService) export(w http.ResponseWriter, r *http.Request) {
 		accountError(w, 401, "Sign in to export your data.")
 		return
 	}
+	x, err := a.exportOf(r.Context(), u)
+	if err != nil {
+		slog.Error("account export", "err", err)
+		accountError(w, 500, "Your data could not be exported.")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="yavchn-account.json"`)
-	a.writeData(w, u, http.StatusOK)
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(x)
+}
+
+// accountExport is everything the server keeps about an account, which
+// the privacy policy promises the export holds. Secrets that would let
+// someone sign in, the session tokens and the passkeys' keys, are left
+// out; a session is described by its dates.
+type accountExport struct {
+	ID         string                 `json:"id"`
+	CreatedAt  int64                  `json:"created_at"`
+	Identities []exportIdentity       `json:"sign_in_identities"`
+	Passkeys   []exportPasskey        `json:"passkeys"`
+	Sessions   []exportSession        `json:"sessions"`
+	Picture    string                 `json:"picture"`                 // "github", "upload" or "none"
+	PictureURI string                 `json:"picture_image,omitempty"` // the stored image as a data URI
+	Revision   int64                  `json:"revision"`
+	Data       accountDocument        `json:"data"`
+	Links      map[string]accountLink `json:"links"`
+}
+
+type exportIdentity struct {
+	Provider  string `json:"provider"`
+	Subject   string `json:"subject"`
+	Username  string `json:"username"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+}
+
+type exportPasskey struct {
+	Name      string `json:"name"`
+	CreatedAt int64  `json:"created_at"`
+	UsedAt    int64  `json:"used_at,omitempty"`
+}
+
+type exportSession struct {
+	CreatedAt int64 `json:"created_at"`
+	ExpiresAt int64 `json:"expires_at"`
+	Current   bool  `json:"current,omitempty"`
+}
+
+func (a *accountService) exportOf(ctx context.Context, u *accountSession) (*accountExport, error) {
+	db := a.server.db
+	x := &accountExport{ID: u.ID, Revision: u.Revision, Data: u.Data, Links: u.Links,
+		Identities: []exportIdentity{}, Passkeys: []exportPasskey{}, Sessions: []exportSession{}}
+	if err := db.QueryRowContext(ctx, `SELECT created_at,picture FROM accounts WHERE id=?`, u.ID).Scan(&x.CreatedAt, &x.Picture); err != nil {
+		return nil, err
+	}
+	rows, err := db.QueryContext(ctx, `SELECT provider,subject,username,avatar_url FROM account_identities WHERE account_id=? ORDER BY provider,username`, u.ID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id exportIdentity
+		if err := rows.Scan(&id.Provider, &id.Subject, &id.Username, &id.AvatarURL); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		x.Identities = append(x.Identities, id)
+	}
+	if err := closeRows(rows); err != nil {
+		return nil, err
+	}
+	if rows, err = db.QueryContext(ctx, `SELECT name,created_at,used_at FROM account_passkeys WHERE account_id=? ORDER BY created_at`, u.ID); err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var k exportPasskey
+		if err := rows.Scan(&k.Name, &k.CreatedAt, &k.UsedAt); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		x.Passkeys = append(x.Passkeys, k)
+	}
+	if err := closeRows(rows); err != nil {
+		return nil, err
+	}
+	if rows, err = db.QueryContext(ctx, `SELECT token_hash,created_at,expires_at FROM account_sessions WHERE account_id=? AND expires_at>? ORDER BY created_at`, u.ID, time.Now().Unix()); err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var s exportSession
+		var hash string
+		if err := rows.Scan(&hash, &s.CreatedAt, &s.ExpiresAt); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		s.Current = hash == u.TokenHash
+		x.Sessions = append(x.Sessions, s)
+	}
+	if err := closeRows(rows); err != nil {
+		return nil, err
+	}
+	var kind string
+	var image []byte
+	err = db.QueryRowContext(ctx, `SELECT content_type,image FROM account_avatars WHERE account_id=?`, u.ID).Scan(&kind, &image)
+	if err == nil {
+		x.PictureURI = "data:" + kind + ";base64," + base64.StdEncoding.EncodeToString(image)
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	return x, nil
+}
+
+func closeRows(rows *sql.Rows) error {
+	err := rows.Err()
+	if cerr := rows.Close(); err == nil {
+		err = cerr
+	}
+	return err
 }
 func accountETag(revision int64) string { return fmt.Sprintf(`"%d"`, revision) }
 func (a *accountService) writeData(w http.ResponseWriter, u *accountSession, status int) {

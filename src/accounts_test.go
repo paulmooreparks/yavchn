@@ -359,9 +359,33 @@ func TestAccountDeletionAndExport(t *testing.T) {
 	f := accountsForTest(t)
 	first := f.login(5)
 	u := f.session(first)
+	if _, err := f.a.server.db.Exec(`INSERT INTO account_passkeys(credential_id,account_id,name,credential,created_at,used_at)VALUES('k1',?,'Laptop','{"secret":"key"}',1,2)`, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.a.server.db.Exec(`INSERT INTO account_avatars(account_id,content_type,image,version)VALUES(?,'image/png',x'89504e47','v1')`, u.ID); err != nil {
+		t.Fatal(err)
+	}
 	w := f.request("GET", "/account/export", "", []*http.Cookie{first}, nil)
 	if w.Code != 200 || !strings.Contains(w.Header().Get("Content-Disposition"), "attachment") {
 		t.Fatal("export unavailable")
+	}
+	// The export holds everything kept about the account, as the privacy
+	// policy says, except what would let someone sign in.
+	var x accountExport
+	if err := json.Unmarshal(w.Body.Bytes(), &x); err != nil {
+		t.Fatal(err)
+	}
+	if x.ID != u.ID || x.CreatedAt == 0 || len(x.Identities) != 1 || x.Identities[0].Provider != "github" ||
+		len(x.Passkeys) != 1 || x.Passkeys[0].Name != "Laptop" || x.Passkeys[0].UsedAt != 2 ||
+		len(x.Sessions) != 1 || !x.Sessions[0].Current || x.PictureURI != "data:image/png;base64,iVBORw==" {
+		t.Fatalf("incomplete export: %s", w.Body)
+	}
+	var token, csrf string
+	if err := f.a.server.db.QueryRow(`SELECT token_hash,csrf FROM account_sessions WHERE account_id=?`, u.ID).Scan(&token, &csrf); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(w.Body.String(), `"secret"`) || strings.Contains(w.Body.String(), token) || strings.Contains(w.Body.String(), csrf) {
+		t.Fatalf("export holds sign-in secrets: %s", w.Body)
 	}
 	body := url.Values{"csrf": {u.CSRF}, "confirm": {"delete"}}.Encode()
 	if _, err := f.a.server.db.Exec(`UPDATE account_sessions SET created_at=?`, time.Now().Add(-time.Hour).Unix()); err != nil {
@@ -383,6 +407,45 @@ func TestAccountDeletionAndExport(t *testing.T) {
 		}
 	}
 }
+
+// Expired sign-in records go on the sweep, whether or not another of their
+// kind is written, and records that have not expired stay.
+func TestAccountSweepDeletesExpiredRecords(t *testing.T) {
+	f := accountsForTest(t)
+	cookie := f.login(7)
+	db := f.a.server.db
+	past, future := time.Now().Add(-time.Minute).Unix(), time.Now().Add(time.Hour).Unix()
+	for _, q := range []string{
+		`INSERT INTO account_login_flows(state_hash,verifier,return_to,expires_at)VALUES('old','v','/',?)`,
+		`INSERT INTO account_email_links(token_hash,email,link_account,return_to,expires_at)VALUES('old','a@example.com','','/',?)`,
+		`INSERT INTO account_ceremonies(token_hash,kind,account_id,session,return_to,expires_at)VALUES('old','signin','','{}','/',?)`,
+		`INSERT INTO account_email_budget(bucket,count,expires_at)VALUES('old',1,?)`,
+	} {
+		if _, err := db.Exec(q, past); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(strings.Replace(q, "'old'", "'new'", 1), future); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO account_sessions(token_hash,account_id,csrf,created_at,expires_at,agent)VALUES('old',?,'c',0,?,'')`, f.session(cookie).ID, past); err != nil {
+		t.Fatal(err)
+	}
+	f.a.sweep(context.Background())
+	for _, table := range []string{"account_sessions", "account_login_flows", "account_email_links", "account_ceremonies", "account_email_budget"} {
+		var old, kept int
+		if err := db.QueryRow(`SELECT count(*) FILTER (WHERE expires_at<=?), count(*) FILTER (WHERE expires_at>?) FROM `+table, past, past).Scan(&old, &kept); err != nil {
+			t.Fatal(err)
+		}
+		if old != 0 || kept == 0 {
+			t.Errorf("%s: %d expired rows left, %d current rows kept", table, old, kept)
+		}
+	}
+	if f.request("GET", "/account/data", "", []*http.Cookie{cookie}, nil).Code != 200 {
+		t.Fatal("the sweep ended a current session")
+	}
+}
+
 func TestAccountUnavailableAndConfiguredOrigin(t *testing.T) {
 	f := accountsForTest(t)
 	f.a.config.ClientID = ""

@@ -124,8 +124,9 @@ func (a *accountService) startSession(ctx context.Context, tx *sql.Tx, r *http.R
 	if _, err = tx.ExecContext(ctx, `DELETE FROM account_sessions WHERE expires_at<=?`, time.Now().Unix()); err != nil {
 		return "", err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO account_sessions(token_hash,account_id,csrf,created_at,expires_at,agent)VALUES(?,?,?,?,?,?)`,
-		tokenHash(session), accountID, csrf, time.Now().Unix(), time.Now().Add(30*24*time.Hour).Unix(), limitedString(r.UserAgent(), 512))
+	// The agent column stays empty: nothing reads it, so it is not collected.
+	_, err = tx.ExecContext(ctx, `INSERT INTO account_sessions(token_hash,account_id,csrf,created_at,expires_at,agent)VALUES(?,?,?,?,?,'')`,
+		tokenHash(session), accountID, csrf, time.Now().Unix(), time.Now().Add(30*24*time.Hour).Unix())
 	return session, err
 }
 

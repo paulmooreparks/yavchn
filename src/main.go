@@ -105,6 +105,7 @@ func main() {
 		slog.Error("account storage initialization failed")
 		os.Exit(1)
 	}
+	srv.accounts.StartSweep(ctx)
 	mux := http.NewServeMux()
 	srv.accounts.register(mux)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))

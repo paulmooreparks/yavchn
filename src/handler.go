@@ -778,7 +778,7 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		if errors.Is(err, errRateLimited) {
-			slog.Info("article extract rate-limited", "url", rawURL, "ip", clientIP(r))
+			slog.Info("article extract rate-limited", "url", rawURL)
 			w.Header().Set("Retry-After", "60")
 			writeFragment(w, http.StatusTooManyRequests, rateLimitedHTML(rawURL))
 			return
@@ -823,7 +823,7 @@ func (s *Server) DiscussionAPI(w http.ResponseWriter, r *http.Request) {
 	thread, err := src.StoryThread(ctx, idStr, clientIP(r))
 	if err != nil {
 		if errors.Is(err, errRateLimited) {
-			slog.Info("discussion rate-limited", "id", idStr, "source", sourceName, "ip", clientIP(r))
+			slog.Info("discussion rate-limited", "id", idStr, "source", sourceName)
 			w.Header().Set("Retry-After", "60")
 			writeFragment(w, http.StatusTooManyRequests, discussionRateLimitedFragment)
 			return

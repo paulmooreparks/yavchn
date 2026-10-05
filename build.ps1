@@ -52,6 +52,7 @@ Write-Host "Starting $container on port $hostPort ..."
 docker run -d `
     --name $container `
     --restart unless-stopped `
+    --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 `
     -p $portBinding `
     -v "${volume}:/data" `
     -e "YAVCHN_DB_PATH=$dbPath" `
