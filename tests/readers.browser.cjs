@@ -456,6 +456,20 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.getByRole('menuitem', { name: 'Close window', exact: true }).click();
     await page.waitForFunction(() => !document.querySelector('.win[data-win="replies"]'));
     assert.equal(await page.locator('.menubar-front').count(), 0);
+    // Help opens the privacy policy as a window, and the About box's link
+    // to the terms closes the box so the window it opens is in view.
+    await page.getByRole('menuitem', { name: 'Help', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Privacy policy', exact: true }).click();
+    await page.locator('.win[data-win="privacy"] .legal h2').first().waitFor();
+    await page.locator('.menubar-front .menubar-title').filter({ hasText: /^Privacy policy$/ }).click();
+    await page.getByRole('menuitem', { name: 'Copy privacy policy link', exact: true }).waitFor();
+    await page.keyboard.press('Escape');
+    await page.locator('.menubar-title').filter({ hasText: /^\s*YAVCHN\s*$/ }).click();
+    await page.getByRole('menuitem', { name: 'About YAVCHN', exact: true }).click();
+    await page.locator('#about-dialog').getByRole('link', { name: 'Terms of use', exact: true }).click();
+    await page.locator('.win[data-win="terms"] .legal').waitFor();
+    assert.equal(await page.locator('#about-dialog').evaluate(d => d.open), false);
+    assert.ok(new URL(page.url()).searchParams.get('open').split(',').includes('terms'));
     assert.deepEqual(errors, []);
     await nojs.close();
     console.log('Reader creation, per-site reuse, docking, minimization, duplicates, independent scroll positions, history, reload, list navigation and no-JS links passed.');

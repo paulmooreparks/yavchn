@@ -183,6 +183,8 @@ func testServer(t *testing.T) (*Server, *http.ServeMux) {
 	mux.HandleFunc("POST /settings/reader-placement", s.ReaderPlacementSetting)
 	mux.HandleFunc("GET /user", s.UserLookup)
 	mux.HandleFunc("GET /settings", s.appletPage("settings"))
+	mux.HandleFunc("GET /privacy", s.appletPage("privacy"))
+	mux.HandleFunc("GET /terms", s.appletPage("terms"))
 	mux.HandleFunc("GET /hn/{$}", s.SourceIndex(src, "top"))
 	mux.HandleFunc("GET /hn/s/{id}", windowRedirect("/hn/", "hn"))
 	mux.HandleFunc("GET /window/{key}", s.Window)
@@ -254,6 +256,25 @@ func TestRender_WindowFragmentAndStoryPage(t *testing.T) {
 	}
 	if rec := get(t, mux, "/pinned/"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `data-source="pinned"`) {
 		t.Errorf("pinned: %d", rec.Code)
+	}
+}
+
+// The privacy policy and the terms are each a page and a window, and the
+// Help menu and the About box link to both.
+func TestRender_LegalPages(t *testing.T) {
+	_, mux := testServer(t)
+	for _, c := range []struct{ path, key, title string }{{"/privacy", "privacy", "Privacy policy"}, {"/terms", "terms", "Terms of use"}} {
+		page := get(t, mux, c.path)
+		if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `<h1 class="story-page-title">`+c.title+`</h1>`) || !strings.Contains(page.Body.String(), `data-applet="`+c.key+`"`) {
+			t.Errorf("%s page: %d", c.path, page.Code)
+		}
+		win := get(t, mux, "/window/"+c.key)
+		if win.Code != http.StatusOK || !strings.Contains(win.Body.String(), `data-win="`+c.key+`"`) || !strings.Contains(win.Body.String(), `data-window-glyph="document"`) {
+			t.Errorf("%s window: %d", c.key, win.Code)
+		}
+		if n := strings.Count(page.Body.String(), `<a href="`+c.path+`" data-win-open="`+c.key+`">`); n < 2 {
+			t.Errorf("%s is linked %d times; the Help menu and the About box should both link it", c.path, n)
+		}
 	}
 }
 

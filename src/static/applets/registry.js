@@ -26,9 +26,9 @@
   };
   var version = document.querySelector('script[data-asset-version]').getAttribute('data-asset-version');
   window.pudlApplets.define('story', {});
-  // Settings, the user lookup and profiles share one small script that gives
-  // each the identity menu every window has.
-  ['settings', 'lookup', 'profile'].forEach(function (name) {
+  // Settings, the legal pages, the user lookup and profiles share one small
+  // script that gives each the identity menu every window has.
+  ['settings', 'privacy', 'terms', 'lookup', 'profile'].forEach(function (name) {
     window.pudlApplets.define(name, { src: '/static/applets/identity.js?v=' + version, ver: '1' });
   });
   window.pudlApplets.define('account', { src: '/static/applets/account.js?v=' + version, page: '/account?view=classic', ver: '1' });

@@ -36,6 +36,21 @@ The initial account features will synchronize pinned stories, blocked domains, a
 
 Account export, deletion, and revocation of other sessions belong in the initial account release. Window geometry will remain device-specific. Later features may include background reply notifications, saved searches, collections and notes, and saved workspaces.
 
+### Privacy policy and terms
+
+YAVCHN publishes a privacy policy at `/privacy` and terms of use at `/terms` (`src/templates/legal.html.tmpl`), drafted on 2026-10-05. Paul runs YAVCHN as an individual in Singapore. The policy is written to the GDPR's standard as well as Singapore's PDPA, because meeting both costs no more than meeting one, even though the GDPR probably does not reach a site that does not target the EU. The site sets only the cookies it needs in order to work, so it has no cookie banner.
+
+The policy describes what the code does, so the two change together. Four changes were made so that it could:
+
+- The export at `/account/export` holds everything kept about the account: its sign-in identities, passkeys by name and date, current sessions by date, the stored picture as a data URI, and the data document. It leaves out what would let someone sign in, which is the session tokens, CSRF tokens, and passkey credentials.
+- A sweep deletes expired sessions, sign-in flows, email links, passkey ceremonies, and email budgets at startup and every 15 minutes. Before it, an expired row went only when another of its kind was written, so rows left by a deleted account could stay indefinitely.
+- Sessions no longer record the browser's user agent, which nothing read. The migration blanks the agents already stored.
+- The rate-limit log lines no longer record IP addresses, and `build.ps1` caps each container's log at three files of 10 MB.
+
+The contact address on both pages is paul@parkscomputing.com (Paul, 2026-10-05), set once in the `legalcontact` template. Paul has accepted Resend's and Cloudflare's data processing agreements, which the policy relies on for data kept outside Singapore, and has turned off Cloudflare's email obfuscation so the address is served as written (2026-10-05).
+
+The policy promises that a database backup is kept for at most 30 days. Each backup is a folder under `%USERPROFILE%\yavchn-backups`, dated in its name, and `prune-backups.ps1` deletes those past the limit; Task Scheduler runs it daily, so a backup goes on time whether or not anything is deployed. The terms promise that an article's readable copy is removed promptly when its publisher asks. The reader's exclusion list (`src/takedown.go`) keeps that promise. An exclusion is one article's address, compared without its scheme, `www.`, fragment, or trailing slash, or a whole site, a host that also covers its subdomains. The reader neither fetches nor serves an excluded article, adding one deletes the cached copies it covers, and the reader shows a link to the article on its own site, without the archive link other failures offer. The server's binary manages the list, as `docker exec yavchn /yavchn takedown add|remove <address or host>` and `takedown list`, and it records only what is excluded and when, nothing about who asked.
+
 Source-site participation will continue through the existing links to HN and Lobsters. YAVCHN will not collect their passwords or session cookies, and account ownership verification is outside the initial scope.
 
 ## Beta deployment
@@ -64,7 +79,7 @@ A redirect from the original hostname remains a proposal. Browser-local pins, re
 
 The account sits at the right end of the top bar, as on parkscomputing.com. A reader who is not signed in sees a Sign in pill when the deployment offers GitHub sign-in. It opens the Account applet, where the GitHub button starts sign-in, because that form needs the token the account page issues. A signed-in reader sees their picture in a round pill that opens their account, or a head-and-shoulders placeholder when there is no picture.
 
-The picture is the reader's GitHub avatar. At each sign-in the server fetches it at 96 pixels from `avatars.githubusercontent.com`, without the provider token, and stores a copy of at most 256 KB when its bytes are PNG, JPEG, GIF, or WebP. Pages show the copy from `/account/avatar`, so a reader's browser never contacts GitHub to draw it. The copy is served only to its owner, at an address that changes with the picture, and may be kept only in a private cache. A failed fetch keeps the previous copy and never stops sign-in. Deleting the account deletes the copy. The export leaves it out, since it is GitHub's public picture and not data the reader created.
+The picture is the reader's GitHub avatar. At each sign-in the server fetches it at 96 pixels from `avatars.githubusercontent.com`, without the provider token, and stores a copy of at most 256 KB when its bytes are PNG, JPEG, GIF, or WebP. Pages show the copy from `/account/avatar`, so a reader's browser never contacts GitHub to draw it. The copy is served only to its owner, at an address that changes with the picture, and may be kept only in a private cache. A failed fetch keeps the previous copy and never stops sign-in. Deleting the account deletes the copy. The export includes whichever picture is stored, as the privacy policy promises.
 
 ## Collections and notes
 

@@ -1,0 +1,106 @@
+{{/* The privacy policy and the terms of use, each a window and a page of
+     its own like Settings. What the policy says the server keeps, and for
+     how long, is what the code does; change them together. The account
+     data is accountDocument and accountExport in accounts.go, and the
+     retention periods come from signin.go, accounts.go and extract.go. */}}
+
+{{ define "legalcontact" }}<a href="mailto:paul@parkscomputing.com">paul@parkscomputing.com</a>{{ end }}
+
+{{ define "privacy" }}
+<article class="app legal" data-applet="privacy" data-applet-page="/privacy">
+  <p class="legal-updated">Last updated 5 October 2026.</p>
+  <p>YAVCHN is a reader for Hacker News and Lobsters at yavchn.com. Paul Parks runs it as an individual in Singapore, and he decides what it does with your data. You can reach him about anything on this page at {{ template "legalcontact" }}.</p>
+  <p>YAVCHN keeps as little about you as it can. It has no advertising and no analytics, it doesn't track you across other sites, and it doesn't sell your data, and it doesn't share your data with anyone except the services listed below, which it needs in order to work.</p>
+
+  <h2>If you don't sign in</h2>
+  <p>Without an account, the server keeps nothing that identifies you. Your pins, collections, notes, hidden stories, blocked sites, reading positions and layout are stored in your own browser, and they stay there until you clear the site's data.</p>
+  <p>The server still sees each request your browser makes, as every web server does. It doesn't keep an access log. To stop any one visitor from overloading the site or the sources it reads, it counts requests by IP address in memory, and it forgets each count after a few minutes.</p>
+  <p>When you open an article, the server fetches it from the publisher and keeps a copy for 30 days so that the next reader gets it quickly. That copy isn't linked to you or to anyone else.</p>
+  <p>The server records errors in a log that is limited in size, so old entries are discarded as new ones arrive. An entry can include the address of an article that failed to load, words searched for on Hacker News, an address entered in Find, or a Hacker News or Lobsters user name being looked up. It never includes IP addresses, email addresses or account details.</p>
+
+  <h2>If you have an account</h2>
+  <p>An account lets you keep the same pins, collections, notes and settings on every device. For each account the server keeps the following.</p>
+  <ul>
+    <li>A random account number and the date the account was created.</li>
+    <li>Each way you sign in. For GitHub, that is your GitHub user number, user name and the address of your GitHub picture. For an email link, it is your email address.</li>
+    <li>Your passkeys. The server keeps each passkey's public key, the name you give it, and when it was added and last used. A passkey's private key never leaves your device.</li>
+    <li>Your profile picture, if you have one, either a copy of your GitHub picture or a picture you uploaded.</li>
+    <li>Your pins, collections, notes and blocked sites, and the reading state YAVCHN restores: where you were in each article and discussion, and the Hacker News user name you entered in Replies to me, if you used it.</li>
+    <li>A record of each browser you are signed in to: a scrambled form of its sign-in code, and when the session started and when it ends.</li>
+  </ul>
+  <p>Only you can see any of this. YAVCHN has no public profiles, and your picture is served only to you.</p>
+  <p>Hidden stories, stories you have opened, collapsed comments and layout stay in each browser, even when you are signed in.</p>
+
+  <h2>Signing in</h2>
+  <p>Signing in with GitHub asks GitHub only for your public identity: your user number, user name and picture. YAVCHN doesn't ask for access to anything else in your GitHub account, and it doesn't keep the access code GitHub returns.</p>
+  <p>Signing in with an email link sends your address to Resend, the service that delivers YAVCHN's email. The link works once and expires after 15 minutes, and the server keeps your address with it until then. To stop the sign-in form from being used to flood someone's inbox, the server counts how many links each address and each IP address has asked for in the current hour. It stores those counts against a scrambled form of the address, and deletes them within an hour of the hour ending.</p>
+  <p>The short-lived records of a sign-in in progress, for GitHub, email and passkeys, are deleted once used, or within an hour of expiring if they are never used.</p>
+
+  <h2>Cookies and browser storage</h2>
+  <p>YAVCHN sets only the cookies it needs in order to work, and none of them track you.</p>
+  <ul>
+    <li><code>__Host-yavchn-session</code> keeps you signed in, for up to 30 days.</li>
+    <li><code>__Host-yavchn-flow</code> and <code>__Host-yavchn-ceremony</code> hold a GitHub or passkey sign-in while it is in progress, for at most 10 minutes.</li>
+    <li><code>yavchn-view</code> and <code>yavchn-reader-placement</code> remember whether you prefer Windowed or Classic view and how new article windows open, for a year.</li>
+  </ul>
+  <p>Everything else YAVCHN remembers is kept in your browser's local storage, which only this site can read.</p>
+
+  <h2>Services YAVCHN uses</h2>
+  <ul>
+    <li><strong>Cloudflare</strong> carries all traffic between your browser and the server, so it handles every request, including your IP address.</li>
+    <li><strong>GitHub</strong> confirms who you are when you sign in with GitHub. The server, not your browser, fetches your GitHub picture.</li>
+    <li><strong>Resend</strong>, in the United States, delivers sign-in emails. It receives your email address and the message.</li>
+    <li><strong>Hacker News and Lobsters</strong> supply the stories, discussions and profiles. The server asks them for what you look at, search for or look up, and never sends them anything that identifies you.</li>
+    <li><strong>Publishers</strong> supply the articles. The server fetches the text without sending anything about you, but pictures inside an article load straight from the publisher's site, so the publisher sees your IP address and that you came from YAVCHN.</li>
+  </ul>
+  <p>Some of these services keep data outside Singapore. YAVCHN uses them under their standard data protection terms, which require them to protect your data to a standard comparable to Singapore's.</p>
+
+  <h2>How long data is kept</h2>
+  <p>Account data is kept until you delete the account. A session ends 30 days after you sign in, or sooner if you sign out, and the server deletes its record within an hour of it ending. Article copies are kept for 30 days.</p>
+  <p>Before an upgrade, the server's database may be backed up. A backup is kept for at most 30 days, so an account you delete can remain in a backup until it is removed.</p>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li><strong>See and download your data.</strong> Export your account data, on the Account page, downloads everything the server keeps about your account, except the passkeys' keys and the sign-in codes of your sessions, which are of no use to you.</li>
+    <li><strong>Correct it.</strong> You can change your pins, collections, notes, picture, passkeys and ways of signing in yourself, on the Account page and in the reader.</li>
+    <li><strong>Delete it.</strong> Delete the account, on the Account page, removes the account and everything kept with it at once, and signs out every browser. The copies in your own browser stay until you clear the site's data.</li>
+  </ul>
+  <p>For anything else, or to ask what YAVCHN holds about you, write to {{ template "legalcontact" }}. You'll get an answer within 30 days. If you think YAVCHN has mishandled your data, you can complain to Singapore's Personal Data Protection Commission, or to the data protection authority where you live.</p>
+
+  <h2>Security</h2>
+  <p>All traffic is encrypted. Sign-in codes are stored only in scrambled form, so a copy of the database can't be used to sign in as you. If a breach puts your data at risk, YAVCHN will tell you and the Personal Data Protection Commission as the law requires.</p>
+
+  <h2>Children</h2>
+  <p>YAVCHN isn't meant for children. Please don't create an account if you are under 13.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the date at the top changes with it. A change that affects how your account data is used will be announced on the site before it takes effect.</p>
+  <p>The <a href="/terms" data-win-open="terms">terms of use</a> cover the rest of your use of YAVCHN.</p>
+</article>
+{{ end }}
+
+{{ define "terms" }}
+<article class="app legal" data-applet="terms" data-applet-page="/terms">
+  <p class="legal-updated">Last updated 5 October 2026.</p>
+  <p>YAVCHN is a free reader for Hacker News and Lobsters at yavchn.com, run by Paul Parks in Singapore. By using it you agree to these terms. The <a href="/privacy" data-win-open="privacy">privacy policy</a> says what YAVCHN keeps about you.</p>
+
+  <h2>What YAVCHN is</h2>
+  <p>YAVCHN shows the stories and discussions that Hacker News and Lobsters publish, and readable copies of the articles they link to. It isn't affiliated with either site. The stories and comments belong to those sites and their authors, and the articles belong to their publishers. Voting, commenting and your accounts on those sites all happen on the sites themselves.</p>
+  <p>If you publish an article and want YAVCHN to stop showing its readable copy, write to {{ template "legalcontact" }} and it will be removed promptly.</p>
+
+  <h2>Your account</h2>
+  <p>An account is for one person. You are responsible for what happens through the ways you sign in, so keep your email, GitHub account and passkeys secure. You can delete your account at any time on the Account page.</p>
+  <p>Your notes, collections and picture are yours. You let YAVCHN store them and show them to you, and for nothing else. Don't upload a picture that you have no right to use or that is unlawful.</p>
+
+  <h2>Fair use</h2>
+  <p>Please don't use YAVCHN in a way that harms it or the sites it reads. That means no attacks on the server, no attempts to get around its limits or into other people's accounts, and no automated use heavy enough to burden YAVCHN, Hacker News, Lobsters or publishers. YAVCHN may limit or close an account that does these things.</p>
+
+  <h2>No warranty</h2>
+  <p>YAVCHN is provided as it is, free of charge, and without any warranty. It may be changed, interrupted or shut down at any time, and stories, articles or your data may sometimes be unavailable. Keep your own copy of anything you can't afford to lose; Export your account data on the Account page makes one.</p>
+  <p>To the extent the law allows, Paul Parks isn't liable for any loss that comes from using YAVCHN or from being unable to use it.</p>
+
+  <h2>Changes and law</h2>
+  <p>These terms may change. If they do, the date at the top changes with it, and continuing to use YAVCHN means you accept the new terms. Singapore law governs these terms.</p>
+  <p>Questions about them go to {{ template "legalcontact" }}.</p>
+</article>
+{{ end }}

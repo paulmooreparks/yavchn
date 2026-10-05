@@ -119,6 +119,8 @@ func main() {
 	mux.HandleFunc("POST /settings/view", srv.ViewSetting)
 	mux.HandleFunc("POST /settings/reader-placement", srv.ReaderPlacementSetting)
 	mux.HandleFunc("GET /settings", srv.appletPage("settings"))
+	mux.HandleFunc("GET /privacy", srv.appletPage("privacy"))
+	mux.HandleFunc("GET /terms", srv.appletPage("terms"))
 
 	// Discussion-finder: /find (empty) and /find?url=<encoded> (results).
 	mux.HandleFunc("GET /find", srv.Finder)

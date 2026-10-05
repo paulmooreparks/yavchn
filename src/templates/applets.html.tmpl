@@ -5,6 +5,8 @@
 {{ define "appbody" }}
 {{ if eq .Kind "account" }}{{ template "accountpanel" .AccountPanel }}
 {{ else if eq .Kind "settings" }}{{ template "settings" . }}
+{{ else if eq .Kind "privacy" }}{{ template "privacy" . }}
+{{ else if eq .Kind "terms" }}{{ template "terms" . }}
 {{/* Profiles and the lookup have no working commands; their applets, on
      elements the layout already has, give them the identity menu every
      window has. */}}

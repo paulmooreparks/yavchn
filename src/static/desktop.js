@@ -158,6 +158,12 @@
     }
   });
 
+  // A window opened from a dialog would open behind it, so the dialog closes.
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('dialog[open] a[data-win-open]');
+    if (a && plainClick(e)) a.closest('dialog').close();
+  });
+
   function syncCloseAll() {
     var none = !window.pudlWindows || window.pudlWindows.state().open.length === 0;
     document.querySelectorAll('[data-close-all]').forEach(function (a) {

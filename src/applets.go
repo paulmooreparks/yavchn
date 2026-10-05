@@ -156,6 +156,13 @@ func (s *Server) appletWindow(ctx context.Context, r *http.Request, key string) 
 		w.ContentSized = true
 		w.Title, w.PageURL, w.Def = "Settings", "/settings", floatingAt(0.12, 0.05, 0.48, 0.86)
 		w.App = &appVM{Kind: "settings", SettingsView: savedView(r), SettingsPlacement: savedReaderPlacement(r)}
+	case key == "privacy" || key == "terms":
+		w.IconGlyph = "document"
+		w.Title, w.PageURL, w.Def = "Privacy policy", "/privacy", floatingAt(0.14, 0.04, 0.6, 0.9)
+		if key == "terms" {
+			w.Title, w.PageURL = "Terms of use", "/terms"
+		}
+		w.App = &appVM{Kind: key}
 	case key == "replies":
 		// A watcher stands beside the reading, so it docks at the right.
 		w.Title, w.PageURL, w.Def = "Replies to me", "/applets/replies", dockedAt("right", 0.3)

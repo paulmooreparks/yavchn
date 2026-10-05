@@ -607,6 +607,25 @@ body.app-page {
   margin: 0 auto;
 }
 
+/* The privacy policy and the terms, set as a document to read: a measure
+   of about seventy characters, in a window or on a page. */
+.legal {
+  max-width: 70ch;
+  margin-inline: auto;
+  padding: var(--space-4);
+  line-height: 1.6;
+  color: var(--text);
+}
+.app-page-body > .legal { padding: 0; }
+.legal h2 {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+.legal p, .legal ul { margin: 0 0 var(--space-3); }
+.legal ul { padding-inline-start: 1.4em; }
+.legal li + li { margin-top: var(--space-1); }
+.legal-updated { color: var(--text-muted); font-size: var(--text-sm); }
+
 .app-head {
   display: flex;
   flex-wrap: wrap;

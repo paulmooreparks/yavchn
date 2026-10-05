@@ -1,9 +1,12 @@
-/* Settings, the user lookup and profiles have no working commands, but every
-   window still has its identity menu: Open as a page, Copy link and Close
-   window, as PUDL's menu-bar conventions give each applet. */
+/* Settings, the privacy policy, the terms, the user lookup and profiles
+   have no working commands, but every window still has its identity menu:
+   Open as a page, Copy link and Close window, as PUDL's menu-bar
+   conventions give each applet. */
 (function () {
   'use strict';
   [['settings', 'Settings', 'Copy settings link', '/settings'],
+    ['privacy', 'Privacy policy', 'Copy privacy policy link', '/privacy'],
+    ['terms', 'Terms of use', 'Copy terms link', '/terms'],
     ['lookup', 'Look up a user', 'Copy lookup link', '/user'],
     ['profile', 'Profile', 'Copy profile link', '']].forEach(function (a) {
     window.pudlApplets.register(a[0], { init: function (root) {
