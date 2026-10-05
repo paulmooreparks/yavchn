@@ -78,6 +78,16 @@
 
 
     function validPane(value) { return ['article', 'discussion', 'split'].indexOf(value) >= 0; }
+    /* The pane the reader last chose opens every story that has no place
+       of its own. It stays in this browser, since a phone and a desktop
+       want different panes. */
+    var PANE_KEY = 'yavchn-reader-pane';
+    function preferredPane() {
+      try { var p = localStorage.getItem(PANE_KEY); return validPane(p) ? p : ''; } catch (e) { return ''; }
+    }
+    function preferPane(mode) {
+      try { localStorage.setItem(PANE_KEY, mode); } catch (e) { /* not kept, then */ }
+    }
     function sharedPage() {
       var page = new URL(root.getAttribute('data-applet-page') || opts.pageUrl, location.href);
       if (paneMode) page.searchParams.set('pane', paneMode);
@@ -100,9 +110,10 @@
         history.replaceState(history.state, '', url);
       }
     }
-    function showPane(mode, save) {
+    function showPane(mode, save, chosen) {
       var split = root.querySelector('.story-split');
       if (!split || !validPane(mode)) return;
+      if (chosen) preferPane(mode);
       if (save && article && article.offsetHeight) positions.a = article.scrollTop;
       if (save && discussion && discussion.offsetHeight) positions.d = discussion.scrollTop;
       paneMode = mode;
@@ -167,11 +178,14 @@
       if (lib.library) lib.library.bindNotes();
       positions = { a: wanted.a, d: wanted.d };
       var urlState = opts.host === 'page' ? parseState(location.search.slice(1)) : null;
+      // A story with no article of its own shows its discussion whatever was chosen.
+      var noArticle = !d.readerUrl && !root.querySelector('.story-text');
       if (urlState && validPane(urlState.pane)) paneMode = urlState.pane;
-      else if (!paneMode && validPane(wanted.pane)) paneMode = wanted.pane;
-      if (!paneMode && d.storyKey) {
+      else if (validPane(wanted.pane)) paneMode = wanted.pane;
+      else if (d.storyKey && noArticle) paneMode = 'discussion';
+      else if (d.storyKey) {
         var width = root.getBoundingClientRect().width || window.innerWidth;
-        paneMode = !d.readerUrl && !root.querySelector('.story-text') ? 'discussion' : width <= 600 ? 'article' : 'split';
+        paneMode = preferredPane() || (width <= 600 ? 'article' : 'split');
       }
       var ratio = (urlState && urlState.ratio) || splitRatio || wanted.ratio;
       if (/^\d+(\.\d+)?$/.test(ratio) && +ratio >= 10 && +ratio <= 90) splitRatio = ratio;
@@ -179,7 +193,7 @@
       if (toolbar) toolbar.hidden = false;
       showPane(paneMode, false);
       root.querySelectorAll('[data-reader-pane]').forEach(function (b) {
-        b.addEventListener('click', function () { showPane(b.dataset.readerPane, true); }, { signal: signal });
+        b.addEventListener('click', function () { showPane(b.dataset.readerPane, true, true); }, { signal: signal });
       });
       if (d.storyKey) savePresentation(false);
 
@@ -355,7 +369,7 @@
           { label: 'Discussion', items: discussionMenu }
         ],
         into: { go: navigation, view: ['article', 'discussion', 'split'].map(function (mode) {
-          return { label: mode === 'article' ? 'Article only' : mode === 'discussion' ? 'Discussion only' : 'Article and discussion', radio: 'reader-pane', checked: paneMode === mode, run: function () { showPane(mode, true); } };
+          return { label: mode === 'article' ? 'Article only' : mode === 'discussion' ? 'Discussion only' : 'Article and discussion', radio: 'reader-pane', checked: paneMode === mode, run: function () { showPane(mode, true, true); } };
         }) }
       };
     }

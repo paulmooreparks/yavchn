@@ -202,6 +202,21 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     assert.equal(new URL(shared).searchParams.get('pane'), 'article');
     await page.evaluate(() => document.querySelector('[data-win="reader-1"] [data-reader-pane="split"]').click());
     assert.equal(await page.locator('[data-win="reader-1"] .story-discussion-body').evaluate(el => el.scrollTop), 150);
+    // The pane chosen last opens every story that has no place of its own,
+    // in a new window, in a window that moves to another story, and on a page.
+    await page.evaluate(() => document.querySelector('[data-win="reader-1"] [data-reader-pane="discussion"]').click());
+    await page.goto(process.argv[2] + '/hn/?open=reader-3&r.reader-3=hn-2');
+    await page.waitForFunction(() => document.querySelector('[data-win="reader-3"] .story[data-story-key="hn-2"]')?.dataset.readerPane === 'discussion');
+    await page.evaluate(() => document.querySelector('[data-win="reader-3"] [data-reader-pane="article"]').click());
+    await clickRow('1');
+    await story('reader-3', 'hn-1');
+    assert.equal(await page.locator('[data-win="reader-3"] .story').getAttribute('data-reader-pane'), 'article');
+    await page.evaluate(() => document.querySelector('[data-win="reader-3"] [data-reader-pane="split"]').click());
+    await page.goto(process.argv[2] + '/story/hn/2?view=classic');
+    await page.waitForFunction(() => document.querySelector('.story[data-story-key="hn-2"]')?.dataset.readerPane === 'split');
+    await page.goto(process.argv[2] + '/hn/?view=window');
+    await page.goto(process.argv[2] + '/hn/?open=reader-1,reader-2&r.reader-1=hn-1&r.reader-2=hn-1');
+    await page.waitForFunction(() => document.querySelectorAll('.discussion-content').length === 2);
     await page.locator('.sidebar-toggle').click();
     assert.equal(await page.locator('.story-list').isVisible(), false);
     assert.equal(await page.locator('.sidebar-toggle').getAttribute('aria-expanded'), 'false');
