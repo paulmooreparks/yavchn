@@ -158,6 +158,35 @@
     }
   });
 
+  /* === The story list's side ============================================
+     The reader chooses the side in the View menu or in Settings. The list
+     moves at once, PUDL's data-md-side="end" putting it at the right, and
+     the choice is saved in a cookie so the server draws it there next time.
+     Without script, each control is a form that saves it and reloads. */
+  function syncSide(side) {
+    document.querySelectorAll('[data-sidebar-side]').forEach(function (b) { b.setAttribute('aria-checked', String(side === 'end')); });
+    var next = document.querySelector('#sidebar-side-form input[name="side"]');
+    if (next) next.value = side === 'end' ? 'start' : 'end';
+    document.querySelectorAll('.settings-side-form button[name="side"]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.value === side)); });
+  }
+  function setSidebarSide(side) {
+    if (layout && layout.hasAttribute('data-md-persistent')) {
+      if (side === 'end') layout.setAttribute('data-md-side', 'end');
+      else layout.removeAttribute('data-md-side');
+    }
+    syncSide(side);
+    return fetch('/settings/sidebar-side', { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' },
+      body: new URLSearchParams({ side: side }) }).then(function (r) { if (!r.ok) throw new Error('Save failed'); });
+  }
+  window.yavchn.setSidebarSide = setSidebarSide;
+  document.addEventListener('submit', function (e) {
+    if (e.target.id !== 'sidebar-side-form') return;
+    e.preventDefault();
+    setSidebarSide(e.target.elements.side.value).catch(function () {
+      if (window.pudlToast) window.pudlToast('The story list moved, but this browser could not save the choice.', { kind: 'warn' });
+    });
+  });
+
   // A window opened from a dialog would open behind it, so the dialog closes.
   document.addEventListener('click', function (e) {
     var a = e.target.closest && e.target.closest('dialog[open] a[data-win-open]');

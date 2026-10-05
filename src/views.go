@@ -18,6 +18,47 @@ type menuContext struct {
 	WindowURL  string
 	ClassicURL string
 	StoriesURL string
+	SidebarEnd bool // the Windowed story list stands at the right, by this browser's choice
+}
+
+// savedSidebarSide is the side of the Windowed story list this browser
+// chose: "end", at the right, or "start", PUDL's default, at the left.
+func savedSidebarSide(r *http.Request) string {
+	if c, err := r.Cookie("yavchn-sidebar-side"); err == nil && c.Value == "end" {
+		return "end"
+	}
+	return "start"
+}
+
+// SidebarSideSetting changes only this browser's side for the story list.
+// A form from the View menu returns to its page; script asks for JSON and
+// moves the list itself.
+func (s *Server) SidebarSideSetting(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid settings", http.StatusBadRequest)
+		return
+	}
+	side := r.PostForm.Get("side")
+	if side != "start" && side != "end" {
+		http.Error(w, "Invalid side", http.StatusBadRequest)
+		return
+	}
+	target := r.PostForm.Get("target")
+	if target == "" {
+		target = "/settings"
+	}
+	u, err := url.Parse(target)
+	if err != nil || !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") || strings.Contains(target, "\\") || u.Host != "" || u.Scheme != "" {
+		http.Error(w, "Invalid destination", http.StatusBadRequest)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: "yavchn-sidebar-side", Value: side, Path: "/", MaxAge: 31536000, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Header.Get("Accept") == "application/json" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 func viewURL(raw, view string) string {
@@ -57,7 +98,7 @@ func savedView(r *http.Request) string {
 
 func listMenu(r *http.Request, feed bool) menuContext {
 	v := listView(r)
-	return menuContext{View: v, WindowView: v == "window", HasList: true, HasFeed: feed,
+	return menuContext{View: v, WindowView: v == "window", HasList: true, HasFeed: feed, SidebarEnd: savedSidebarSide(r) == "end",
 		Account: currentAccount(r), SignIn: currentAccount(r) == nil && signInAvailable(r), AccountURL: accountElsewhere(r),
 		WindowURL: viewURL(r.URL.RequestURI(), "window"), ClassicURL: viewURL(r.URL.RequestURI(), "classic")}
 }

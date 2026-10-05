@@ -6,7 +6,7 @@
 <body class="{{ if .WindowView }}desktop{{ else }}classic-list{{ end }}" data-view="{{ .View }}">
 {{ template "topbar" . }}
 
-<div class="md-layout"{{ if .WindowView }} data-md-persistent data-md-default-width="380"{{ end }} data-md-pane="{{ if and .WindowView .Win.Shown }}detail{{ else }}list{{ end }}">
+<div class="md-layout"{{ if .WindowView }} data-md-persistent data-md-peek data-md-default-width="380"{{ if .SidebarEnd }} data-md-side="end"{{ end }}{{ end }} data-md-pane="{{ if and .WindowView .Win.Shown }}detail{{ else }}list{{ end }}">
   <script>
     /* The list's width is the reader's, applied as the layout is parsed so
        the page never draws at the default first, and saved whenever

@@ -480,6 +480,44 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.locator('.win[data-win="terms"] .legal').waitFor();
     assert.equal(await page.locator('#about-dialog').evaluate(d => d.open), false);
     assert.ok(new URL(page.url()).searchParams.get('open').split(',').includes('terms'));
+
+    // The View menu moves the story list to the right at once, and the
+    // choice holds across a reload. Hidden, the list can be peeked at from
+    // its handle, and Settings moves it back.
+    await page.setViewportSize({ width: 1500, height: 1000 });
+    await page.goto(process.argv[2] + '/hn/?view=window&open=reader-1&r.reader-1=hn-1&top=reader-1');
+    await story('reader-1', 'hn-1');
+    const listLeft = () => page.locator('.md-sidebar').evaluate(el => el.getBoundingClientRect().left);
+    assert.ok(await listLeft() < 100);
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    const saved = page.waitForResponse(r => r.url().endsWith('/settings/sidebar-side') && r.status() === 204);
+    await page.getByRole('menuitemcheckbox', { name: 'Story list on the right', exact: true }).click();
+    await saved;
+    assert.equal(await page.locator('.md-layout').getAttribute('data-md-side'), 'end');
+    assert.ok(await listLeft() > 750);
+    await page.reload();
+    await story('reader-1', 'hn-1');
+    assert.equal(await page.locator('.md-layout').getAttribute('data-md-side'), 'end');
+    assert.ok(await listLeft() > 750);
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    assert.equal(await page.getByRole('menuitemcheckbox', { name: 'Story list on the right', exact: true }).getAttribute('aria-checked'), 'true');
+    await page.keyboard.press('Escape');
+    await page.locator('.sidebar-toggle').click();
+    await page.waitForFunction(() => document.querySelector('.md-layout').hasAttribute('data-md-collapsed'));
+    await page.locator('.md-resize').hover();
+    await page.waitForFunction(() => document.querySelector('.md-layout').hasAttribute('data-md-peek-open'));
+    assert.ok(await page.locator('.story-list').isVisible());
+    assert.ok(await page.locator('.md-layout').evaluate(el => el.hasAttribute('data-md-collapsed')));
+    await page.mouse.move(200, 500);
+    await page.waitForFunction(() => !document.querySelector('.md-layout').hasAttribute('data-md-peek-open'));
+    await page.locator('.sidebar-toggle').click();
+    await page.goto(process.argv[2] + '/hn/?view=window&open=settings&top=settings');
+    const back = page.waitForResponse(r => r.url().endsWith('/settings/sidebar-side') && r.status() === 204);
+    await page.locator('.win[data-win="settings"] .settings-side-form button[value="start"]').click();
+    await back;
+    assert.equal(await page.locator('.md-layout').getAttribute('data-md-side'), null);
+    assert.ok(await listLeft() < 100);
+    assert.equal(await page.locator('.win[data-win="settings"] .settings-side-form button[value="start"]').getAttribute('aria-pressed'), 'true');
     assert.deepEqual(errors, []);
     await nojs.close();
     console.log('Reader creation, per-site reuse, docking, minimization, duplicates, independent scroll positions, history, reload, list navigation and no-JS links passed.');

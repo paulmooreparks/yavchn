@@ -44,6 +44,14 @@
     if (button.dataset.setting === 'sort') { window.yavchn.sort.set(button.value); status(root, 'Comment order saved.'); }
   });
   document.addEventListener('submit', function (e) {
+    if (!e.target.matches('.settings-side-form') || !e.submitter) return;
+    e.preventDefault();
+    var root = e.target.closest('[data-settings]');
+    status(root, 'Saving preference…');
+    window.yavchn.setSidebarSide(e.submitter.value).then(function () { status(root, 'Story list side saved.'); },
+      function () { status(root, 'The preference could not be saved. Try again.'); });
+  });
+  document.addEventListener('submit', function (e) {
     if (!e.target.matches('.settings-view-form, .settings-placement-form')) return;
     e.preventDefault();
     if (e.submitter) saveView(e.target, e.submitter.value);

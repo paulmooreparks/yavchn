@@ -104,7 +104,8 @@
             <li><button type="submit" form="view-window-form" aria-checked="{{ .WindowView }}">Windowed</button></li>
             <li><button type="submit" form="view-classic-form" aria-checked="{{ not .WindowView }}">Classic</button></li>
             <li>-</li>
-            {{ if .WindowView }}<li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>{{ end }}
+            {{ if .WindowView }}<li><button type="button" data-focus-toggle aria-pressed="false">Hide the story list</button></li>
+            {{ if .HasList }}<li><button type="submit" form="sidebar-side-form" data-sidebar-side aria-checked="{{ .SidebarEnd }}">Story list on the right</button></li>{{ end }}{{ end }}
             <li><button type="button" commandfor="filters-dialog" command="show-modal">Blocked domains across feeds</button></li>
             <li>-</li>
             <li>Theme
@@ -277,6 +278,9 @@
 <form id="view-classic-form" action="/settings/view" method="post" hidden>
   <input type="hidden" name="view" value="classic"><input type="hidden" name="target" value="{{ .ClassicURL }}">
 </form>
+{{ if .WindowView }}<form id="sidebar-side-form" action="/settings/sidebar-side" method="post" hidden>
+  <input type="hidden" name="side" value="{{ if .SidebarEnd }}start{{ else }}end{{ end }}"><input type="hidden" name="target" value="{{ .WindowURL }}">
+</form>{{ end }}
 <dialog class="dialog wide-dialog" id="filters-dialog" aria-labelledby="filters-dialog-title">
   <h3 class="dialog-title" id="filters-dialog-title">Domain filters</h3>
   <div class="dialog-body">{{ template "domainfilters" "dialog" }}</div>

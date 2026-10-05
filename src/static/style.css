@@ -1248,6 +1248,8 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 
 .sidebar-toggle .sidebar-glyph-pane { fill: currentColor; }
 .sidebar-toggle[aria-expanded="false"] .sidebar-glyph-pane { fill: none; }
+/* The glyph draws the list on its side of the window. */
+body:has(.md-layout[data-md-side="end"]) .sidebar-toggle svg { transform: scaleX(-1); }
 
 @media (max-width: 640px) {
   :root { --yv-edge-inset: 8px; }

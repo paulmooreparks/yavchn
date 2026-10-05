@@ -8,6 +8,57 @@ import (
 	"testing"
 )
 
+// The story list's side is this browser's choice, drawn by the server, and
+// the Windowed list can always be peeked at while it is hidden.
+func TestSidebarSidePreference(t *testing.T) {
+	_, mux := testServer(t)
+	page := func(cookie string) string {
+		r := httptest.NewRequest("GET", "/hn/", nil)
+		if cookie != "" {
+			r.AddCookie(&http.Cookie{Name: "yavchn-sidebar-side", Value: cookie})
+		}
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		return w.Body.String()
+	}
+	left, right := page(""), page("end")
+	if !strings.Contains(left, `data-md-persistent data-md-peek`) || strings.Contains(left, `data-md-side`) ||
+		!strings.Contains(left, `data-sidebar-side aria-checked="false"`) || !strings.Contains(left, `name="side" value="end"`) {
+		t.Fatal("the default list is not at the left with peeking on")
+	}
+	if !strings.Contains(right, `data-md-side="end"`) || !strings.Contains(right, `data-sidebar-side aria-checked="true"`) || !strings.Contains(right, `name="side" value="start"`) {
+		t.Fatal("the chosen side is not drawn")
+	}
+	r := httptest.NewRequest("GET", "/hn/?view=classic", nil)
+	r.AddCookie(&http.Cookie{Name: "yavchn-sidebar-side", Value: "end"})
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+	if classic := w.Body.String(); strings.Contains(classic, `data-md-side`) || strings.Contains(classic, `data-md-peek`) || strings.Contains(classic, `data-sidebar-side`) {
+		t.Fatal("the Classic list has a side or a peek")
+	}
+	post := func(data url.Values, accept string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/settings/sidebar-side", strings.NewReader(data.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if accept != "" {
+			r.Header.Set("Accept", accept)
+		}
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		return w
+	}
+	if w := post(url.Values{"side": {"end"}, "target": {"/hn/?view=window"}}, ""); w.Code != 303 || w.Header().Get("Location") != "/hn/?view=window" || w.Result().Cookies()[0].Value != "end" {
+		t.Fatalf("form save: %d %v", w.Code, w.Header())
+	}
+	if w := post(url.Values{"side": {"start"}}, "application/json"); w.Code != 204 || w.Result().Cookies()[0].Value != "start" {
+		t.Fatalf("script save: %d", w.Code)
+	}
+	for _, bad := range []url.Values{{"side": {"left"}}, {"side": {"end"}, "target": {"//example.com/"}}} {
+		if w := post(bad, ""); w.Code != 400 {
+			t.Errorf("%v accepted", bad)
+		}
+	}
+}
+
 func TestViewsAndPreference(t *testing.T) {
 	_, mux := testServer(t)
 	for _, tc := range []struct {

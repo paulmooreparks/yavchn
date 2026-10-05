@@ -118,6 +118,7 @@ func main() {
 	mux.HandleFunc("GET /healthz", srv.Healthz)
 	mux.HandleFunc("POST /settings/view", srv.ViewSetting)
 	mux.HandleFunc("POST /settings/reader-placement", srv.ReaderPlacementSetting)
+	mux.HandleFunc("POST /settings/sidebar-side", srv.SidebarSideSetting)
 	mux.HandleFunc("GET /settings", srv.appletPage("settings"))
 	mux.HandleFunc("GET /privacy", srv.appletPage("privacy"))
 	mux.HandleFunc("GET /terms", srv.appletPage("terms"))

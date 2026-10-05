@@ -181,6 +181,7 @@ func testServer(t *testing.T) (*Server, *http.ServeMux) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /settings/view", s.ViewSetting)
 	mux.HandleFunc("POST /settings/reader-placement", s.ReaderPlacementSetting)
+	mux.HandleFunc("POST /settings/sidebar-side", s.SidebarSideSetting)
 	mux.HandleFunc("GET /user", s.UserLookup)
 	mux.HandleFunc("GET /settings", s.appletPage("settings"))
 	mux.HandleFunc("GET /privacy", s.appletPage("privacy"))

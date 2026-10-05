@@ -29,6 +29,20 @@
     </form>
   </section>
   <section class="card">
+    <h2 class="card-title">Story list</h2>
+    <p class="card-desc">Which side of the Windowed view the story list stands on. While it is hidden, resting the pointer on its edge shows it over the windows.</p>
+    <form action="/settings/sidebar-side" method="post" class="settings-side-form">
+      <input type="hidden" name="target" value="/settings">
+      <fieldset>
+        <legend class="visually-hidden">Story list side</legend>
+        <div class="seg">
+          <button type="submit" name="side" value="start" aria-pressed="{{ eq .SettingsSide "start" }}">Left</button>
+          <button type="submit" name="side" value="end" aria-pressed="{{ eq .SettingsSide "end" }}">Right</button>
+        </div>
+      </fieldset>
+    </form>
+  </section>
+  <section class="card">
     <h2 class="card-title">New article windows</h2>
     <p class="card-desc">How a new reader opens. Open windows keep their placement, and a narrow screen always maximizes readers.</p>
     <form action="/settings/reader-placement" method="post" class="settings-placement-form">
