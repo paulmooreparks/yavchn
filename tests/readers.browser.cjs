@@ -276,6 +276,26 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await story('reader-1', 'hn-2');
     assert.equal(await page.locator('.win.story-win').count(), 2);
     await story('reader-2', 'lobsters-2');
+    // Choosing a source while reading, on a phone, shows that source's list,
+    // whether it is another source or the one already shown.
+    assert.equal(await page.locator('.story-list').isVisible(), false);
+    await mobileSource('lobsters');
+    await page.locator('#row-lobsters-1').waitFor();
+    await page.waitForFunction(() => document.querySelector('.story-list').checkVisibility());
+    await page.locator('#row-lobsters-2 > a.md-item').click();
+    await story('reader-2', 'lobsters-2');
+    await mobileSource('hn');
+    await page.locator('#row-hn-1').waitFor();
+    await page.waitForFunction(() => document.querySelector('.story-list').checkVisibility());
+    await clickRow('2');
+    await story('reader-1', 'hn-2');
+    assert.equal(await page.locator('.story-list').isVisible(), false);
+    await page.locator('.source-switch .menu-btn').click();
+    await page.locator('.source-switch .seg-choice[aria-current="page"]').click();
+    await page.waitForFunction(() => document.querySelector('.story-list').checkVisibility());
+    assert.equal(new URL(page.url()).pathname, '/hn/');
+    await clickRow('2');
+    await story('reader-1', 'hn-2');
     // The same minimized-reader reuse applies after widening the viewport.
     await page.locator('.sidebar-toggle').click();
     await page.setViewportSize({ width: 1500, height: 1000 });

@@ -125,6 +125,19 @@
   document.addEventListener('pudl:windows-change', syncFocus);
   syncFocus();
 
+  /* On a phone, choosing a source while reading an article is a request
+     for that source's list, so the list comes back once it has loaded.
+     Waiting for the swap leaves the article in the history entry it was
+     read in. Choosing the source already shown brings the list back now,
+     since no swap follows. */
+  var listWanted = false;
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('.source-switch a[href]');
+    if (!a || !plainClick(e) || !narrowLayout() || !listHidden()) return;
+    if (a.getAttribute('aria-current') === 'page') setListHidden(false);
+    else listWanted = true;
+  });
+
   document.addEventListener('click', function (e) {
     var t = e.target.closest && e.target.closest('[data-theme-choice], [data-focus-toggle], [data-close-all]');
     if (!t) return;
@@ -191,7 +204,9 @@
     window.yavchn.readers.read(links[0].getAttribute('data-win-open'), links[0]);
   }
   document.addEventListener('pudl:regions-swap', function () {
-    if (!fromHistory) autoOpen();
+    // A list asked for on a phone stays in view, so the finder opens nothing.
+    if (listWanted) { listWanted = false; setListHidden(false); }
+    else if (!fromHistory) autoOpen();
     fromHistory = false;
   });
 
