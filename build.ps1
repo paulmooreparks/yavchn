@@ -31,6 +31,11 @@ if ($Target -eq 'Beta') {
     $publicOrigin = 'https://yavchn.com'
 }
 $dbPath    = '/data/yavchn.db'
+# Plausible Analytics counts production only, so beta testing is not counted.
+$analyticsArgs = @()
+if ($Target -eq 'Production') {
+    $analyticsArgs = @('-e', 'YAVCHN_PLAUSIBLE_SCRIPT=https://plausible.io/js/pa-6eOh4zvn9DGx7SVfxXCnu.js')
+}
 $authArgs = @()
 if ($AuthEnvFile -ne '') {
     $authPath = (Resolve-Path -LiteralPath $AuthEnvFile).Path
@@ -57,6 +62,7 @@ docker run -d `
     -v "${volume}:/data" `
     -e "YAVCHN_DB_PATH=$dbPath" `
     @authArgs `
+    @analyticsArgs `
     -e "YAVCHN_PUBLIC_ORIGIN=$publicOrigin" `
     $image
 

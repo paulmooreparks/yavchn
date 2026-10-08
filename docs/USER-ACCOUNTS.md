@@ -40,6 +40,8 @@ Account export, deletion, and revocation of other sessions belong in the initial
 
 YAVCHN publishes a privacy policy at `/privacy` and terms of use at `/terms` (`src/templates/legal.html.tmpl`), drafted on 2026-10-05. Paul runs YAVCHN as an individual in Singapore. The policy is written to the GDPR's standard as well as Singapore's PDPA, because meeting both costs no more than meeting one, even though the GDPR probably does not reach a site that does not target the EU. The site sets only the cookies it needs in order to work, so it has no cookie banner.
 
+Production counts visits with Plausible Analytics (Paul, 2026-10-08), which sets no cookies and stores no IP addresses, so it needs no banner either; the policy's Counting visits section says what it collects, from Plausible's data policy. `build.ps1` sets `YAVCHN_PLAUSIBLE_SCRIPT` for production only, and the server refuses any address that is not a Plausible script. Plausible's own script counts every `history.pushState` as a page view, and YAVCHN pushes one for each window and story, which Plausible would count again as the list's path, since it drops the query. So `static/analytics.js` turns automatic page views off and sends one when a page loads and when a region swap changes the path.
+
 The policy describes what the code does, so the two change together. Four changes were made so that it could:
 
 - The export at `/account/export` holds everything kept about the account: its sign-in identities, passkeys by name and date, current sessions by date, the stored picture as a data URI, and the data document. It leaves out what would let someone sign in, which is the session tokens, CSRF tokens, and passkey credentials.

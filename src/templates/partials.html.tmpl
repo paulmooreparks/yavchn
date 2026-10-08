@@ -6,6 +6,9 @@
 <title>{{ .Title }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+{{/* Plausible Analytics, set only on production; see the privacy policy. */}}
+{{ with analytics }}<script src="{{ asset "/static/analytics.js" }}"></script>
+<script async src="{{ . }}"></script>{{ end }}
 {{ if .Account }}
 <meta name="yavchn-account" content="{{ .Account.ID }}">
 <meta name="yavchn-csrf" content="{{ .Account.CSRF }}">

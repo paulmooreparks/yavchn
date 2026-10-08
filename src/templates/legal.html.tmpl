@@ -8,15 +8,19 @@
 
 {{ define "privacy" }}
 <article class="app legal">
-  <p class="legal-updated">Last updated 5 October 2026.</p>
+  <p class="legal-updated">Last updated 8 October 2026.</p>
   <p>YAVCHN is a reader for Hacker News and Lobsters at yavchn.com. Paul Parks runs it as an individual in Singapore, and he decides what it does with your data. You can reach him about anything on this page at {{ template "legalcontact" }}.</p>
-  <p>YAVCHN keeps as little about you as it can. It has no advertising and no analytics, it doesn't track you across other sites, and it doesn't sell your data, and it doesn't share your data with anyone except the services listed below, which it needs in order to work.</p>
+  <p>YAVCHN keeps as little about you as it can. It has no advertising, it doesn't track you across other sites, and it doesn't sell your data, and it doesn't share your data with anyone except the services listed below, which it needs in order to work.</p>
 
   <h2>If you don't sign in</h2>
   <p>Without an account, the server keeps nothing that identifies you. Your pins, collections, notes, hidden stories, blocked sites, reading positions and layout are stored in your own browser, and they stay there until you clear the site's data.</p>
   <p>The server still sees each request your browser makes, as every web server does. It doesn't keep an access log. To stop any one visitor from overloading the site or the sources it reads, it counts requests by IP address in memory, and it forgets each count after a few minutes.</p>
   <p>When you open an article, the server fetches it from the publisher and keeps a copy for 30 days so that the next reader gets it quickly. That copy isn't linked to you or to anyone else.</p>
   <p>The server records errors in a log that is limited in size, so old entries are discarded as new ones arrive. An entry can include the address of an article that failed to load, words searched for on Hacker News, an address entered in Find, or a Hacker News or Lobsters user name being looked up. It never includes IP addresses, email addresses or account details.</p>
+
+  <h2>Counting visits</h2>
+  <p>To learn how many people read YAVCHN and which parts they use, it counts visits with Plausible Analytics, whether or not you sign in. Each time you open a page or change the list you are reading, your browser tells Plausible the page's address, without the part after the question mark, and the site that sent you there. From the request Plausible also works out your country, region and city, your browser, operating system and kind of device, and how far you scrolled and how long you stayed.</p>
+  <p>Plausible sets no cookies and keeps nothing in your browser. It doesn't store your IP address. To tell one day's visitors apart, it combines your IP address and browser with a value that it changes and deletes every 24 hours, so a visitor can't be followed from one day to the next. The counts don't include your account, your pins, notes or collections, or which stories you read in a window. Plausible keeps this data in the European Union.</p>
 
   <h2>If you have an account</h2>
   <p>An account lets you keep the same pins, collections, notes and settings on every device. For each account the server keeps the following.</p>
@@ -41,7 +45,7 @@
   <ul>
     <li><code>__Host-yavchn-session</code> keeps you signed in, for up to 30 days.</li>
     <li><code>__Host-yavchn-flow</code> and <code>__Host-yavchn-ceremony</code> hold a GitHub or passkey sign-in while it is in progress, for at most 10 minutes.</li>
-    <li><code>yavchn-view</code> and <code>yavchn-reader-placement</code> remember whether you prefer Windowed or Classic view and how new article windows open, for a year.</li>
+    <li><code>yavchn-view</code>, <code>yavchn-reader-placement</code> and <code>yavchn-sidebar-side</code> remember whether you prefer Windowed or Classic view, how new article windows open and which side the story list stands on, for a year.</li>
   </ul>
   <p>Everything else YAVCHN remembers is kept in your browser's local storage, which only this site can read.</p>
 
@@ -49,6 +53,7 @@
   <ul>
     <li><strong>Cloudflare</strong> carries all traffic between your browser and the server, so it handles every request, including your IP address.</li>
     <li><strong>GitHub</strong> confirms who you are when you sign in with GitHub. The server, not your browser, fetches your GitHub picture.</li>
+    <li><strong>Plausible Analytics</strong>, in the European Union, counts visits as described above. Your browser loads its script from plausible.io and sends it each page view.</li>
     <li><strong>Resend</strong>, in the United States, delivers sign-in emails. It receives your email address and the message.</li>
     <li><strong>Hacker News and Lobsters</strong> supply the stories, discussions and profiles. The server asks them for what you look at, search for or look up, and never sends them anything that identifies you.</li>
     <li><strong>Publishers</strong> supply the articles. The server fetches the text without sending anything about you, but pictures inside an article load straight from the publisher's site, so the publisher sees your IP address and that you came from YAVCHN.</li>
