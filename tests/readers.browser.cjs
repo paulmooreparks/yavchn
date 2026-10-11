@@ -73,6 +73,23 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await clickRow('1');
     await story('reader-1', 'hn-1');
     await siteBadge('reader-1', 'hn', 'HN');
+    // The reader's pin pins the story it shows, in step with the story's
+    // row, and follows the reader to the next story.
+    const readerPin = page.locator('.win[data-win="reader-1"] [data-story-pin]');
+    const rowPin = page.locator('#row-hn-1 .story-pin');
+    assert.equal(await readerPin.getAttribute('aria-pressed'), 'false');
+    await readerPin.click();
+    assert.equal(await readerPin.getAttribute('aria-pressed'), 'true');
+    assert.equal(await readerPin.getAttribute('aria-label'), 'Unpin this story');
+    assert.equal(await rowPin.getAttribute('aria-pressed'), 'true');
+    await clickRow('2');
+    await story('reader-1', 'hn-2');
+    assert.equal(await readerPin.getAttribute('aria-pressed'), 'false');
+    await clickRow('1');
+    await story('reader-1', 'hn-1');
+    assert.equal(await readerPin.getAttribute('aria-pressed'), 'true');
+    await rowPin.click();
+    assert.equal(await readerPin.getAttribute('aria-pressed'), 'false');
     const siteTitles = () => page.locator('.menubar-menu:not(.menubar-front):not(.menubar-one) .menubar-title').allTextContents();
     assert.deepEqual((await siteTitles()).map(t => t.trim()), ['YAVCHN', 'Go', 'Applets', 'Feed', 'View', 'Window', 'Help']);
     await page.locator('.menubar-title').filter({ hasText: /^Reader$/ }).click();
@@ -259,8 +276,8 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     // story wrap below them instead of covering them.
     const toolbar = await page.evaluate(() => {
       const bar = document.querySelector('.win[data-win="reader-1"] .reader-toolbar');
-      bar.querySelectorAll('[data-note-toggle], .story-next').forEach(b => { b.hidden = false; });
-      const boxes = [...bar.querySelectorAll('.reader-panes button, [data-note-toggle], .story-next')].map(b => b.getBoundingClientRect());
+      bar.querySelectorAll('[data-note-toggle], [data-story-pin], .story-next').forEach(b => { b.hidden = false; });
+      const boxes = [...bar.querySelectorAll('.reader-panes button, [data-note-toggle], [data-story-pin], .story-next')].map(b => b.getBoundingClientRect());
       const overlap = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
       return { overlaps: boxes.some((a, i) => boxes.some((b, j) => i < j && overlap(a, b))), inside: boxes.every(b => b.right <= bar.getBoundingClientRect().right + 0.5) };
     });

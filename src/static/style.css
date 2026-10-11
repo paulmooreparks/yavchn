@@ -1292,6 +1292,18 @@ img.account-avatar { border-radius: 50%; }
 }
 .note-mark { margin-inline-end: 5px; }
 .story-note-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+/* The reader's pin is a square toggle beside the note, as tall as it, with
+   the row's pin glyph; a pinned story's latches in and its glyph fills. */
+.story-pin-toggle { --yv-glyph: var(--yv-glyph-pin); padding-inline: 4px; justify-content: center; }
+.story-pin-toggle[hidden] { display: none; }
+/* The glyph's box is 16 pixels, as Add note's chevron is, so with the same
+   padding on every side the pin is a square as tall as Add note. */
+.story-pin-toggle::before {
+  content: ""; width: 16px; height: 16px; background: currentColor;
+  -webkit-mask: var(--yv-glyph) center / 14px no-repeat;
+  mask: var(--yv-glyph) center / 14px no-repeat;
+}
+.story-pin-toggle[aria-pressed="true"] { --yv-glyph: var(--yv-glyph-pinned); color: var(--accent); }
 .story-note-toggle[hidden] { display: none; }
 .story-note-panel { flex: none; padding: 8px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
 .story-note-panel[hidden] { display: none; }
