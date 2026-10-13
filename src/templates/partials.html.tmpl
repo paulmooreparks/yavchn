@@ -184,7 +184,11 @@
     <div class="reader-actions">
     <button type="button" class="btn btn-sm disclosure story-note-toggle" data-note-toggle aria-expanded="false" aria-controls="note-{{ .Key }}-{{ .StoryKey }}" hidden><span class="story-note-label">Add note</span></button>
     <button type="button" class="btn btn-sm story-pin-toggle" data-story-pin aria-pressed="false" aria-label="Pin this story" title="Pin this story" hidden></button>
-    <a class="btn btn-sm story-next" href="{{ .PageURL }}" data-win-replace hidden>Next story</a>
+    <span class="reader-end">
+      {{ if .HasArticle }}<a href="{{ .URL }}" target="_blank" rel="noopener">Open original</a>
+      <button type="button" class="btn btn-sm reader-icon-btn story-refresh" aria-label="Refresh the article" title="Refresh the article"></button>{{ end }}
+      <a class="btn btn-sm story-next" href="{{ .PageURL }}" data-win-replace hidden>Next story</a>
+    </span>
     </div>
   </div>
   <section class="story-note-panel" id="note-{{ .Key }}-{{ .StoryKey }}" data-note-panel aria-label="Your note" hidden>
@@ -201,10 +205,9 @@
         <span class="story-bar-label">{{ if .IsComment }}Comment{{ else }}Article{{ end }}</span>
         {{ if not .IsComment }}<span class="story-bar-meta">{{ .Host }}</span>{{ end }}
         <span class="story-bar-spacer"></span>
-        {{ if .HasArticle }}
-        <a href="{{ .URL }}" target="_blank" rel="noopener">Open original</a>
-        <button type="button" class="icon-btn story-refresh" aria-label="Refresh the article"></button>
-        {{ end }}
+        {{/* With script, the toolbar above offers Open original and the
+             refresh; without it the toolbar is hidden, so the link is here. */}}
+        {{ if .HasArticle }}<noscript><a href="{{ .URL }}" target="_blank" rel="noopener">Open original</a></noscript>{{ end }}
       </div>
       <div class="story-article-content">
         {{ if .HasArticle }}
