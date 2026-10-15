@@ -240,7 +240,8 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     const divider = page.locator('.md-resize');
     assert.equal(await divider.isVisible(), true);
     assert.equal(await page.locator('.md-sidebar').evaluate(el => el.inert), true);
-    assert.equal((await divider.boundingBox()).width, 24);
+    // PUDL's persistent divider, 12px for a fine pointer since 0.54.0.
+    assert.equal((await divider.boundingBox()).width, 12);
     await divider.focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('.story-list').isVisible(), true);

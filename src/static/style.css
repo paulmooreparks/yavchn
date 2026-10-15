@@ -1250,6 +1250,11 @@ body:has(.md-layout[data-md-side="end"]) .sidebar-toggle svg { transform: scaleX
 
 /* PUDL owns persistent divider geometry and interaction. */
 .md-layout[data-md-persistent] > .md-body > .md-resize { background: var(--surface-alt); }
+/* A stopgap until PUDL clips it (reported 2026-10-15, against 0.62.0): the
+   handle is 12px since 0.54.0 but its grip is drawn 16px wide, and on a
+   phone the handle stands at the right edge, so the 2px past it scroll the
+   page sideways. Clipping shows the grip's middle column, as PUDL means. */
+.md-layout[data-md-persistent] > .md-body > .md-resize { overflow: hidden; }
 
 .stories-button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .stories-button svg { width: 16px; height: 16px; flex: none; }

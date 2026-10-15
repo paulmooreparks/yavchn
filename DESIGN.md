@@ -158,7 +158,7 @@ New article windows default to floating. Settings offers Floating and Maximized 
 
 ## PUDL 0.43.0 persistent sidebar
 
-Windowed layouts use PUDL's persistent master-detail handle, including its default 24px target, keyboard controls, focus transfer, and canceled-drag rollback. The former separate reopen rail and host drag handlers are removed. Requested width and desktop collapse retain their existing browser preferences. Narrow pane requests go through the existing window-manager policy and URL state; PUDL's sidebar does not independently change the pane. Classic view keeps its full-width list.
+Windowed layouts use PUDL's persistent master-detail handle, including its default target (12px for a fine pointer and 20px for a finger since PUDL 0.54.0), keyboard controls, focus transfer, and canceled-drag rollback. The former separate reopen rail and host drag handlers are removed. Requested width and desktop collapse retain their existing browser preferences. Narrow pane requests go through the existing window-manager policy and URL state; PUDL's sidebar does not independently change the pane. Classic view keeps its full-width list.
 
 The browsing-view selector remains visible at phone widths. Classic articles place a Stories button with the sidebar glyph in the topbar. The separate article navigation row and Open in a window command are removed; selecting Windowed opens the current article in the window workspace and saves that browsing preference.
 
