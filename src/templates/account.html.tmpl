@@ -162,7 +162,7 @@
         <input type="hidden" name="csrf" value="{{ .Account.CSRF }}">
         <input type="hidden" name="confirm" value="delete">
         <button class="btn" type="button" commandfor="account-delete-dialog" command="close">Keep my account</button>
-        <button class="btn btn-danger" type="submit"><span class="glyph" style="--glyph: var(--glyph-warning)" aria-hidden="true"></span> Delete my account</button>
+        <button class="btn btn-danger" type="submit">Delete my account</button>
       </form>
     </dialog>{{ else }}<p class="card-desc">Sign in again to confirm it is you, then delete the account.</p>
     <div class="settings-actions">
