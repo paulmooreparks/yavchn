@@ -36,11 +36,12 @@
      stay alive. The first choice still opens the reader normally. */
   document.addEventListener('click', function (e) {
     if (!window.yavchn.plainClick(e) || !window.yavchn.readers) return;
-    var link = e.target.closest && e.target.closest('.story-list a[data-win-open], .story-next[data-win-open]');
+    var link = e.target.closest && e.target.closest('.story-list a[data-win-open], .story-step[data-win-open]');
     if (!link) return;
-    if (link.matches('.story-next')) syncNext(link);
+    var step = link.matches('.story-step');
+    if (step) syncStep(link);
     var key = link.getAttribute('data-win-open');
-    if (!key || !window.yavchn.readers.read(key, link, link.matches('.story-next') ? link.closest('.win') : null)) return;
+    if (!key || !window.yavchn.readers.read(key, link, step ? link.closest('.win') : null)) return;
     e.preventDefault();
   }, true);
 
@@ -57,54 +58,65 @@
     if (current && current !== focused()) mark(current, true);
   });
 
-  /* === Next story =======================================================
-     A story window's Next link loads the story after it into the running
-     applet, so the reader can go down a list in one instance, and Back
-     steps back up it. The list decides what is next: the following row
-     that is not hidden or filtered out, even with the list itself hidden. */
-  function nextLink(key) {
+  /* === Previous and next story ==========================================
+     A story window's Previous and Next links load the story before or
+     after it into the running applet, so the reader can go up and down a
+     list in one instance, and Back retraces the way. The list decides
+     which: the neighbouring row that is not hidden or filtered out, even
+     with the list itself hidden. */
+  function neighbour(key, step) {
     var list = Array.prototype.slice.call(document.querySelectorAll('.story-list .story-row:not(.dismissed):not(.filtered)'));
     var i = list.findIndex(function (r) { return r.dataset.key === key; });
-    return i >= 0 && list[i + 1] ? list[i + 1].querySelector('a[data-win-open]') : null;
+    return i >= 0 && list[i + step] ? list[i + step].querySelector('a[data-win-open]') : null;
   }
 
-  function syncNext(a) {
+  function syncStep(a) {
+    var forward = !a.matches('.story-prev');
+    var words = forward ? 'Next story' : 'Previous story';
     var story = a.closest('.story');
-    var next = story && a.closest('.win') ? nextLink(story.dataset.storyKey) : null;
+    var to = story && a.closest('.win') ? neighbour(story.dataset.storyKey, forward ? 1 : -1) : null;
     a.hidden = !a.closest('.win');
-    a.setAttribute('aria-disabled', String(!next));
-    if (!next) { a.removeAttribute('data-win-open'); a.removeAttribute('href'); a.setAttribute('aria-label', 'Next story'); return; }
-    a.setAttribute('data-win-open', next.getAttribute('data-win-open'));
-    a.setAttribute('href', next.getAttribute('href'));
-    a.setAttribute('aria-label', 'Next story: ' + next.firstChild.textContent.trim());
+    a.setAttribute('aria-disabled', String(!to));
+    if (!to) {
+      a.removeAttribute('data-win-open'); a.removeAttribute('href');
+      a.setAttribute('aria-label', words);
+      a.title = forward ? 'Next story: this is the last in the list' : 'Previous story: this is the first in the list';
+      return;
+    }
+    a.setAttribute('data-win-open', to.getAttribute('data-win-open'));
+    a.setAttribute('href', to.getAttribute('href'));
+    a.setAttribute('aria-label', words + ': ' + to.firstChild.textContent.trim());
+    a.title = a.getAttribute('aria-label') + (forward ? ' (])' : ' ([)');
   }
 
-  function syncAllNext() { document.querySelectorAll('.story-next').forEach(syncNext); }
-  window.yavchn.onList(syncAllNext);
+  function syncAllSteps() { document.querySelectorAll('.story-step').forEach(syncStep); }
+  window.yavchn.onList(syncAllSteps);
   ['yavchn:rows-appended', 'yavchn:list-change', 'yavchn:story-change', 'pudl:window-open', 'pudl:windows-change'].forEach(function (name) {
-    document.addEventListener(name, syncAllNext);
+    document.addEventListener(name, syncAllSteps);
   });
   /* Rows hide and pins change between those events, so the link is set
      again just before pudl-windows.js reads it. */
   document.addEventListener('click', function (e) {
-    var a = e.target.closest && e.target.closest('.story-next');
-    if (a) syncNext(a);
-    else if (e.target.closest && e.target.closest('.story-hide, .story-show-hidden')) setTimeout(syncAllNext, 0);
+    var a = e.target.closest && e.target.closest('.story-step');
+    if (a) syncStep(a);
+    else if (e.target.closest && e.target.closest('.story-hide, .story-show-hidden')) setTimeout(syncAllSteps, 0);
   }, true);
 
-  /* The Next link of a window, current, or null when nothing follows it. */
-  function nextStory(win) {
-    var a = win && win.querySelector('.story-next');
-    if (a) syncNext(a);
+  /* A window's Next or Previous link, current, or null when no story lies
+     that way. */
+  function stepLink(win, forward) {
+    var a = win && win.querySelector(forward ? '.story-next' : '.story-prev');
+    if (a) syncStep(a);
     return a && !a.hidden && a.getAttribute('aria-disabled') !== 'true' ? a : null;
   }
-  window.yavchn.nextStory = nextStory;
+  window.yavchn.nextStory = function (win) { return stepLink(win, true); };
+  window.yavchn.previousStory = function (win) { return stepLink(win, false); };
 
   document.addEventListener('keydown', function (e) {
     if (!window.yavchn.plainKey(e)) return;
-    if (e.key === ']') {
-      var next = nextStory(document.querySelector('.win.active:not([hidden])'));
-      if (next) { e.preventDefault(); next.click(); }
+    if (e.key === ']' || e.key === '[') {
+      var to = stepLink(document.querySelector('.win.active:not([hidden])'), e.key === ']');
+      if (to) { e.preventDefault(); to.click(); }
       return;
     }
     var list = rows();

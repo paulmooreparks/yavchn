@@ -75,21 +75,45 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await siteBadge('reader-1', 'hn', 'HN');
     // The reader's pin pins the story it shows, in step with the story's
     // row, and follows the reader to the next story.
+    // PUDL draws the pin from the story applet's pin command, on the next
+    // frame after a change, so each check waits for the redraw.
     const readerPin = page.locator('.win[data-win="reader-1"] [data-story-pin]');
     const rowPin = page.locator('#row-hn-1 .story-pin');
-    assert.equal(await readerPin.getAttribute('aria-pressed'), 'false');
+    const pinIs = async pressed => page.waitForFunction(p => document.querySelector('.win[data-win="reader-1"] [data-story-pin]')?.getAttribute('aria-pressed') === p, pressed);
+    await pinIs('false');
     await readerPin.click();
-    assert.equal(await readerPin.getAttribute('aria-pressed'), 'true');
+    await pinIs('true');
     assert.equal(await readerPin.getAttribute('aria-label'), 'Unpin this story');
     assert.equal(await rowPin.getAttribute('aria-pressed'), 'true');
     await clickRow('2');
     await story('reader-1', 'hn-2');
-    assert.equal(await readerPin.getAttribute('aria-pressed'), 'false');
+    await pinIs('false');
     await clickRow('1');
     await story('reader-1', 'hn-1');
-    assert.equal(await readerPin.getAttribute('aria-pressed'), 'true');
+    await pinIs('true');
     await rowPin.click();
-    assert.equal(await readerPin.getAttribute('aria-pressed'), 'false');
+    await pinIs('false');
+    // Previous and Next step up and down the list in the same reader, by
+    // their links or by [ and ], and Previous is disabled on the first row.
+    const prev = page.locator('.win[data-win="reader-1"] .story-prev');
+    assert.equal(await prev.getAttribute('aria-disabled'), 'true');
+    assert.match(await page.locator('.win[data-win="reader-1"] .story-next').getAttribute('aria-label'), /^Next story: /);
+    await page.locator('.win[data-win="reader-1"] .story-next').click();
+    await story('reader-1', 'hn-2');
+    assert.match(await prev.getAttribute('aria-label'), /^Previous story: /);
+    await prev.click();
+    await story('reader-1', 'hn-1');
+    await page.keyboard.press(']');
+    await story('reader-1', 'hn-2');
+    await page.keyboard.press('[');
+    await story('reader-1', 'hn-1');
+    assert.equal(await page.locator('.win.story-win').count(), 1);
+    // The story's commands are data an agent can read: the pane choice, the
+    // pin and the refresh among them, with their state.
+    const commands = await page.evaluate(() => window.pudlCommands.list(document.querySelector('.win[data-win="reader-1"] .story')));
+    const byId = Object.fromEntries(commands.map(c => [c.id, c]));
+    assert.ok(byId['pane-split'] && byId['pane-split'].choice === 'pane' && byId.pin && byId.refresh && byId['next-comment'], JSON.stringify(commands));
+    assert.equal(byId.pin.shown, 'toolbar');
     const siteTitles = () => page.locator('.menubar-menu:not(.menubar-front):not(.menubar-one) .menubar-title').allTextContents();
     assert.deepEqual((await siteTitles()).map(t => t.trim()), ['YAVCHN', 'Go', 'Applets', 'Feed', 'View', 'Window', 'Help']);
     await page.locator('.menubar-title').filter({ hasText: /^Reader$/ }).click();
@@ -198,7 +222,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.goto(process.argv[2] + '/hn/?open=reader-1,reader-2&r.reader-1=hn-1&r.reader-2=hn-1');
     await page.waitForFunction(() => document.querySelectorAll('.discussion-content').length === 2);
     await page.evaluate(() => {
-      document.querySelectorAll('[data-reader-pane="split"]').forEach(b => b.click());
+      document.querySelectorAll('[data-command="pane-split"]').forEach(b => b.click());
       document.querySelector('[data-win="reader-1"] .story-discussion-body').scrollTop = 150;
       document.querySelector('[data-win="reader-2"] .story-discussion-body').scrollTop = 450;
     });
@@ -211,24 +235,24 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     // Pane selection belongs to a reader and preserves both scroll positions.
     await page.evaluate(() => {
       const r = document.querySelector('[data-win="reader-1"]');
-      r.querySelector('[data-reader-pane="article"]').click();
+      r.querySelector('[data-command="pane-article"]').click();
     });
     assert.equal(await page.locator('[data-win="reader-1"] .story-discussion').isVisible(), false);
     assert.equal(await page.locator('[data-win="reader-2"] .story').getAttribute('data-reader-pane'), 'split');
     const shared = await page.evaluate(() => window.pudlWindows.shareURL('reader-1'));
     assert.equal(new URL(shared).searchParams.get('pane'), 'article');
-    await page.evaluate(() => document.querySelector('[data-win="reader-1"] [data-reader-pane="split"]').click());
+    await page.evaluate(() => document.querySelector('[data-win="reader-1"] [data-command="pane-split"]').click());
     assert.equal(await page.locator('[data-win="reader-1"] .story-discussion-body').evaluate(el => el.scrollTop), 150);
     // The pane chosen last opens every story that has no place of its own,
     // in a new window, in a window that moves to another story, and on a page.
-    await page.evaluate(() => document.querySelector('[data-win="reader-1"] [data-reader-pane="discussion"]').click());
+    await page.evaluate(() => document.querySelector('[data-win="reader-1"] [data-command="pane-discussion"]').click());
     await page.goto(process.argv[2] + '/hn/?open=reader-3&r.reader-3=hn-2');
     await page.waitForFunction(() => document.querySelector('[data-win="reader-3"] .story[data-story-key="hn-2"]')?.dataset.readerPane === 'discussion');
-    await page.evaluate(() => document.querySelector('[data-win="reader-3"] [data-reader-pane="article"]').click());
+    await page.evaluate(() => document.querySelector('[data-win="reader-3"] [data-command="pane-article"]').click());
     await clickRow('1');
     await story('reader-3', 'hn-1');
     assert.equal(await page.locator('[data-win="reader-3"] .story').getAttribute('data-reader-pane'), 'article');
-    await page.evaluate(() => document.querySelector('[data-win="reader-3"] [data-reader-pane="split"]').click());
+    await page.evaluate(() => document.querySelector('[data-win="reader-3"] [data-command="pane-split"]').click());
     await page.goto(process.argv[2] + '/story/hn/2?view=classic');
     await page.waitForFunction(() => document.querySelector('.story[data-story-key="hn-2"]')?.dataset.readerPane === 'split');
     await page.goto(process.argv[2] + '/hn/?view=window');
@@ -277,7 +301,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     // story wrap below them instead of covering them.
     const toolbar = await page.evaluate(() => {
       const bar = document.querySelector('.win[data-win="reader-1"] .reader-toolbar');
-      bar.querySelectorAll('[data-note-toggle], [data-story-pin], .story-next').forEach(b => { b.hidden = false; });
+      bar.querySelectorAll('[data-note-toggle], [data-story-pin], .story-step').forEach(b => { b.hidden = false; });
       const boxes = [...bar.querySelectorAll('.reader-panes button, [data-note-toggle], [data-story-pin], .reader-end > a, .story-refresh')].map(b => b.getBoundingClientRect());
       const overlap = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
       return { overlaps: boxes.some((a, i) => boxes.some((b, j) => i < j && overlap(a, b))), inside: boxes.every(b => b.right <= bar.getBoundingClientRect().right + 0.5) };

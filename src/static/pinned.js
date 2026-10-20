@@ -69,15 +69,9 @@
         btn.title = btn.getAttribute('aria-label');
       }
     });
-    // The reader toolbar's pin, for the story its reader shows. It needs
-    // script, so it stays hidden until this runs.
-    document.querySelectorAll('.story[data-story-id] [data-story-pin]').forEach(function (btn) {
-      var pinned = !!store[btn.closest('.story').dataset.storyId];
-      btn.hidden = false;
-      btn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
-      btn.setAttribute('aria-label', pinned ? 'Unpin this story' : 'Pin this story');
-      btn.title = btn.getAttribute('aria-label');
-    });
+    // The reader toolbar's pin is the story applet's pin command, which
+    // PUDL redraws from the store.
+    if (window.pudlCommands) window.pudlCommands.changed();
     var count = Object.keys(store).length;
     document.querySelectorAll('.list-tabs a[href^="/pinned/"]').forEach(function (a) {
       a.textContent = count > 0 ? 'Pinned (' + count + ')' : 'Pinned';
@@ -227,13 +221,9 @@
 
   document.addEventListener('click', function (e) {
     var btn = e.target.closest && e.target.closest('.story-row .story-pin');
-    if (btn) {
-      e.preventDefault();
-      toggleRow(btn.closest('.story-row'));
-      return;
-    }
-    var toolbarPin = e.target.closest && e.target.closest('.story[data-story-id] [data-story-pin]');
-    if (toolbarPin) toggleStory(toolbarPin.closest('.story'));
+    if (!btn) return;
+    e.preventDefault();
+    toggleRow(btn.closest('.story-row'));
   });
   // A reader that opens, or moves to another story, shows that story's pin.
   document.addEventListener('pudl:window-open', applyState);

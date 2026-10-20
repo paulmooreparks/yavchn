@@ -120,12 +120,13 @@
       root.dataset.readerPane = mode;
       var hiddenPane = split.querySelector(mode === 'article' ? '.story-discussion' : '.story-article');
       if (mode !== 'split' && hiddenPane.contains(document.activeElement)) {
-        root.querySelector('[data-reader-pane="' + mode + '"]').focus();
+        var chosenButton = root.querySelector('[data-command="pane-' + mode + '"]');
+        if (chosenButton) chosenButton.focus();
       }
       if (mode === 'split') delete split.dataset.splitPane;
       else split.dataset.splitPane = mode === 'article' ? 'first' : 'second';
       if (splitRatio) split.style.setProperty('--split-a', splitRatio + '%');
-      root.querySelectorAll('[data-reader-pane]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.readerPane === mode)); });
+      if (opts.commandsChanged) opts.commandsChanged();
       if (article && mode !== 'discussion') article.scrollTop = positions.a;
       if (discussion && mode !== 'article') discussion.scrollTop = positions.d;
       if (mode === 'split' && window.pudlSplit) window.pudlSplit.refresh();
@@ -147,19 +148,22 @@
       return '/api/article?' + (refresh ? 'refresh=1&' : '') + 'url=' + encodeURIComponent(d.readerUrl);
     }
 
+    /* The refresh command is disabled while an article is fetched again, and
+       its button turns its glyph meanwhile. */
+    var refreshing = false;
     function refresh() {
-      if (!refreshBtn || !article || !d.readerUrl || refreshBtn.disabled) return;
-      var button = refreshBtn;
+      if (!article || !d.readerUrl || refreshing) return;
       var body = root.querySelector('.story-article-content');
       positions.a = 0;
       article.scrollTop = 0;
       var signal = contentCtl.signal;
-      button.disabled = true;
-      button.setAttribute('aria-busy', 'true');
-      fill(body, articleSrc(true), signal).then(function () {
-        if (signal.aborted) return;
-        button.disabled = false;
-        button.removeAttribute('aria-busy');
+      refreshing = true;
+      if (refreshBtn) refreshBtn.setAttribute('aria-busy', 'true');
+      if (opts.commandsChanged) opts.commandsChanged();
+      return fill(body, articleSrc(true), signal).then(function () {
+        refreshing = false;
+        if (refreshBtn) refreshBtn.removeAttribute('aria-busy');
+        if (opts.commandsChanged) opts.commandsChanged();
       });
     }
 
@@ -191,10 +195,8 @@
       if (/^\d+(\.\d+)?$/.test(ratio) && +ratio >= 10 && +ratio <= 90) splitRatio = ratio;
       var toolbar = root.querySelector('.reader-toolbar');
       if (toolbar) toolbar.hidden = false;
+      refreshing = false;
       showPane(paneMode, false);
-      root.querySelectorAll('[data-reader-pane]').forEach(function (b) {
-        b.addEventListener('click', function () { showPane(b.dataset.readerPane, true, true); }, { signal: signal });
-      });
       if (d.storyKey) savePresentation(false);
 
       if (article && d.readerUrl) {
@@ -218,7 +220,6 @@
       [article, discussion].forEach(function (el) {
         if (el) el.addEventListener('scroll', changedSoon, { passive: true, signal: signal });
       });
-      if (refreshBtn) refreshBtn.addEventListener('click', refresh, { signal: signal });
     }
 
     function rememberedState() {
@@ -321,56 +322,79 @@
 
     function win() { return root.closest('.win'); }
 
+    /* The reader's commands, declared once with PUDL's command table: the
+       toolbar's pane selector, pin and refresh are drawn from them, and the
+       menus below list them by id, so a command's words, state and reason
+       are the same wherever it appears, and an agent can list and run them
+       (pudlCommands.list and run). Every field is read when it is drawn. */
+    var noStory = function () { return !d.storyKey; };
+    var noComments = function () { return !root.querySelector('.discussion-content .comment'); };
+    var original = function () { return d.readerUrl || ''; };
+    var sourceLink = function () { return root.querySelector('.story-discussion .story-bar a[target="_blank"]'); };
+    var nextLink = function () { return win() && lib.nextStory ? lib.nextStory(win()) : null; };
+    var previousLink = function () { return win() && lib.previousStory ? lib.previousStory(win()) : null; };
+    function pane(mode, label) {
+      return { id: 'pane-' + mode, label: label, choice: 'pane', choiceLabel: 'Reader panes', hidden: noStory,
+        checked: function () { return paneMode === mode; }, run: function () { showPane(mode, true, true); } };
+    }
+    function sortBy(mode, label) {
+      return { id: 'sort-' + mode, label: label, choice: 'sort', choiceLabel: 'Sort comments', hidden: noStory,
+        disabled: noComments, reason: 'The discussion has no comments yet.',
+        checked: function () { return !!lib.sort && lib.sort.get() === mode; }, run: function () { lib.sort.set(mode); } };
+    }
+    function commandTable() {
+      var pins = lib.pins, disc = lib.discussion;
+      return [
+        pane('article', 'Article'), pane('discussion', 'Discussion'), pane('split', 'Split'),
+        { id: 'pin', glyph: 'pin', hidden: function () { return !d.storyId || !pins; },
+          label: function () { return pins && pins.isPinned(d.storyId) ? 'Unpin this story' : 'Pin this story'; },
+          checked: function () { return !!(pins && pins.isPinned(d.storyId)); }, run: function () { pins.toggleStory(root); } },
+        { id: 'new-reader', label: 'Open in new reader window', glyph: 'new-window', hidden: function () { return noStory() || !win(); },
+          run: function () { lib.readers.create(d.storyKey); } },
+        { id: 'open-original', label: 'Open the original', glyph: 'open', hidden: function () { return noStory() || !original(); },
+          run: function () { window.open(original(), '_blank', 'noopener'); } },
+        { id: 'open-source', glyph: 'link', hidden: function () { return noStory() || !sourceLink(); },
+          label: function () { var s = sourceLink(); return s ? s.textContent.trim() : 'Open on the source site'; },
+          run: function () { window.open(sourceLink().href, '_blank', 'noopener'); } },
+        { id: 'refresh', label: 'Refresh the article', glyph: 'reload', hidden: function () { return noStory() || !original(); },
+          disabled: function () { return refreshing; }, reason: 'The article is being fetched again.', run: refresh },
+        { id: 'hide-story', label: 'Hide this story', hidden: function () { return noStory() || !lib.hiding; },
+          run: function () { lib.hiding.hide(d.storyId); } },
+        // A text post's host is the source itself, which is no site to block.
+        { id: 'block-site', hidden: function () { return noStory() || !lib.hiding || !original() || !d.host; },
+          label: function () { return 'Block ' + d.host + ' across all feeds'; }, run: function () { lib.hiding.blockDomain(d.host); } },
+        sortBy('best', 'Best first'), sortBy('newest', 'Newest first'), sortBy('oldest', 'Oldest first'),
+        { id: 'collapse-all', label: 'Collapse every thread', hidden: noStory, disabled: noComments,
+          reason: 'The discussion has no comments yet.', run: function () { disc.collapseAll(root, true); } },
+        { id: 'expand-all', label: 'Expand every thread', hidden: noStory, disabled: noComments,
+          reason: 'The discussion has no comments yet.', run: function () { disc.collapseAll(root, false); } },
+        { id: 'previous-story', label: 'Previous story', hidden: function () { return noStory() || !win(); },
+          disabled: function () { return !previousLink(); }, reason: 'This is the first story in the list.',
+          run: function () { var to = previousLink(); if (to) to.click(); } },
+        { id: 'next-story', label: 'Next story', hidden: function () { return noStory() || !win(); },
+          disabled: function () { return !nextLink(); }, reason: 'This is the last story in the list.',
+          run: function () { var next = nextLink(); if (next) next.click(); } },
+        { id: 'next-comment', label: 'Next comment', glyph: 'arrow-down', hidden: noStory, disabled: noComments,
+          reason: 'The discussion has no comments yet.', run: function () { disc.step(root, 1); } },
+        { id: 'previous-comment', label: 'Previous comment', glyph: 'arrow-up', hidden: noStory, disabled: noComments,
+          reason: 'The discussion has no comments yet.', run: function () { disc.step(root, -1); } },
+        { id: 'first-new-comment', label: 'First new comment', hidden: noStory,
+          disabled: function () { return !root.querySelector('.comment-new'); }, reason: 'No comment is new since your last visit.',
+          run: function () { disc.firstNew(root); } }
+      ];
+    }
+
     function menus() {
       if (!d.storyKey) return { titles: [] };
-      var pins = lib.pins, disc = lib.discussion, sort = lib.sort;
-      var next = win() && lib.nextStory ? lib.nextStory(win()) : null;
-      var page = sharedPage().href;
-      var original = d.readerUrl || '';
-      var source = root.querySelector('.story-discussion .story-bar a[target="_blank"]');
-      var story = [
-        { label: 'Pin this story', checked: !!(pins && pins.isPinned(d.storyId)), run: function () { pins.toggleStory(root); } },
-        ...(lib.library ? lib.library.storyMenu(root) : []),
-        '-',
-        ...(win() ? [{ label: 'Open in new reader window', run: function () { lib.readers.create(d.storyKey); } }] : []),
-        { label: 'Open the original', disabled: !original, run: function () { window.open(original, '_blank', 'noopener'); } },
-        { label: source ? source.textContent.trim() : 'Open on the source site', disabled: !source,
-          run: function () { window.open(source.href, '_blank', 'noopener'); } },
-        { label: 'Refresh the article', disabled: !original || !!(refreshBtn && refreshBtn.disabled), run: refresh }
-      ];
-      if (lib.hiding) {
-        story.push('-', { label: 'Hide this story', run: function () { lib.hiding.hide(d.storyId); } });
-        // A text post's host is the source itself, which is no site to block.
-        if (original && d.host) {
-          story.push({ label: 'Block ' + d.host + ' across all feeds', run: function () { lib.hiding.blockDomain(d.host); } });
-        }
-      }
-      var mode = sort ? sort.get() : 'best';
-      var hasNew = !!root.querySelector('.comment-new');
-      var hasComments = !!root.querySelector('.discussion-content .comment');
-      var discussionMenu = [
-        { label: 'Best first', disabled: !hasComments, radio: 'sort', checked: mode === 'best', run: function () { sort.set('best'); } },
-        { label: 'Newest first', disabled: !hasComments, radio: 'sort', checked: mode === 'newest', run: function () { sort.set('newest'); } },
-        { label: 'Oldest first', disabled: !hasComments, radio: 'sort', checked: mode === 'oldest', run: function () { sort.set('oldest'); } },
-        '-',
-        { label: 'Collapse every thread', disabled: !hasComments, run: function () { disc.collapseAll(root, true); } },
-        { label: 'Expand every thread', disabled: !hasComments, run: function () { disc.collapseAll(root, false); } }
-      ];
-      var navigation = [
-        ...(win() ? [{ label: 'Next story', disabled: !next, run: function () { if (next) next.click(); } }, '-'] : []),
-        { label: 'Next comment', disabled: !hasComments, run: function () { disc.step(root, 1); } },
-        { label: 'Previous comment', disabled: !hasComments, run: function () { disc.step(root, -1); } },
-        { label: 'First new comment', disabled: !hasNew, run: function () { disc.firstNew(root); } },
-      ];
       return {
         titles: [
-          { label: 'Reader', items: lib.identityMenu(root, 'Copy story link', page) },
-          { label: 'Story', items: story },
-          { label: 'Discussion', items: discussionMenu }
+          { label: 'Reader', items: lib.identityMenu(root, 'Copy story link', sharedPage().href) },
+          { label: 'Story', items: ['pin', ...(lib.library ? lib.library.storyMenu(root) : []), '-',
+            'new-reader', 'open-original', 'open-source', 'refresh', '-', 'hide-story', 'block-site'] },
+          { label: 'Discussion', items: ['sort-best', 'sort-newest', 'sort-oldest', '-', 'collapse-all', 'expand-all'] }
         ],
-        into: { go: navigation, view: ['article', 'discussion', 'split'].map(function (mode) {
-          return { label: mode === 'article' ? 'Article only' : mode === 'discussion' ? 'Discussion only' : 'Article and discussion', radio: 'reader-pane', checked: paneMode === mode, run: function () { showPane(mode, true, true); } };
-        }) }
+        into: { go: ['previous-story', 'next-story', '-', 'next-comment', 'previous-comment', 'first-new-comment'],
+          view: ['pane-article', 'pane-discussion', 'pane-split'] }
       };
     }
 
@@ -383,6 +407,7 @@
         if (key) loadStory(key, true);
       },
       menus: menus,
+      commandTable: commandTable,
       destroy: function () {
         unmountReader();
         clearTimeout(timer);

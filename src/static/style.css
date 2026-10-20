@@ -486,12 +486,12 @@ body.desktop .md-layout {
   padding: 0;
 }
 
-.story-refresh[aria-busy="true"]::before {
+.story-refresh[aria-busy="true"] > .glyph {
   animation: pudl-spin .8s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .story-refresh[aria-busy="true"]::before {
+  .story-refresh[aria-busy="true"] > .glyph {
     animation: none;
   }
 }
@@ -1160,15 +1160,22 @@ kbd {
 /* Responsive reader presentation. The controls remain available through menus
    when narrow windows put content ahead of secondary window chrome. */
 .story-win, .story-page-main { container-type: inline-size; container-name: reader; }
-.reader-toolbar { display: flex; flex: none; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
+/* The reader's toolbar is a PUDL toolbar of three groups, the panes, the
+   story's own controls and the article's, set off by PUDL's dividers. */
+.reader-toolbar { flex: none; gap: 6px 0; padding: 6px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
 .reader-toolbar[hidden] { display: none; }
+.reader-toolbar > .toolbar-group { gap: 8px; }
 .reader-panes { flex: none; box-sizing: border-box; height: 30px; align-items: center; }
-/* The note and Next story stay together, so on a narrow reader they wrap
-   below the pane selector as one row. */
-.reader-actions { display: flex; flex: 1 0 auto; align-items: center; gap: inherit; align-self: stretch; }
-.reader-actions:not(:has(> :not([hidden]))) { display: none; }
-.reader-toolbar .story-next { margin-left: auto; white-space: nowrap; align-self: stretch; }
-.story-next[aria-disabled="true"] { opacity: .45; cursor: default; }
+/* Previous and Next step through the list, PUDL's back chevron and its
+   mirror, so they read apart from the comments' up and down arrows. On a
+   narrow reader they are their glyphs alone, the tooltip giving the story. */
+.reader-toolbar .story-step { white-space: nowrap; gap: 4px; line-height: normal; }
+.story-step > .glyph { --glyph: var(--glyph-back); }
+.reader-toolbar .story-step > .glyph { --glyph-size: 16px; -webkit-mask-size: 14px; mask-size: 14px; }
+.story-next > .glyph { transform: scaleX(-1); }
+.story-step:dir(rtl) > .glyph { transform: scaleX(-1); }
+.story-next:dir(rtl) > .glyph { transform: none; }
+.story-step[aria-disabled="true"] { opacity: .45; cursor: default; }
 .story[data-reader-pane] .story-bar-label { display: none; }
 .story-split:not(.split) { display: flex; flex-direction: column; }
 .story-split:not(.split) > .story-pane:not([hidden]) { flex: 1; min-height: 0; }
@@ -1184,17 +1191,18 @@ kbd {
 .win-bar-dock .win-tab { flex: 0 0 auto; max-width: 250px; }
 body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 @container reader (max-width: 600px) {
-  /* The pane selector never shrinks below its words; when the note and
-     Next story do not fit beside it, they wrap to a row of their own. */
-  .reader-toolbar { padding: 6px; gap: 6px; flex-wrap: wrap; }
-  /* The selector and each of its buttons keep their words' width, so a
-     wide font grows the selector instead of spilling past it, and a
-     wrapped row leaves the selector its own size. */
+  /* A narrow reader's groups wrap below the panes when they must, so the
+     dividers go, since one would stand at the start of a row. The pane
+     selector and each of its buttons keep their words' width, so a wide
+     font grows the selector instead of spilling past it. */
+  .reader-toolbar { padding: 6px; gap: 6px; }
+  .reader-toolbar > .toolbar-group { padding: 0; border: 0; gap: 6px; }
+  .reader-toolbar > .toolbar-group + .toolbar-group { margin-inline-start: 6px; }
+  .reader-toolbar > .toolbar-group.reader-end { margin-inline-start: auto; }
+  .reader-toolbar .story-step > .toolbar-words { display: none; }
+  .reader-toolbar .story-step { padding-inline: 4px; }
   .reader-panes { flex: none; display: flex; }
   .reader-panes button { flex: none; }
-  /* A narrow reader may not have room for every button in one row, so the
-     article's site and Next story wrap below the note and the pin. */
-  .reader-actions { flex: 1 1 auto; flex-wrap: wrap; row-gap: 6px; }
   .article-info, .discussion-info { padding: 10px 14px; }
   .discussion-info .story-bar-meta { flex-basis: 100%; }
   .discussion-info .story-bar-spacer { display: none; }
@@ -1286,25 +1294,26 @@ img.account-avatar { border-radius: 50%; }
 .story-note-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 /* The reader's pin is a square toggle beside the note, as tall as it, with
    the row's pin glyph; a pinned story's latches in and its glyph fills. */
-.story-pin-toggle { --yv-glyph: var(--yv-glyph-pin); }
 .story-pin-toggle[hidden] { display: none; }
 /* The toolbar's glyph buttons, the pin and the refresh: the glyph's box is
    16 pixels, as Add note's chevron is, so with the same padding on every
-   side each is a square as tall as Add note. */
+   side each is a square as tall as Add note. A pinned story's pin latches
+   in and its glyph fills. */
 .story-pin-toggle, .reader-icon-btn { padding-inline: 4px; justify-content: center; }
-.story-pin-toggle::before, .reader-icon-btn::before {
-  content: ""; width: 16px; height: 16px; background: currentColor;
-  -webkit-mask: var(--yv-glyph) center / 14px no-repeat;
-  mask: var(--yv-glyph) center / 14px no-repeat;
+.reader-toolbar :is(.story-pin-toggle, .reader-icon-btn) > .glyph {
+  --glyph-size: 16px; -webkit-mask-size: 14px; mask-size: 14px;
 }
+.story-pin-toggle > .glyph { --glyph: var(--yv-glyph-pin); }
+.story-pin-toggle[aria-pressed="true"] { color: var(--accent); }
+.story-pin-toggle[aria-pressed="true"] > .glyph { --glyph: var(--yv-glyph-pinned); }
+.story-refresh > .glyph { --glyph: var(--yv-glyph-refresh); }
 /* Open original, the refresh and Next story stand together at the right,
    and wrap below the note and the pin as one group when they must. */
-.reader-end { display: inline-flex; align-items: center; gap: inherit; margin-left: auto; white-space: nowrap; }
+.reader-end { margin-inline-start: auto; white-space: nowrap; }
+.reader-end > .story-step { margin: 0; }
 /* Open original keeps the size it had in the article's bar. */
 .reader-end > a:not(.btn) { font-size: var(--text-xs); }
 .reader-end:not(:has(> :not([hidden]))) { display: none; }
-.story-refresh { --yv-glyph: var(--yv-glyph-refresh); }
-.story-pin-toggle[aria-pressed="true"] { --yv-glyph: var(--yv-glyph-pinned); color: var(--accent); }
 .story-note-toggle[hidden] { display: none; }
 .story-note-panel { flex: none; padding: 8px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
 .story-note-panel[hidden] { display: none; }

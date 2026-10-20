@@ -175,20 +175,23 @@
     <div class="empty-state-actions"><a class="btn btn-sm" href="{{ .SourceURL }}" target="_blank" rel="noopener">{{ .SourceLabel }}</a></div>
   </div>
 {{ else }}
-  <div class="reader-toolbar" hidden>
-    <div class="seg sm reader-panes" role="group" aria-label="Reader panes">
-      <button type="button" data-reader-pane="article" aria-pressed="false">Article</button>
-      <button type="button" data-reader-pane="discussion" aria-pressed="false">Discussion</button>
-      <button type="button" data-reader-pane="split" aria-pressed="true">Split</button>
+  {{/* The reader's toolbar, a PUDL toolbar of three groups: one Tab stop,
+       with the arrow keys moving along it. Its controls are drawn from the
+       story applet's commands (story.js), which its menus share, except the
+       note, which library.js runs, and the two links, which go somewhere. */}}
+  <div class="toolbar reader-toolbar" role="toolbar" aria-label="Reader" hidden>
+    <div class="toolbar-group reader-panes-group" aria-label="Panes">
+      <div class="seg sm reader-panes" data-command-choice="pane"></div>
     </div>
-    <div class="reader-actions">
-    <button type="button" class="btn btn-sm disclosure story-note-toggle" data-note-toggle aria-expanded="false" aria-controls="note-{{ .Key }}-{{ .StoryKey }}" hidden><span class="story-note-label">Add note</span></button>
-    <button type="button" class="btn btn-sm story-pin-toggle" data-story-pin aria-pressed="false" aria-label="Pin this story" title="Pin this story" hidden></button>
-    <span class="reader-end">
+    <div class="toolbar-group reader-story-group" aria-label="Story">
+      <button type="button" class="btn btn-sm disclosure story-note-toggle" data-note-toggle aria-expanded="false" aria-controls="note-{{ .Key }}-{{ .StoryKey }}" hidden><span class="story-note-label">Add note</span></button>
+      <button type="button" class="btn btn-sm story-pin-toggle" data-command="pin" data-story-pin><span class="glyph" aria-hidden="true"></span></button>
+    </div>
+    <div class="toolbar-group reader-end" aria-label="Article">
       {{ if .HasArticle }}<a href="{{ .URL }}" target="_blank" rel="noopener">Open original</a>
-      <button type="button" class="btn btn-sm reader-icon-btn story-refresh" aria-label="Refresh the article" title="Refresh the article"></button>{{ end }}
-      <a class="btn btn-sm story-next" href="{{ .PageURL }}" data-win-replace hidden>Next story</a>
-    </span>
+      <button type="button" class="btn btn-sm reader-icon-btn story-refresh" data-command="refresh"><span class="glyph" aria-hidden="true"></span></button>{{ end }}
+      <a class="btn btn-sm story-step story-prev" href="{{ .PageURL }}" data-win-replace hidden><span class="glyph" aria-hidden="true"></span><span class="toolbar-words">Previous</span></a>
+      <a class="btn btn-sm story-step story-next" href="{{ .PageURL }}" data-win-replace hidden><span class="toolbar-words">Next</span><span class="glyph" aria-hidden="true"></span></a>
     </div>
   </div>
   <section class="story-note-panel" id="note-{{ .Key }}-{{ .StoryKey }}" data-note-panel aria-label="Your note" hidden>
@@ -343,7 +346,7 @@
       <dl class="keys">
         <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Move down and up the story list. The arrow keys scroll whatever has focus.</dd>
         <dt><kbd>Enter</kbd></dt><dd>Read the marked story in the article reader.</dd>
-        <dt><kbd>]</kbd></dt><dd>Read the next story in the same article-reader applet. Back returns to the previous story.</dd>
+        <dt><kbd>[</kbd> / <kbd>]</kbd></dt><dd>Read the story above or below in the list, in the same article reader. Back returns to the story you came from.</dd>
         <dt><kbd>p</kbd></dt><dd>Pin or unpin the marked story, which keeps it in Pinned.</dd>
         <dt><kbd>n</kbd> / <kbd>N</kbd></dt><dd>Move to the next or previous top-level comment in the window in front.</dd>
         <dt><kbd>c</kbd></dt><dd>Collapse or expand that comment.</dd>
@@ -355,9 +358,9 @@
     </section>
     <section>
       <h4>Windows</h4>
-      <p>Each story opens in a window holding its article above its discussion; drag the bar between them to share the room differently. A window can be moved by its title bar, resized from any edge, snapped to a half or a corner by dragging it there, maximised, or minimised to the bar at the foot of the page. Use Window &gt; New reader window to open an empty reader, or Story &gt; Open in new reader window to open another reader for the current article. Docked readers keep their articles when you select another story from the sidebar. Minimized readers can be restored and reused for their site. A window's Next story link reads on down the list in the same window.</p>
+      <p>Each story opens in a window holding its article above its discussion; drag the bar between them to share the room differently. A window can be moved by its title bar, resized from any edge, snapped to a half or a corner by dragging it there, maximised, or minimised to the bar at the foot of the page. Use Window &gt; New reader window to open an empty reader, or Story &gt; Open in new reader window to open another reader for the current article. Docked readers keep their articles when you select another story from the sidebar. Minimized readers can be restored and reused for their site. A window's Previous and Next buttons read up and down the list in the same window.</p>
       <p>A link in a comment or an article to another Hacker News or Lobsters thread opens that thread in a window too. A link to a single HN comment opens the comment above its replies.</p>
-      <p>While a story's window is in front, the Story and Discussion menus in the menu bar hold its commands: pinning, Next story, sorting, collapsing every thread, jumping to the first new comment. Each window also remembers where you were in its article and discussion, so a reload, or Back to a story that Next took you past, finds your place again. Closing a window forgets it.</p>
+      <p>While a story's window is in front, the Story and Discussion menus in the menu bar hold its commands: pinning, Previous and Next story, sorting, collapsing every thread, jumping to the first new comment. Each window also remembers where you were in its article and discussion, so a reload, or Back to a story that Next took you past, finds your place again. Closing a window forgets it.</p>
       <p>The whole arrangement lives in the address, so a bookmark or a shared link brings it back, and Back undoes the last change. Moving between Hacker News, Lobsters, their lists, Pinned and Find changes only the list, and leaves the windows open.</p>
     </section>
     <section>
@@ -394,6 +397,8 @@
 <script src="{{ asset "/static/accounts.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/pudl-windows.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/pudl-menu.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/pudl-commands.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/pudl-toolbar.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/pudl-applets.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/pudl-menubar.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/pudl-regions.js" }}" defer></script>
