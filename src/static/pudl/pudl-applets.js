@@ -187,6 +187,8 @@
 
   function define(name, cfg) {
     defs[name] = cfg || {};
+    /* For pudl-actions.js, which reads the manifests define() names. */
+    document.dispatchEvent(new CustomEvent('pudl:applet-define', { detail: { name: name } }));
     var roots = unresolved[name] || [];
     delete unresolved[name];
     roots.forEach(function (root) {
@@ -272,9 +274,13 @@
       changed: function (s) {
         if (s === undefined && entry.instance && entry.instance.state) s = entry.instance.state();
         root.dispatchEvent(new CustomEvent('pudl:applet-change', { bubbles: true, detail: { state: s == null ? null : String(s) } }));
-      }
+      },
+      /* Says the instance's commands have changed state (preview,
+         docs/proposals/toolbar-commands.md). */
+      commandsChanged: function () { if (window.pudlCommands) window.pudlCommands.changed(); }
     });
     entry.instance = instance || null;
+    commandsFor(entry);
     running.push(entry);
     root.setAttribute('data-applet-state', 'running');
     if (!inWindow && entry.instance && typeof entry.instance.commands === 'function') addCommandRow(entry);
@@ -288,6 +294,69 @@
     var ready = entry.instance && entry.instance.ready;
     if (ready && typeof ready.then === 'function') ready.then(function () { settle(root); }, function () { settle(root); });
     else settle(root);
+  }
+
+  /* === Commands and toolbars (preview) =====================================
+     An instance's commandTable() is its commands, which pudl-commands.js
+     registers with the mount as their scope, so its menus, toolbars, keys
+     and agents all reach them by id. Its toolbars() describe toolbars of
+     those ids:
+       [{ label, groups: [{ label, glyph, priority, end, items: ['bold',
+          { choice: 'view' }, …] }] }]
+     drawn into the mount's [data-toolbar-slot] if it has one, or else
+     before the mount, folding as room runs out. */
+  function commandsFor(entry) {
+    var inst = entry.instance;
+    if (!inst || !window.pudlCommands) return;
+    if (typeof inst.commandTable === 'function') {
+      entry.unregister = window.pudlCommands.register(entry.root, function () { return inst.commandTable(); });
+    }
+    if (typeof inst.toolbars !== 'function') return;
+    var bars;
+    try { bars = inst.toolbars(); } catch (err) { if (window.console) console.warn('pudl-applets:', err); return; }
+    if (!Array.isArray(bars) || !bars.length) return;
+    var holder = document.createElement('div');
+    holder.className = 'applet-toolbars';
+    bars.forEach(function (t) {
+      var bar = document.createElement('div');
+      bar.className = 'toolbar';
+      bar.setAttribute('role', 'toolbar');
+      bar.setAttribute('aria-label', t.label || '');
+      bar.setAttribute('data-toolbar-fold', '');
+      (t.groups || []).forEach(function (g) {
+        var group = document.createElement('div');
+        group.className = 'toolbar-group';
+        if (g.label) group.setAttribute('data-toolbar-group', g.label);
+        if (g.glyph) group.setAttribute('data-toolbar-glyph', g.glyph);
+        if (g.priority != null) group.setAttribute('data-toolbar-priority', String(g.priority));
+        if (g.end) group.setAttribute('data-toolbar-end', '');
+        (g.items || []).forEach(function (item) {
+          var c;
+          if (item && typeof item === 'object' && item.choice) {
+            c = document.createElement('div');
+            c.setAttribute('data-command-choice', item.choice);
+          } else {
+            c = document.createElement('button');
+            c.type = 'button';
+            c.setAttribute('data-command', String(item));
+          }
+          group.appendChild(c);
+        });
+        bar.appendChild(group);
+      });
+      holder.appendChild(bar);
+    });
+    var slot = entry.root.querySelector('[data-toolbar-slot]');
+    if (slot) slot.appendChild(holder);
+    else entry.root.parentNode.insertBefore(holder, entry.root);
+    entry.toolbars = holder;
+    /* Toolbars drawn before the mount are outside it, so they are a scope
+       of the same commands. */
+    if (!slot && typeof inst.commandTable === 'function') {
+      var off = window.pudlCommands.register(holder, function () { return inst.commandTable(); });
+      var first = entry.unregister;
+      entry.unregister = function () { if (first) first(); off(); };
+    }
   }
 
   /* === When an applet starts ===============================================
@@ -468,6 +537,8 @@
       entry.root.removeAttribute('data-applet-state');
       if (entry.fitSet) entry.root.removeAttribute('data-applet-fit');
       if (entry.row) entry.row.remove();
+      if (entry.unregister) entry.unregister();
+      if (entry.toolbars) entry.toolbars.remove();
       return false;
     });
   }
@@ -480,9 +551,25 @@
      join the window menu, which asks for them with commandsIn(); on a page
      they get a menu of their own, in a row above the applet. */
 
+  /* A row may be the id of a command in the applet's command table, which
+     pudl-commands.js turns into the row (0.68.1). */
+  function resolveRows(list, root) {
+    return window.pudlCommands && window.pudlCommands.menuRows ? window.pudlCommands.menuRows(list, root) : list;
+  }
+  function resolveMenus(m, root) {
+    if (!m || typeof m !== 'object') return m;
+    var out = Object.assign({}, m);
+    if (Array.isArray(m.titles)) out.titles = m.titles.map(function (t) { return t && Array.isArray(t.items) ? Object.assign({}, t, { items: resolveRows(t.items, root) }) : t; });
+    if (m.into && typeof m.into === 'object') {
+      out.into = {};
+      Object.keys(m.into).forEach(function (k) { out.into[k] = resolveRows(m.into[k], root); });
+    }
+    return out;
+  }
+
   function commandsOf(entry) {
     var list;
-    try { list = entry.instance.commands(); }
+    try { list = resolveRows(entry.instance.commands(), entry.root); }
     catch (err) { if (window.console) console.warn('pudl-applets:', err); return []; }
     return (Array.isArray(list) ? list : []).filter(function (c) {
       return c && typeof c.label === 'string' && typeof c.run === 'function';
@@ -514,11 +601,11 @@
       if (!hasMenus && !hasCommands) continue;
       return {
         name: entry.name, root: entry.root, _instance: inst,
-        menus: hasMenus ? function (inst, name) {
+        menus: hasMenus ? function (inst, name, root) {
           return function () {
-            try { return inst.menus(); } catch (err) { if (window.console) console.warn('pudl-applets: ' + name + '.menus():', err); return null; }
+            try { return resolveMenus(inst.menus(), root); } catch (err) { if (window.console) console.warn('pudl-applets: ' + name + '.menus():', err); return null; }
           };
-        }(inst, entry.name) : null,
+        }(inst, entry.name, entry.root) : null,
         commands: hasCommands ? function (e) { return function () { return commandsOf(e); }; }(entry) : null
       };
     }
@@ -713,8 +800,18 @@
     delete handed[e.detail && e.detail.key];
   });
 
-  window.pudlApplets = { define: define, register: register, boot: boot, destroy: destroy, request: request, can: can,
-                         commandsIn: commandsIn, menuSourceIn: menuSourceIn, started: started, start: startWindow };
+  /* Merged into what is there, so pudl-actions.js may load either side. */
+  window.pudlApplets = Object.assign(window.pudlApplets || {}, { define: define, register: register, boot: boot, destroy: destroy, request: request, can: can,
+                         commandsIn: commandsIn, menuSourceIn: menuSourceIn, started: started, start: startWindow,
+                         /* What each define() said, for pudl-actions.js: { name: { actions, handles, page, ver } }. */
+                         definitions: function () {
+                           var out = {};
+                           Object.keys(defs).forEach(function (n) {
+                             var d = defs[n];
+                             out[n] = { actions: d.actions || null, handles: d.handles || null, page: d.page || null, ver: d.ver || null, title: d.title || null };
+                           });
+                           return out;
+                         } });
 
   /* A mount with data-applet-param keeps its state in the page's query. */
   document.addEventListener('pudl:applet-change', function (e) {
