@@ -167,6 +167,11 @@
       });
     }
 
+    function setRunning(on) {
+      var host = root.closest('.win[data-win]');
+      if (host) host.toggleAttribute('data-win-running', on);
+    }
+
     function wire(stateText) {
       if (contentCtl) contentCtl.abort();
       contentCtl = new AbortController();
@@ -199,23 +204,28 @@
       showPane(paneMode, false);
       if (d.storyKey) savePresentation(false);
 
+      var loading = [];
       if (article && d.readerUrl) {
         var articleBody = article;
-        fill(root.querySelector('.story-article-content'), articleSrc(false), signal).then(function () {
+        loading.push(fill(root.querySelector('.story-article-content'), articleSrc(false), signal).then(function () {
           if (!signal.aborted) restore(articleBody, wantedState.a);
-        });
+        }));
       } else if (article) {
         restore(article, wantedState.a);
       }
       if (discussion) {
         var discussionBody = discussion;
-        fill(root.querySelector('.story-discussion-content'), '/api/discussion?id=' + encodeURIComponent(d.storyId) +
+        loading.push(fill(root.querySelector('.story-discussion-content'), '/api/discussion?id=' + encodeURIComponent(d.storyId) +
           '&source=' + encodeURIComponent(d.storySource || 'hn'), signal).then(function () {
           if (signal.aborted) return;
           if (wantedState.c && lib.discussion) lib.discussion.focusId(root, wantedState.c, false);
           restore(discussionBody, wantedState.d);
-        });
+        }));
       }
+      // The window's running mark, PUDL's, shows in the taskbar until the
+      // article and the discussion are in.
+      setRunning(loading.length > 0);
+      if (loading.length) Promise.allSettled(loading).then(function () { if (!signal.aborted) setRunning(false); });
 
       [article, discussion].forEach(function (el) {
         if (el) el.addEventListener('scroll', changedSoon, { passive: true, signal: signal });
@@ -253,6 +263,7 @@
         opts.changed(state());
         if (contentCtl) contentCtl.abort();
         root.removeAttribute('aria-busy');
+        setRunning(false);
         Array.from(root.attributes).forEach(function (attr) {
           if (attr.name.indexOf('data-story-') === 0 || attr.name === 'data-reader-url' || attr.name === 'data-applet-page') root.removeAttribute(attr.name);
         });

@@ -1,12 +1,12 @@
 {{ define "comment" }}
 <li class="comment" data-id="{{ .ID }}" data-ts="{{ .CreatedAt }}">
   <div class="comment-header">
-    <span class="comment-toggle" aria-hidden="true"></span>
+    <button type="button" class="card-toggle comment-toggle" aria-expanded="true" aria-label="Collapse this comment"></button>
     {{ if .AuthorKey }}<a class="comment-author" href="{{ .AuthorURL }}" data-win-open="{{ .AuthorKey }}">{{ .Author }}</a>{{ else }}<span class="comment-author">{{ .Author }}</span>{{ end }}
     <span class="comment-age">{{ .Age }}</span>
     {{ if gt .Descendants 0 }}<span class="comment-collapsed-count">[{{ .Descendants }} replies]</span>{{ end }}
-    <span class="comment-new-badge" aria-hidden="true">new</span>
-    <a class="comment-link" href="{{ .HNURL }}" target="_blank" rel="noopener" title="open on HN">&uarr;</a>
+    <span class="badge accent comment-new-badge">new</span>
+    <a class="comment-link" href="{{ .HNURL }}" target="_blank" rel="noopener" aria-label="Open this comment on the source site" title="Open this comment on the source site"><span class="glyph" style="--glyph: var(--glyph-open)" aria-hidden="true"></span></a>
   </div>
   <div class="comment-text">{{ .HTML }}</div>
   {{ if .Children }}
@@ -19,7 +19,7 @@
 
 <div class="discussion-content">
   {{ if not .Comments }}
-    <p class="empty-note">No comments yet.</p>
+    <div class="empty-state"><p class="empty-state-title">No comments yet</p></div>
   {{ else }}
     <ul class="thread">
       {{ range .Comments }}{{ template "comment" . }}{{ end }}

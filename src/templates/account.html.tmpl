@@ -26,7 +26,9 @@
 
   <section class="card">
     <h2 class="card-title">Profile picture</h2>
-    <div class="account-identity">{{ template "avatar" .Account.AvatarURL }}
+    {{/* PUDL's largest avatar: the picture, or the account's initial when
+         there is none or it fails to load (pudl-fields.js). */}}
+    <div class="account-identity hstack align-center gap-4"><span class="avatar xl tint" role="img" aria-label="Your profile picture">{{ with .Account.AvatarURL }}<img src="{{ . }}" alt="">{{ end }}{{ .Account.Initial }}</span>
       <p class="card-desc">Shown at the top of every page while you are signed in. Any picture works; it is cropped to a square and made small before it is sent.</p>
     </div>
     {{ template "accountnotice" (.NoticeAt "picture") }}

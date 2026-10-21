@@ -21,11 +21,23 @@
     try { localStorage.setItem('yavchn-collapsed:' + storyID, JSON.stringify(ids)); } catch (err) {}
   }
 
-  // Shared by the click on a comment's header and the c key, so the two
-  // can't drift.
+  /* A comment is collapsed or expanded here alone, so its toggle, PUDL's
+     raised card toggle, always says which with aria-expanded. */
+  function setCollapsed(comment, on) {
+    comment.classList.toggle('collapsed', on);
+    var toggle = comment.querySelector(':scope > .comment-header > .comment-toggle');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', String(!on));
+      toggle.setAttribute('aria-label', on ? 'Expand this comment' : 'Collapse this comment');
+    }
+  }
+
+  // Shared by the comment's toggle, a click on its header and the c key,
+  // so they can't drift.
   function toggleCollapse(comment) {
     if (!comment) return;
-    var nowCollapsed = comment.classList.toggle('collapsed');
+    var nowCollapsed = !comment.classList.contains('collapsed');
+    setCollapsed(comment, nowCollapsed);
     var story = storyOf(comment);
     var storyID = story && story.dataset.storyId;
     var id = comment.dataset.id;
@@ -38,6 +50,8 @@
   }
 
   document.addEventListener('click', function (e) {
+    var toggle = e.target.closest('.story .comment-header > .comment-toggle');
+    if (toggle) { toggleCollapse(toggle.closest('.comment')); return; }
     if (e.target.closest('a, button')) return;
     var header = e.target.closest('.story .comment-header');
     if (header) toggleCollapse(header.closest('.comment'));
@@ -92,7 +106,7 @@
     var storyID = story.dataset.storyId;
     var ids = loadCollapsed(storyID);
     topLevel(story).forEach(function (c) {
-      c.classList.toggle('collapsed', on);
+      setCollapsed(c, on);
       var i = ids.indexOf(c.dataset.id);
       if (on && i < 0 && c.dataset.id) ids.push(c.dataset.id);
       else if (!on && i >= 0) ids.splice(i, 1);
@@ -130,7 +144,7 @@
       var set = {};
       collapsed.forEach(function (id) { set[id] = true; });
       body.querySelectorAll('.comment[data-id]').forEach(function (c) {
-        if (set[c.dataset.id]) c.classList.add('collapsed');
+        if (set[c.dataset.id]) setCollapsed(c, true);
       });
     }
 

@@ -255,7 +255,7 @@
 </div>
 {{ end }}
 
-{{ define "sourceicon" }}{{ if eq . "hn" }}<img class="source-icon" src="/static/hn-favicon.svg" width="16" height="16" alt="">{{ else if eq . "lobsters" }}<img class="source-icon" src="/static/lobsters-favicon.png" width="16" height="16" alt="">{{ else if eq . "pinned" }}<span class="source-glyph source-glyph-pin" aria-hidden="true"></span>{{ else if eq . "find" }}<span class="source-glyph source-glyph-find" aria-hidden="true"></span>{{ end }}{{ end }}
+{{ define "sourceicon" }}{{ if eq . "hn" }}<img class="source-icon" src="/static/hn-favicon.svg" width="16" height="16" alt="">{{ else if eq . "lobsters" }}<img class="source-icon" src="/static/lobsters-favicon.png" width="16" height="16" alt="">{{ else if eq . "pinned" }}<span class="glyph source-glyph source-glyph-pin" style="--glyph: var(--glyph-pin)" aria-hidden="true"></span>{{ else if eq . "find" }}<span class="glyph source-glyph source-glyph-find" style="--glyph: var(--glyph-search)" aria-hidden="true"></span>{{ end }}{{ end }}
 
 {{ define "readerbody" }}
 <div class="story" data-applet="story" data-state-key="story">
@@ -407,6 +407,8 @@
 <script src="{{ asset "/static/pudl/min/pudl-dialog.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/min/pudl-tooltip.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/min/pudl-toast.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/min/pudl-fields.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/min/pudl-combo.js" }}" defer></script>
 <script src="{{ asset "/static/migration.js" }}" defer></script>
 <script src="{{ asset "/static/desktop.js" }}" defer></script>
 <script src="{{ asset "/static/views.js" }}" defer></script>

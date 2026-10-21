@@ -170,8 +170,9 @@
       var pinned = !!pins[s.id];
       var host = s.host || (s.source === 'lobsters' ? 'lobste.rs' : 'news.ycombinator.com');
       var pinLabel = pinned ? 'Unpin this story' : 'Pin this story';
-      var last = cfg.remove ? '<button type="button" class="icon-btn story-uncollect" aria-label="' + esc(cfg.remove) + '" title="' + esc(cfg.remove) + '"></button>' :
-        '<button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story"></button>';
+      var close = '<span class="glyph" style="--glyph: var(--glyph-close)" aria-hidden="true"></span>';
+      var last = cfg.remove ? '<button type="button" class="icon-btn story-uncollect" aria-label="' + esc(cfg.remove) + '" title="' + esc(cfg.remove) + '">' + close + '</button>' :
+        '<button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story">' + close + '</button>';
       return '<div class="md-row story-row' + (pinned ? ' pinned' : '') + (cfg.rowClass ? ' ' + cfg.rowClass : '') + (current ? ' active' : '') + '" id="row-' + esc(key) + '" data-key="' + esc(key) + '"' +
         ' data-id="' + esc(s.id) + '" data-source="' + esc(s.source) + '" data-url="' + esc(s.url || '') + '"' +
         ' data-host="' + esc(host) + '" data-by="' + esc(s.by || '') + '" data-score="' + (s.score || 0) + '"' +
@@ -181,7 +182,7 @@
         '<span class="md-meta num">' + esc(host) + ' &middot; ' + (s.score || 0) + ' points' +
         (s.by ? ' &middot; ' + esc(s.by) : '') + ' &middot; ' + esc(cfg.time) + ' ' + relTime(s.at) +
         ' &middot; ' + (s.comments || 0) + ' comments</span>' + (cfg.extra ? cfg.extra(s) : '') + '</a>' +
-        '<div class="story-row-actions"><button type="button" class="icon-btn story-pin" aria-pressed="' + pinned + '" aria-label="' + pinLabel + '" title="' + pinLabel + '"></button>' +
+        '<div class="story-row-actions"><button type="button" class="icon-btn story-pin" aria-pressed="' + pinned + '" aria-label="' + pinLabel + '" title="' + pinLabel + '"><span class="glyph" style="--glyph: var(--glyph-pin)" aria-hidden="true"></span></button>' +
         last + '</div></div>';
     }).join('');
     box.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));

@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -361,6 +362,17 @@ type accountSession struct {
 	Revision  int64                  `json:"revision"`
 	Data      accountDocument        `json:"data"`
 	Links     map[string]accountLink `json:"links"`
+}
+
+// Initial is the letter a PUDL avatar shows for the account when it has no
+// picture, or its picture fails: the first letter of its user name.
+func (u *accountSession) Initial() string {
+	for _, r := range u.Username {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return strings.ToUpper(string(r))
+		}
+	}
+	return "?"
 }
 
 type accountLink struct {

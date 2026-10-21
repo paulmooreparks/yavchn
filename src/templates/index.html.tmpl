@@ -28,7 +28,7 @@
 
   <div class="md-toolbar site-listbar" data-region="listbar">
     {{ if or (eq .Source "hn") (eq .Source "lobsters") }}
-    <button id="feed-refresh" class="icon-btn feed-refresh" type="button" aria-label="Refresh {{ .SourceLabel }} feed" title="Refresh {{ .SourceLabel }} feed" hidden></button>
+    <button id="feed-refresh" class="icon-btn feed-refresh" type="button" aria-label="Refresh {{ .SourceLabel }} feed" title="Refresh {{ .SourceLabel }} feed" hidden><span class="glyph" style="--glyph: var(--glyph-reload)" aria-hidden="true"></span></button>
     <span class="feed-refresh-status visually-hidden" role="status" hidden></span>
     {{ end }}
     {{ if .Finder }}
@@ -73,7 +73,7 @@
           <hr class="menu-sep">
           <button type="button" class="menu-action" data-collection-action="new">New collection&hellip;</button>
           {{ if .OneCollection }}<button type="button" class="menu-action" data-collection-action="rename">Rename this collection&hellip;</button>
-          <button type="button" class="menu-action" data-collection-action="delete">Delete this collection&hellip;</button>{{ end }}
+          <button type="button" class="menu-action danger" data-collection-action="delete">Delete this collection&hellip;</button>{{ end }}
         </div>
       </div>{{ end }}
       <div class="menu">
@@ -128,8 +128,8 @@
           <div class="md-row story-row" id="row-{{ .Key }}" data-key="{{ .Key }}" data-id="{{ .ID }}" data-source="{{ .Source }}" data-url="{{ .URL }}" data-host="{{ .Host }}" data-by="{{ .By }}" data-score="{{ .Score }}" data-comments="{{ .Comments }}">
             <a class="md-item" href="{{ .PageURL }}" data-win-open="{{ .Key }}">{{ .Title }}<span class="md-meta num">{{ if $.Finder }}{{ if .Where }}{{ .Where }} &middot; {{ end }}{{ else }}{{ .Rank }}. {{ .Host }} &middot; {{ end }}{{ .Score }} points{{ if .By }} &middot; {{ .By }}{{ end }} &middot; {{ .Age }} &middot; {{ .Comments }} comments</span></a>
             <div class="story-row-actions">
-              <button type="button" class="icon-btn story-pin" aria-pressed="false" aria-label="Pin this story" title="Pin this story"></button>
-              <button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story"></button>
+              <button type="button" class="icon-btn story-pin" aria-pressed="false" aria-label="Pin this story" title="Pin this story"><span class="glyph" style="--glyph: var(--glyph-pin)" aria-hidden="true"></span></button>
+              <button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story"><span class="glyph" style="--glyph: var(--glyph-close)" aria-hidden="true"></span></button>
             </div>
           </div>
         {{ end }}
@@ -151,16 +151,16 @@
           <div class="reader-empty" data-region="intro">
             {{ if .Finder }}
             <div class="card welcome-card">
-              <h1>Find the conversation behind a link</h1>
-              <p>Paste a link into the box above. YAVCHN looks it up on Hacker News and Lobsters and lists every submission of it, including the times the same article was posted years apart.</p>
-              <p>Each submission opens in a window holding the article and that submission's discussion, so you can read one thread beside another.</p>
+              <h1 class="card-title">Find the conversation behind a link</h1>
+              <p class="card-desc">Paste a link into the box above. YAVCHN looks it up on Hacker News and Lobsters and lists every submission of it, including the times the same article was posted years apart.</p>
+              <p class="card-desc">Each submission opens in a window holding the article and that submission's discussion, so you can read one thread beside another.</p>
             </div>
             {{ else }}
             <div class="card welcome-card">
-              <h1>Pick a story from the list</h1>
-              <p>Each story opens in a reader window. Choose Article, Discussion, or Split to make room for what you want to read. In Split, drag the divider to adjust the panes.</p>
-              <p>Open several and switch between them from the taskbar at the bottom of the workspace, or drag them side by side. The arrangement lives in the address, so a bookmark brings it back, and changing lists or sources leaves the windows where they are.</p>
-              <p>Press <kbd>?</kbd> for the keyboard, or open the Help menu.</p>
+              <h1 class="card-title">Pick a story from the list</h1>
+              <p class="card-desc">Each story opens in a reader window. Choose Article, Discussion, or Split to make room for what you want to read. In Split, drag the divider to adjust the panes.</p>
+              <p class="card-desc">Open several and switch between them from the taskbar at the bottom of the workspace, or drag them side by side. The arrangement lives in the address, so a bookmark brings it back, and changing lists or sources leaves the windows where they are.</p>
+              <p class="card-desc">Press <kbd>?</kbd> for the keyboard, or open the Help menu.</p>
             </div>
             {{ end }}
           </div>
@@ -175,9 +175,9 @@
   {{ if .WindowView }}
         <div class="win-bar">
           <button class="icon-btn sidebar-toggle" type="button" aria-controls="story-list" data-focus-toggle aria-label="Hide sidebar" title="Hide sidebar" aria-expanded="true" hidden><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path class="sidebar-glyph-pane" d="M2 3h3v10H2z" stroke="none"/><path d="M5.5 2v12"/></svg></button>
-          <button class="icon-btn taskbar-scroll" type="button" data-taskbar-scroll="-1" aria-label="Earlier open windows" hidden>‹</button>
+          <button class="icon-btn taskbar-scroll" type="button" data-taskbar-scroll="-1" aria-label="Earlier open windows" hidden><span class="glyph" style="--glyph: var(--glyph-back)" aria-hidden="true"></span></button>
           <nav class="win-dock win-bar-dock" data-win-dock aria-label="Open windows"></nav>
-          <button class="icon-btn taskbar-scroll" type="button" data-taskbar-scroll="1" aria-label="More open windows" hidden>›</button>
+          <button class="icon-btn taskbar-scroll" type="button" data-taskbar-scroll="1" aria-label="More open windows" hidden><span class="glyph" style="--glyph: var(--glyph-forward)" aria-hidden="true"></span></button>
           <a class="icon-btn min-all" data-win-back href="{{ .Win.MinAllHref }}"{{ if not .Win.Shown }} aria-disabled="true"{{ end }} aria-label="Minimize all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="13" height="9" rx="1.5"/><line x1="4.5" y1="14" x2="11.5" y2="14"/><path d="M6 5.5l2 2 2-2"/></svg></a>
           <a class="icon-btn restore-all" data-win-restore href="{{ .Win.RestoreAllHref }}"{{ if not .Win.AnyMin }} aria-disabled="true"{{ end }} aria-label="Restore all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="13" height="9" rx="1.5"/><line x1="4.5" y1="14" x2="11.5" y2="14"/><path d="M6 7.5l2-2 2 2"/></svg></a>
           <a class="icon-btn close-all" data-close-all href="{{ .Win.CloseAllHref }}"{{ if not .Win.Open }} aria-disabled="true" tabindex="-1"{{ end }} aria-label="Close all windows"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="4.5" width="9" height="9" rx="1.5"/><path d="M5.5 4V3a1.5 1.5 0 0 1 1.5-1.5h6A1.5 1.5 0 0 1 14.5 3v6A1.5 1.5 0 0 1 13 10.5h-1"/><line x1="4" y1="7" x2="8" y2="11"/><line x1="8" y1="7" x2="4" y2="11"/></svg></a>

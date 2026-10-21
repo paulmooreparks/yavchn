@@ -30,14 +30,6 @@
   --tb-fg: #e6e8eb;
 }
 
-/* YAVCHN's own glyphs, drawn as SVG masks as PUDL draws its own, so they
-   follow the theme and never turn into emoji. */
-:root {
-  --yv-glyph-pin: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 2h6v3l2 3H9v6l-1 1-1-1V8H3l2-3V2z' fill='none' stroke='black' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E");
-  --yv-glyph-pinned: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 2h6v3l2 3H9v6l-1 1-1-1V8H3l2-3V2z' stroke='black' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E");
-  --yv-glyph-refresh: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 8a5 5 0 1 1-1.6-3.7'/%3E%3Cpath d='M12.2 1.8v3h-3'/%3E%3C/svg%3E");
-}
-
 /* === The top bar ==========================================================
    The source switcher follows the menus so navigation stays together
    on wide displays. */
@@ -151,21 +143,7 @@ body.desktop .md-layout {
   margin: 10vh auto 0;
 }
 
-.welcome-card h1 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-md);
-  font-weight: 700;
-}
-
-.welcome-card p {
-  margin: 0 0 14px;
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-
-.welcome-card p:last-child {
-  margin-bottom: 0;
-}
+.welcome-card > :last-child { margin-bottom: 0; }
 
 /* Hiding the story list gives the windows the whole width. The f key and
    the View menu toggle it, and the choice is applied before the first
@@ -204,11 +182,6 @@ body.desktop .md-layout {
   height: 15px;
 }
 
-.win-bar .icon-btn[aria-disabled="true"] {
-  opacity: .45;
-  cursor: not-allowed;
-}
-
 /* Minimise-all and restore-all share one place: restore shows only when
    it is the useful one, every window minimised; otherwise minimise-all
    shows, disabled when nothing is open. PUDL keeps both links'
@@ -244,47 +217,19 @@ body.desktop .md-layout {
   margin-top: 2px;
 }
 
-.story-pin,
-.story-hide,
-.story-uncollect {
-  flex: none;
-  align-self: flex-start;
-  width: 24px;
-  height: 24px;
-  margin: 5px 6px 0;
-  padding: 0;
-}
-
-.story-pin::before,
-.story-hide::before,
-.story-uncollect::before {
-  content: "";
-  width: 12px;
-  height: 12px;
-  background: currentColor;
-  -webkit-mask: var(--yv-glyph) center / contain no-repeat;
-  mask: var(--yv-glyph) center / contain no-repeat;
-}
-
-.story-pin { --yv-glyph: var(--yv-glyph-pin); }
-/* A pinned story's pin latches, pressed in, and its glyph fills. */
-.story-row .story-pin[aria-pressed="true"] {
-  --yv-glyph: var(--yv-glyph-pinned);
-  color: var(--accent);
-  background: var(--raise-active-bg);
-  box-shadow: var(--raise-active-shadow);
-}
-.story-hide, .story-uncollect { --yv-glyph: var(--glyph-close); width: 28px; height: 28px; margin: 6px; color: var(--text); }
+/* A row's pin and hide are PUDL icon buttons holding PUDL's glyphs. A
+   pinned story's pin latches in, as PUDL draws a pressed icon button, and
+   takes the accent colour. */
 .story-row-actions { display: flex; flex-direction: column; flex: none; gap: 8px; align-self: flex-start; margin: 6px; }
-.story-row-actions .icon-btn { width: 28px; height: 28px; margin: 0; padding: 0; }
-.story-pin, .story-row-actions .icon-btn { color: var(--text); }
+.story-row-actions .icon-btn { color: var(--text); }
+.story-row-actions .icon-btn > .glyph { --glyph-size: 12px; }
+.story-row .story-pin[aria-pressed="true"] { color: var(--accent); }
 
 .source-icon { width: 16px; height: 16px; flex: none; object-fit: contain; }
-.feed-refresh::before { content: ""; width: 16px; height: 16px; background: currentColor; -webkit-mask: var(--yv-glyph-refresh) center / contain no-repeat; mask: var(--yv-glyph-refresh) center / contain no-repeat; }
+.feed-refresh > .glyph { --glyph-size: 16px; }
 .feed-refresh-status { font-size: var(--text-sm); }
-.source-glyph { display: inline-block; width: 16px; height: 16px; flex: none; background: currentColor; -webkit-mask: var(--source-glyph) center / contain no-repeat; mask: var(--source-glyph) center / contain no-repeat; }
-.source-glyph-pin { --source-glyph: var(--yv-glyph-pin); }
-.source-glyph-find { --source-glyph: var(--glyph-search); }.reader-site { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+.source-glyph { --glyph-size: 16px; }
+.reader-site { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
 .win-tab[data-reader-source]:not(.minimized)::before { display: none; }
 .source-seg a { display: inline-flex; align-items: center; gap: 6px; }
 .source-switch .menu-btn-label::before,
@@ -307,7 +252,7 @@ body.desktop .md-layout {
 }
 .source-switch:has(.source-seg [data-source="pinned"][aria-current]) .menu-btn-label::before,
 .source-switch .seg-choice[href^="/pinned/"]::before {
-  background: currentColor; -webkit-mask: var(--yv-glyph-pin) center / contain no-repeat; mask: var(--yv-glyph-pin) center / contain no-repeat;
+  background: currentColor; -webkit-mask: var(--glyph-pin) center / contain no-repeat; mask: var(--glyph-pin) center / contain no-repeat;
 }
 .source-switch:has(.source-seg [data-source="find"][aria-current]) .menu-btn-label::before,
 .source-switch .seg-choice[href="/find"]::before {
@@ -504,11 +449,6 @@ body.desktop .md-layout {
 .story-scroll:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 3px var(--focus-ring);
-}
-
-.story-note {
-  --glyph-size: 28px;
-  padding: var(--space-5) var(--space-4);
 }
 
 .story > .story-note {
@@ -736,16 +676,9 @@ body.app-page {
   margin-bottom: var(--space-1);
 }
 
-/* A reply newer than the reader last marked read carries the word "new"
-   as well as the accent edge, as a new comment in a discussion does. */
-.reply-new-badge {
-  display: none;
-  color: var(--accent);
-  font-size: var(--text-2xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-}
+/* A reply newer than the reader last marked read carries PUDL's accent
+   badge, "new", as well as the accent edge, as a new comment does. */
+.reply-new-badge { display: none; }
 
 .reply.reply-new {
   box-shadow: inset 3px 0 0 var(--accent);
@@ -754,7 +687,7 @@ body.app-page {
 }
 
 .reply.reply-new .reply-new-badge {
-  display: inline;
+  display: inline-flex;
 }
 
 .reply-parent {
@@ -943,21 +876,9 @@ a.comment-author {
   user-select: none;
 }
 
-.comment-toggle {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  align-self: center;
-  background: var(--text-muted);
-  -webkit-mask: var(--glyph-sort-down) center / contain no-repeat;
-  mask: var(--glyph-sort-down) center / contain no-repeat;
-}
-
-.comment.collapsed > .comment-header > .comment-toggle {
-  transform: rotate(-90deg);
-}
-
-.comment-toggle:dir(rtl) { scale: -1 1; }
+/* A comment's toggle is PUDL's card toggle, which turns with its own
+   aria-expanded (discussion.js). */
+.comment-toggle { align-self: center; }
 
 .comment-collapsed-count {
   display: none;
@@ -978,16 +899,8 @@ a.comment-author {
   padding-inline-start: var(--space-2);
 }
 
-.comment-new-badge {
-  display: none;
-  color: var(--accent);
-  font-size: var(--text-2xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-}
-
-.comment-new > .comment-header > .comment-new-badge { display: inline; }
+.comment-new-badge { display: none; }
+.comment-new > .comment-header > .comment-new-badge { display: inline-flex; }
 
 /* The comment n and N move to, which c collapses. */
 .comment.focused {
@@ -1005,6 +918,7 @@ a.comment-author {
 }
 
 .comment-link:hover { color: var(--accent); }
+.comment-link > .glyph { --glyph-size: 12px; }
 
 .comment-text {
   font-size: var(--text-sm);
@@ -1164,17 +1078,15 @@ kbd {
 .reader-toolbar { flex: none; gap: 6px 0; padding: 6px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
 .reader-toolbar[hidden] { display: none; }
 .reader-toolbar > .toolbar-group { gap: 8px; }
-.reader-panes { flex: none; box-sizing: border-box; height: 30px; align-items: center; }
-/* Previous and Next step through the list, PUDL's back chevron and its
-   mirror, so they read apart from the comments' up and down arrows. On a
-   narrow reader they are their glyphs alone, the tooltip giving the story. */
+.reader-panes { flex: none; }
+/* Previous and Next step through the list with PUDL's back and forward
+   glyphs, swapped in a right-to-left page, so they read apart from the
+   comments' up and down arrows. On a narrow reader they are their glyphs
+   alone, the tooltip giving the story. */
 .reader-toolbar .story-step { white-space: nowrap; gap: 4px; line-height: normal; }
-.story-step > .glyph { --glyph: var(--glyph-back); }
+.story-prev > .glyph, .story-next:dir(rtl) > .glyph { --glyph: var(--glyph-back); }
+.story-next > .glyph, .story-prev:dir(rtl) > .glyph { --glyph: var(--glyph-forward); }
 .reader-toolbar .story-step > .glyph { --glyph-size: 16px; -webkit-mask-size: 14px; mask-size: 14px; }
-.story-next > .glyph { transform: scaleX(-1); }
-.story-step:dir(rtl) > .glyph { transform: scaleX(-1); }
-.story-next:dir(rtl) > .glyph { transform: none; }
-.story-step[aria-disabled="true"] { opacity: .45; cursor: default; }
 .story[data-reader-pane] .story-bar-label { display: none; }
 .story-split:not(.split) { display: flex; flex-direction: column; }
 .story-split:not(.split) > .story-pane:not([hidden]) { flex: 1; min-height: 0; }
@@ -1185,7 +1097,7 @@ kbd {
 .discussion-info .story-bar-meta { white-space: normal; overflow: visible; }
 .story-scroll { overscroll-behavior: contain; }
 .win-bar { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
-.taskbar-scroll { font-size: 21px; }
+.taskbar-scroll > .glyph { --glyph-size: 14px; }
 .taskbar-scroll[hidden] { display: none; }
 .win-bar-dock .win-tab { flex: 0 0 auto; max-width: 250px; }
 body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
@@ -1199,7 +1111,7 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
   .reader-toolbar > .toolbar-group + .toolbar-group { margin-inline-start: 6px; }
   .reader-toolbar > .toolbar-group.reader-end { margin-inline-start: auto; }
   .reader-toolbar .story-step > .toolbar-words { display: none; }
-  .reader-toolbar .story-step { padding-inline: 4px; }
+  .reader-toolbar .story-step { padding-inline: 5px; }
   .reader-panes { flex: none; display: flex; }
   .reader-panes button { flex: none; }
   .article-info, .discussion-info { padding: 10px 14px; }
@@ -1224,7 +1136,7 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
   .win-head [data-win-action="menu"] { order: 5; width: 40px; height: 40px; }
   .story-win .win-head [data-win-action="menu"]::before {
     width: 20px; height: 20px;
-    --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m4 7 6 6 6-6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --glyph: var(--glyph-chevron);
   }
   .win-bar { padding-inline: 6px; gap: 4px; }
   .win-bar-dock .win-tab { max-width: 175px; min-height: 40px; }
@@ -1261,18 +1173,15 @@ body:has(.md-layout[data-md-side="end"]) .sidebar-toggle svg { transform: scaleX
 .stories-button svg { width: 16px; height: 16px; flex: none; }
 /* Keep the migration action within the toast on narrow screens. */
 .migration-toast-action { display: block; width: fit-content; margin-top: var(--space-3); }
-/* The account panel's form fields, and its notices, which a settings
-   panel has no counterpart for. */
-.settings-panel .form-group { display: flex; flex-direction: column; gap: 4px; }
+/* The account panel's notices, which a settings panel has no counterpart
+   for. */
 .settings-panel .notice { margin-block: var(--space-3) 0; }
 .account-panel h1 { font-size: var(--text-lg); }
 
 /* The account is a status item, which PUDL draws, as are its picture and
    the account glyph that stands in for one. The picture is round. */
 img.account-avatar { border-radius: 50%; }
-.account-identity { display: flex; align-items: center; gap: var(--space-4); }
-.account-identity .card-desc { margin: 0; }
-.account-identity .account-avatar { display: block; width: 72px; height: 72px; flex: none; object-fit: cover; --glyph-size: 72px; }
+.account-identity .card-desc { margin: 0; flex: 1 1 16rem; }
 .account-profile { width: 100%; }
 .account-methods { width: 100%; margin-block: var(--space-2); }
 .account-methods td:last-child { width: 1%; white-space: nowrap; text-align: end; }
@@ -1286,21 +1195,18 @@ img.account-avatar { border-radius: 50%; }
 }
 .note-mark { margin-inline-end: 5px; }
 .story-note-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-/* The reader's pin is a square toggle beside the note, as tall as it, with
-   the row's pin glyph; a pinned story's latches in and its glyph fills. */
 .story-pin-toggle[hidden] { display: none; }
-/* The toolbar's glyph buttons, the pin and the refresh: the glyph's box is
-   16 pixels, as Add note's chevron is, so with the same padding on every
-   side each is a square as tall as Add note. A pinned story's pin latches
-   in and its glyph fills. */
-.story-pin-toggle, .reader-icon-btn { padding-inline: 4px; justify-content: center; }
+/* The toolbar's glyph buttons, the pin and the refresh, hold PUDL's glyphs
+   in a 16px box; PUDL makes a small button 28px tall (0.74.1), so 5px on
+   each side and the border make it square. A pinned story's pin latches in
+   and takes the accent colour. */
+.story-pin-toggle, .reader-icon-btn { padding-inline: 5px; justify-content: center; }
 .reader-toolbar :is(.story-pin-toggle, .reader-icon-btn) > .glyph {
   --glyph-size: 16px; -webkit-mask-size: 14px; mask-size: 14px;
 }
-.story-pin-toggle > .glyph { --glyph: var(--yv-glyph-pin); }
+.story-pin-toggle > .glyph { --glyph: var(--glyph-pin); }
 .story-pin-toggle[aria-pressed="true"] { color: var(--accent); }
-.story-pin-toggle[aria-pressed="true"] > .glyph { --glyph: var(--yv-glyph-pinned); }
-.story-refresh > .glyph { --glyph: var(--yv-glyph-refresh); }
+.story-refresh > .glyph { --glyph: var(--glyph-reload); }
 /* Open original, the refresh and Next story stand together at the right,
    and wrap below the note and the pin as one group when they must. */
 .reader-end { margin-inline-start: auto; white-space: nowrap; }
@@ -1311,8 +1217,22 @@ img.account-avatar { border-radius: 50%; }
 .story-note-toggle[hidden] { display: none; }
 .story-note-panel { flex: none; padding: 8px 10px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
 .story-note-panel[hidden] { display: none; }
-.story-note-panel .form-group { display: flex; flex-direction: column; gap: 4px; }
+.story-note-panel .form-group { margin: 0; }
 .story-note-text { width: 100%; max-height: 40vh; }
 .story-row .md-item .note-excerpt, .story-row .md-item .collection-names { display: block; white-space: normal; }
 .story-row .md-item .note-excerpt { font-style: italic; }
 .collection-manage { flex: none; }
+
+/* YAVCHN's few glyphs drawn as masks of their own, the read tick, the
+   note's mark, the source switch's marks and a blocked domain's remove,
+   are painted in the system's colours in high-contrast mode, as PUDL
+   paints its own, since the system's recolouring would leave them blank. */
+@media (forced-colors: active) {
+  .story-row.visited .md-item::before, .note-mark, .story-note-toggle.has-note::before,
+  .source-switch .seg-choice[href^="/pinned/"]::before, .source-switch .seg-choice[href="/find"]::before,
+  .source-switch .seg-choice[aria-current]:not([aria-current="false"])::after,
+  .source-switch:has(.source-seg :is([data-source="pinned"], [data-source="find"])[aria-current]) .menu-btn-label::before {
+    forced-color-adjust: none; background-color: CanvasText;
+  }
+  .filters-list-remove::before { forced-color-adjust: none; background: ButtonText; }
+}

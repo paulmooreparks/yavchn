@@ -95,7 +95,7 @@
   {{ range .Replies }}
   <li class="reply" data-time="{{ .Time }}">
     <div class="reply-head">
-      <span class="reply-new-badge">new</span>
+      <span class="badge accent reply-new-badge">new</span>
       {{ if .AuthorKey }}<a class="comment-author" href="{{ .AuthorURL }}" data-win-open="{{ .AuthorKey }}">{{ .Author }}</a>{{ else }}<span class="comment-author">{{ .Author }}</span>{{ end }}
       <span class="num">{{ .Age }}</span>
     </div>
