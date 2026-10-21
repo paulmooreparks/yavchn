@@ -270,7 +270,7 @@ func TestRender_LegalPages(t *testing.T) {
 			t.Errorf("%s page: %d", c.path, page.Code)
 		}
 		win := get(t, mux, "/window/"+c.key)
-		if win.Code != http.StatusOK || !strings.Contains(win.Body.String(), `data-win="`+c.key+`"`) || !strings.Contains(win.Body.String(), `data-window-glyph="document"`) {
+		if win.Code != http.StatusOK || !strings.Contains(win.Body.String(), `data-win="`+c.key+`"`) || !strings.Contains(win.Body.String(), `data-win-glyph="document"`) {
 			t.Errorf("%s window: %d", c.key, win.Code)
 		}
 		if n := strings.Count(page.Body.String(), `<a href="`+c.path+`" data-win-open="`+c.key+`">`); n < 2 {

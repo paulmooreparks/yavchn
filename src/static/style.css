@@ -286,7 +286,6 @@ body.desktop .md-layout {
 .source-glyph-pin { --source-glyph: var(--yv-glyph-pin); }
 .source-glyph-find { --source-glyph: var(--glyph-search); }.reader-site { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
 .win-tab[data-reader-source]:not(.minimized)::before { display: none; }
-.reader-tab-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .source-seg a { display: inline-flex; align-items: center; gap: 6px; }
 .source-switch .menu-btn-label::before,
 .source-switch .seg-choice[href^="/hn/"]::before,
@@ -1278,11 +1277,6 @@ img.account-avatar { border-radius: 50%; }
 .account-methods { width: 100%; margin-block: var(--space-2); }
 .account-methods td:last-child { width: 1%; white-space: nowrap; text-align: end; }
 .account-methods form { margin: 0; }
-
-/* Applet identity follows the host's icon choice and PUDL's masked glyphs. */
-.win-tab .task-icon { width: 16px; height: 16px; flex: none; object-fit: contain; }
-.win-tab .task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.win-tab:has(.task-icon):not(.minimized)::before { display: none; }
 
 /* Collections and notes. A note's mark pairs the document glyph with the
    accent colour, and its words are given to assistive technology. */

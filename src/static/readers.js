@@ -41,41 +41,20 @@
         head.insertBefore(mark, title);
         win.setAttribute('aria-labelledby', mark.id + ' ' + title.id);
       } else win.setAttribute('aria-labelledby', title.id);
+      /* A reader's tab shows its site before the title PUDL draws. The
+         badge goes beside PUDL's own parts of the tab and leaves them be,
+         since PUDL keeps and updates those parts (0.69.3). */
       document.querySelectorAll('[data-win-tab="' + CSS.escape(key) + '"]').forEach(function (tab) {
-        var headline = document.createElement('span');
-        headline.className = 'reader-tab-title';
-        headline.textContent = title.textContent.trim();
-        tab.replaceChildren(headline);
+        var had = tab.querySelector(':scope > .reader-site');
+        if (had) had.remove();
         if (site) {
-          tab.prepend(badge(site));
+          var mark = badge(site);
+          var name = tab.querySelector(':scope > .win-item-title');
+          if (name) tab.insertBefore(mark, name); else tab.prepend(mark);
           tab.setAttribute('data-reader-source', root.dataset.storySource);
-          tab.title = site.label + ': ' + title.textContent.trim() + (tab.classList.contains('minimized') ? ' (minimized)' : '');
         } else {
           tab.removeAttribute('data-reader-source');
-          tab.title = headline.textContent + (tab.classList.contains('minimized') ? ' (minimized)' : '');
         }
-      });
-    });
-  }
-
-  // Applet icons come from host-owned window metadata, with PUDL's app glyph as fallback.
-  function syncAppletIcons() {
-    document.querySelectorAll('.win.app-win').forEach(function (win) {
-      var key = win.getAttribute('data-win');
-      document.querySelectorAll('[data-win-tab="' + CSS.escape(key) + '"]').forEach(function (tab) {
-        var title = document.createElement('span');
-        title.className = 'task-title';
-        title.textContent = win.querySelector('.win-title').textContent.trim();
-        var iconURL = win.getAttribute('data-window-icon');
-        var icon = document.createElement(iconURL ? 'img' : 'span');
-        icon.className = 'task-icon';
-        if (iconURL) { icon.src = iconURL; icon.alt = ''; }
-        else {
-          icon.classList.add('glyph');
-          icon.style.setProperty('--glyph', 'var(--glyph-' + (win.getAttribute('data-window-glyph') || 'app') + ')');
-        }
-        icon.setAttribute('aria-hidden', 'true');
-        tab.replaceChildren(icon, title);
       });
     });
   }
@@ -148,7 +127,6 @@
 
   function syncRows() {
     syncChrome();
-    syncAppletIcons();
     var front = document.querySelector('.win.active:not([hidden]) .story');
     document.querySelectorAll('.story-list .story-row').forEach(function (row) {
       var link = row.querySelector('a[data-win-open]');
@@ -205,7 +183,6 @@
   var taskDock = document.querySelector('[data-win-dock]');
   if (taskDock) new MutationObserver(function () {
     syncChrome();
-    syncAppletIcons();
   }).observe(taskDock, { childList: true });
   window.addEventListener('popstate', function () {
     mounted.forEach(function (entry, key) {
