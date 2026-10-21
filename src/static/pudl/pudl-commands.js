@@ -52,12 +52,43 @@
     return typeof v === 'function' && field !== 'run' ? v.call(cmd) : v;
   }
 
-  function tableOf(scope) {
+  /* === The index ==========================================================
+     A scope's table is asked for once per task and indexed by id (0.69.3):
+     drawing every control, answering a key, building a menu or listing
+     the commands each looks commands up many times, and asking the table
+     each time ran the application's commandTable() once a control and
+     searched it from the top. The index is dropped once the task is done,
+     and at once when a command runs, a scope is registered or something
+     calls changed, so it never outlives the state it was built from. */
+  var pass = null;          // Map: a scope's table function -> { list, byId, flat }
+  function index(scope) {
     var get = scopes.get(scope);
-    var t;
-    try { t = get ? get() : null; } catch (err) { if (window.console) console.warn('pudl-commands:', err); }
-    return Array.isArray(t) ? t : [];
+    if (!get) return { list: [], byId: new Map(), flat: [] };
+    if (!pass) { pass = new Map(); Promise.resolve().then(function () { pass = null; }); }
+    var hit = pass.get(get);
+    if (hit) return hit;
+    var list;
+    try { list = get(); } catch (err) { if (window.console) console.warn('pudl-commands:', err); }
+    if (!Array.isArray(list)) list = [];
+    var byId = new Map(), flatList = [];
+    /* Depth first, a command before its items, so the first of an id
+       found is the one a search from the top would find. */
+    (function walk(arr) {
+      arr.forEach(function (c) {
+        if (!c || typeof c !== 'object') return;
+        if (typeof c.id === 'string' && !byId.has(c.id)) byId.set(c.id, c);
+        flatList.push(c);
+        var items = val(c, 'items');
+        if (Array.isArray(items)) walk(items.filter(function (x) { return x && typeof x === 'object'; }));
+      });
+    })(list);
+    hit = { list: list, byId: byId, flat: flatList };
+    pass.set(get, hit);
+    return hit;
   }
+  function forget() { pass = null; }
+
+  function tableOf(scope) { return index(scope).list; }
 
   /* The scopes around el, nearest first, ending at the page. */
   function chain(el) {
@@ -70,19 +101,8 @@
   function find(id, el) {
     var list = chain(el);
     for (var i = 0; i < list.length; i++) {
-      var hit = search(tableOf(list[i]), id);
+      var hit = index(list[i]).byId.get(id);
       if (hit) return { cmd: hit, scope: list[i] };
-    }
-    return null;
-  }
-
-  function search(table, id) {
-    for (var i = 0; i < table.length; i++) {
-      var c = table[i];
-      if (!c || typeof c !== 'object') continue;
-      if (c.id === id) return c;
-      var items = val(c, 'items');
-      if (Array.isArray(items)) { var inner = search(items.filter(function (x) { return typeof x === 'object'; }), id); if (inner) return inner; }
     }
     return null;
   }
@@ -125,58 +145,100 @@
       }
       return Promise.reject(new Error((val(cmd, 'label') || cmd.id) + ' has nothing to run'));
     }
-    try { return Promise.resolve(cmd.run(value)).then(function (r) { changed(); return r; }); }
-    catch (err) { return Promise.reject(err); }
+    /* What it ran may change the table, so the index goes with it. */
+    try { var r = cmd.run(value); forget(); return Promise.resolve(r).then(function (v) { changed(); return v; }); }
+    catch (err) { forget(); return Promise.reject(err); }
   }
 
   /* === Controls =========================================================== */
 
+  /* A tone colours a command's control and row with a status colour and
+     nothing else (0.69.0). Colour is never the only signal, so a toned
+     command without a glyph of its own takes the status's glyph. */
+  var TONES = { danger: 'stop', warn: 'warning', positive: 'check' };
+  function toneOf(cmd) { var t = val(cmd, 'tone'); return Object.prototype.hasOwnProperty.call(TONES, t) ? t : null; }
+  function glyphOf(cmd) {
+    return val(cmd, 'glyph') || (val(cmd, 'danger') ? 'warning' : null) || (toneOf(cmd) ? TONES[toneOf(cmd)] : null);
+  }
+  /* A command opens a menu when it has items or draws its own panel. */
+  function opensMenu(cmd, el) { return !!itemsOf(cmd, el) || typeof cmd.panel === 'function'; }
+
+  /* Drawing touches the page only where something changed (0.69.3): an
+     attribute is set only when its value differs, and a control's glyph,
+     words and badge are built again only when one of them differs. Every
+     change to the page wakes whatever watches it, and a toolbar measures
+     itself again after a change, so a redraw that changes nothing must
+     leave nothing changed. touched says whether a drawing changed any. */
+  var touched = false;
+  function attr(el, name, value) {
+    if (value == null || value === false) { if (el.hasAttribute(name)) { el.removeAttribute(name); touched = true; } return; }
+    value = value === true ? '' : String(value);
+    if (el.getAttribute(name) !== value) { el.setAttribute(name, value); touched = true; }
+  }
+  function prop(el, name, value) { if (el[name] !== value) { el[name] = value; touched = true; } }
+
   function fill(ctl) {
     var f = find(ctl.getAttribute('data-command'), ctl);
     if (!f) return;
-    var cmd = f.cmd, label = val(cmd, 'label') || cmd.id, glyph = val(cmd, 'glyph');
-    var items = itemsOf(cmd, ctl);
+    var cmd = f.cmd, label = val(cmd, 'label') || cmd.id, glyph = glyphOf(cmd);
+    var items = itemsOf(cmd, ctl), menu = opensMenu(cmd, ctl);
     if (!ctl.hasAttribute('data-command-own') && !ctl.__pudlFilled && ctl.childNodes.length) ctl.setAttribute('data-command-own', '');
     var own = ctl.hasAttribute('data-command-own');
+    var badge = val(cmd, 'badge');
     if (!own) {
-      ctl.__pudlFilled = true;
-      ctl.textContent = '';
-      if (val(cmd, 'danger') && !glyph) glyph = 'warning';
-      if (glyph) ctl.appendChild(glyphEl(glyph));
-      var words = document.createElement('span');
-      words.className = 'toolbar-words';
-      words.textContent = items && val(cmd, 'current') ? val(cmd, 'current') : label.replace(/…$/, '');
-      ctl.appendChild(words);
-      var badge = val(cmd, 'badge');
-      if (badge != null && badge !== '') {
-        var b = document.createElement('span');
-        b.className = 'toolbar-badge';
-        b.textContent = String(badge);
-        ctl.appendChild(b);
+      var words = items && val(cmd, 'current') ? val(cmd, 'current') : label.replace(/…$/, '');
+      var sig = (glyph || '') + '\n' + words + '\n' + (badge == null ? '' : badge);
+      if (ctl.__pudlSig !== sig) {
+        ctl.__pudlSig = sig;
+        ctl.__pudlFilled = true;
+        touched = true;
+        ctl.textContent = '';
+        if (glyph) ctl.appendChild(glyphEl(glyph));
+        var w = document.createElement('span');
+        w.className = 'toolbar-words';
+        w.textContent = words;
+        ctl.appendChild(w);
+        if (badge != null && badge !== '') {
+          var b = document.createElement('span');
+          b.className = 'toolbar-badge';
+          b.textContent = String(badge);
+          ctl.appendChild(b);
+        }
       }
-      if (!ctl.classList.contains('btn') && !ctl.classList.contains('icon-btn')) ctl.classList.add('btn', 'btn-sm');
+      if (!ctl.classList.contains('btn') && !ctl.classList.contains('icon-btn')) { ctl.classList.add('btn', 'btn-sm'); touched = true; }
     }
-    var key = val(cmd, 'shortcut');
-    ctl.setAttribute('aria-label', label.replace(/…$/, '') + (items && val(cmd, 'current') ? ': ' + val(cmd, 'current') : ''));
-    ctl.title = label + (key ? ' (' + shown(key) + ')' : '');
-    if (key) ctl.setAttribute('aria-keyshortcuts', key.replace(/Mod/g, 'Control')); else ctl.removeAttribute('aria-keyshortcuts');
-    ctl.disabled = !!val(cmd, 'disabled');
-    if (val(cmd, 'disabled') && val(cmd, 'reason')) ctl.title = label + ': ' + val(cmd, 'reason');
-    ctl.hidden = !!val(cmd, 'hidden');
+    var key = val(cmd, 'shortcut'), detail = val(cmd, 'detail');
+    /* The name a screen reader hears carries the badge, as the eye sees it. */
+    attr(ctl, 'aria-label', label.replace(/…$/, '') + (items && val(cmd, 'current') ? ': ' + val(cmd, 'current') : '') +
+      (badge != null && badge !== '' ? ', ' + badge : ''));
+    var title = val(cmd, 'disabled') && val(cmd, 'reason') ? label + ': ' + val(cmd, 'reason') : label + (key ? ' (' + shown(key) + ')' : '') + (detail ? '\n' + detail : '');
+    attr(ctl, 'title', title);
+    attr(ctl, 'aria-keyshortcuts', key ? key.replace(/Mod/g, 'Control') : null);
+    prop(ctl, 'disabled', !!val(cmd, 'disabled'));
+    attr(ctl, 'data-tone', toneOf(cmd));
+    prop(ctl, 'hidden', !!val(cmd, 'hidden'));
     /* A menu button's wrapper goes with it, so it leaves no gap. */
-    if (ctl.parentElement && ctl.parentElement.classList.contains('menu') && ctl.parentElement.children[0] === ctl) ctl.parentElement.hidden = ctl.hidden;
-    ctl.classList.toggle('btn-danger', !!val(cmd, 'danger') && ctl.classList.contains('btn'));
+    if (ctl.parentElement && ctl.parentElement.classList.contains('menu') && ctl.parentElement.children[0] === ctl) prop(ctl.parentElement, 'hidden', ctl.hidden);
+    var danger = !!val(cmd, 'danger') && ctl.classList.contains('btn');
+    if (ctl.classList.contains('btn-danger') !== danger) { ctl.classList.toggle('btn-danger', danger); touched = true; }
     var checked = val(cmd, 'checked');
-    if (checked != null && !items) ctl.setAttribute('aria-pressed', String(!!checked)); else ctl.removeAttribute('aria-pressed');
-    if (items) menuFor(ctl, cmd);
+    attr(ctl, 'aria-pressed', checked != null && !menu ? String(!!checked) : null);
+    if (menu && !ctl.__pudlMenu) { menuFor(ctl, cmd); touched = true; }
     if (!ctl.__pudlBound) {
       ctl.__pudlBound = true;
       ctl.addEventListener('mousedown', function (e) { if (ctl.closest('.toolbar')) e.preventDefault(); });
       ctl.addEventListener('click', function () {
         var now = find(ctl.getAttribute('data-command'), ctl);
-        if (now && !itemsOf(now.cmd, ctl)) runCmd(now.cmd, ctl.getAttribute('data-command-value') || undefined).catch(function () {});
+        if (now && !opensMenu(now.cmd, ctl)) runCmd(now.cmd, ctl.getAttribute('data-command-value') || undefined).catch(function () {});
       });
     }
+  }
+
+  /* A command's own content in a menu: panel(container) draws into the
+     container each time the menu opens (0.69.0), such as a grid of
+     swatches or a searchable list. */
+  function drawPanel(cmd, container) {
+    try { cmd.panel(container); } catch (err) { if (window.console) console.warn('pudl-commands: ' + cmd.id + '.panel():', err); }
   }
 
   /* A command with items is a menu button: its panel is made beside it
@@ -202,7 +264,9 @@
       if (e.newState !== 'open') return;
       var now = find(ctl.getAttribute('data-command'), ctl);
       panel.textContent = '';
-      if (now) rows(panel, itemsOf(now.cmd, ctl) || [], ctl);
+      if (!now) return;
+      if (typeof now.cmd.panel === 'function') drawPanel(now.cmd, panel);
+      else rows(panel, itemsOf(now.cmd, ctl) || [], ctl);
     });
   }
 
@@ -223,6 +287,18 @@
         panel.appendChild(h);
       }
       lastChoice = choice || null;
+      /* A command with a panel of its own draws it under its name, in
+         place, as a folded group's menu shows a command's items. */
+      if (typeof c.panel === 'function') {
+        var ph = document.createElement('div');
+        ph.className = 'md-section-label';
+        ph.textContent = val(c, 'label') || c.id;
+        var box = document.createElement('div');
+        box.className = 'menu-command-panel';
+        panel.append(ph, box);
+        drawPanel(c, box);
+        return;
+      }
       panel.appendChild(row(c, el, onRun));
     });
   }
@@ -237,13 +313,15 @@
       b.setAttribute('aria-pressed', String(!!checked));
       b.setAttribute('aria-checked', String(!!checked));
     } else {
-      var g = val(c, 'glyph') || (val(c, 'danger') ? 'warning' : null);
+      var g = glyphOf(c);
       if (g) b.appendChild(glyphEl(g));
     }
+    if (toneOf(c)) b.setAttribute('data-tone', toneOf(c));
     var words = document.createElement('span');
     words.className = 'menu-words';
     words.textContent = val(c, 'label') || c.id;
-    var second = val(c, 'disabled') && val(c, 'reason') ? val(c, 'reason') : (val(c, 'badge') != null ? String(val(c, 'badge')) : null);
+    /* The second line: why it is disabled, else what it does, else its badge. */
+    var second = val(c, 'disabled') && val(c, 'reason') ? val(c, 'reason') : val(c, 'detail') ? String(val(c, 'detail')) : (val(c, 'badge') != null ? String(val(c, 'badge')) : null);
     if (second) {
       var box = document.createElement('span');
       box.className = 'menu-row-text';
@@ -269,13 +347,14 @@
   /* A segmented control of a choice: one button per command in it. */
   function fillChoice(seg) {
     var name = seg.getAttribute('data-command-choice');
-    var list = chain(seg).reduce(function (all, s) { return all.concat(flat(tableOf(s))); }, []).filter(function (c) { return val(c, 'choice') === name && !val(c, 'hidden'); });
-    if (!seg.classList.contains('seg')) seg.classList.add('seg', 'sm');
-    seg.setAttribute('role', 'group');
-    seg.hidden = !list.length;
-    if (!seg.hasAttribute('aria-label') && list[0] && list[0].choiceLabel) seg.setAttribute('aria-label', list[0].choiceLabel);
+    var list = chain(seg).reduce(function (all, s) { return all.concat(index(s).flat); }, []).filter(function (c) { return val(c, 'choice') === name && !val(c, 'hidden'); });
+    if (!seg.classList.contains('seg')) { seg.classList.add('seg', 'sm'); touched = true; }
+    attr(seg, 'role', 'group');
+    prop(seg, 'hidden', !list.length);
+    if (!seg.hasAttribute('aria-label') && list[0] && list[0].choiceLabel) attr(seg, 'aria-label', list[0].choiceLabel);
     var have = Array.prototype.map.call(seg.children, function (b) { return b.getAttribute('data-command'); }).join();
     if (have !== list.map(function (c) { return c.id; }).join()) {
+      touched = true;
       seg.textContent = '';
       list.forEach(function (c) {
         var b = document.createElement('button');
@@ -287,10 +366,11 @@
     Array.prototype.forEach.call(seg.children, function (b) {
       var f = find(b.getAttribute('data-command'), b);
       if (!f) return;
-      b.textContent = val(f.cmd, 'label');
-      b.title = val(f.cmd, 'label');
-      b.setAttribute('aria-pressed', String(!!val(f.cmd, 'checked')));
-      b.disabled = !!val(f.cmd, 'disabled');
+      var label = String(val(f.cmd, 'label'));
+      if (b.textContent !== label) { b.textContent = label; touched = true; }
+      attr(b, 'title', label);
+      attr(b, 'aria-pressed', String(!!val(f.cmd, 'checked')));
+      prop(b, 'disabled', !!val(f.cmd, 'disabled'));
       if (!b.__pudlBound) {
         b.__pudlBound = true;
         b.addEventListener('click', function () { var now = find(b.getAttribute('data-command'), b); if (now) runCmd(now.cmd).catch(function () {}); });
@@ -298,16 +378,6 @@
     });
   }
 
-  function flat(table) {
-    var out = [];
-    table.forEach(function (c) {
-      if (!c || typeof c !== 'object') return;
-      out.push(c);
-      var items = val(c, 'items');
-      if (Array.isArray(items)) out = out.concat(flat(items.filter(function (x) { return typeof x === 'object'; })));
-    });
-    return out;
-  }
 
   /* A toolbar group of commands with nothing to show leaves the row, and
      comes back when one of them shows (0.68.1, from parkscomputing.com's
@@ -321,20 +391,31 @@
       });
       if (!parts.length) return;
       var any = parts.some(function (c) { return !c.hidden; });
-      if (g.hidden === any) g.hidden = !any;
+      if (g.hidden === any) { g.hidden = !any; touched = true; }
     });
   }
 
+  /* pudl:commands-change fires after every drawing, and its detail.changed
+     says whether the drawing changed the page, so a toolbar measures
+     itself again only when it did. */
   function draw(root) {
+    touched = false;
     (root || document).querySelectorAll('[data-command-choice]').forEach(fillChoice);
     (root || document).querySelectorAll('[data-command]').forEach(function (c) { if (!c.closest('[data-command-choice]')) fill(c); });
     emptyGroups(root);
-    document.dispatchEvent(new CustomEvent('pudl:commands-change'));
+    document.dispatchEvent(new CustomEvent('pudl:commands-change', { detail: { changed: touched } }));
   }
 
+  /* The controls are drawn again once the current task is done, however
+     many times it calls changed (0.69.1). An animation frame was used
+     before, but a browser runs none in a hidden tab and few in a headless
+     one, so a script or an agent reading a control's state just after
+     running a command could find the old state. */
   function changed() {
+    forget();
     if (frame) return;
-    frame = requestAnimationFrame(function () { frame = 0; draw(); });
+    frame = 1;
+    Promise.resolve().then(function () { frame = 0; draw(); });
   }
 
   /* === Keys =============================================================== */
@@ -359,10 +440,11 @@
     var pressed = spelling(e), el = document.activeElement || document.body;
     var list = chain(el);
     for (var i = 0; i < list.length; i++) {
-      var cmds = flat(tableOf(list[i]));
+      var cmds = index(list[i]).flat;
       for (var j = 0; j < cmds.length; j++) {
         var key = val(cmds[j], 'shortcut');
-        if (key && normal(key) === pressed && !val(cmds[j], 'hidden')) {
+        /* bind: false shows a key that something else binds (0.69.0). */
+        if (key && normal(key) === pressed && !val(cmds[j], 'hidden') && val(cmds[j], 'bind') !== false) {
           e.preventDefault();
           runCmd(cmds[j]).catch(function () {});
           return;
@@ -373,42 +455,69 @@
 
   /* === For agents ========================================================= */
 
-  function describe(c, el) {
+  /* Whether a toolbar shows a command, counting only the controls whose
+     command is this scope's, so two windows with a command of one id
+     never answer for each other (0.69.0). Two scopes are the same when
+     they were registered with the same table, as an applet's mount and
+     the toolbars drawn beside it are. */
+  function sameScope(a, b) { return a === b || (scopes.has(a) && scopes.get(a) === scopes.get(b)); }
+
+  /* controls is the page's command controls by id, gathered once for the
+     whole listing rather than searched for once a command. */
+  function controlsById() {
+    var m = new Map();
+    document.querySelectorAll('[data-command]').forEach(function (ctl) {
+      var id = ctl.getAttribute('data-command');
+      if (!m.has(id)) m.set(id, []);
+      m.get(id).push(ctl);
+    });
+    return m;
+  }
+
+  function describe(c, el, controls) {
     var shownBy = 'none';
-    document.querySelectorAll('[data-command="' + CSS.escape(c.id) + '"]').forEach(function (ctl) {
+    controls = controls || controlsById();
+    (controls.get(c.id) || []).forEach(function (ctl) {
       if (shownBy === 'toolbar') return;
+      var mine = find(c.id, ctl);
+      if (!mine || !sameScope(mine.scope, el)) return;
       var group = ctl.closest('.toolbar-group');
       if (group && +(group.getAttribute('data-toolbar-stage') || 1) >= 3) shownBy = 'folded';
       else if (ctl.getClientRects().length) shownBy = 'toolbar';
     });
     var out = { id: c.id, label: val(c, 'label') || c.id };
-    ['glyph', 'shortcut', 'disabled', 'reason', 'checked', 'choice', 'value', 'current', 'badge', 'hidden', 'danger', 'action'].forEach(function (f) {
+    ['glyph', 'shortcut', 'disabled', 'reason', 'detail', 'checked', 'choice', 'value', 'current', 'badge', 'tone', 'hidden', 'danger', 'action'].forEach(function (f) {
       var v = val(c, f);
       if (v != null && v !== false && v !== '') out[f] = v;
     });
+    if (val(c, 'bind') === false) out.bind = false;
+    if (typeof c.panel === 'function') out.panel = true;
     out.shown = val(c, 'hidden') ? 'hidden' : shownBy;
     var items = itemsOf(c, el);
-    if (items) out.items = items.filter(function (x) { return typeof x === 'object'; }).map(function (x) { return describe(x, el); });
+    if (items) out.items = items.filter(function (x) { return typeof x === 'object'; }).map(function (x) { return describe(x, el, controls); });
     return out;
   }
 
   function list(el) {
-    var seen = {}, out = [];
+    var seen = {}, out = [], controls = controlsById();
     chain(el || document.body).forEach(function (s) {
       tableOf(s).forEach(function (c) {
         if (!c || typeof c !== 'object' || seen[c.id]) return;
         seen[c.id] = true;
-        out.push(describe(c, s));
+        out.push(describe(c, s, controls));
       });
     });
     return out;
   }
 
+  /* A caller that names an element runs only a command in that element's
+     scopes, so a script or an agent asking about one window never runs
+     another's (0.69.0). One that names none is looked for where focus is,
+     and then in every scope. */
   function run(id, value, el, opts) {
     var f = find(id, el || document.activeElement || document.body);
-    if (!f) {
-      /* An agent may not know where focus is: look in every scope. */
-      scopes.forEach(function (get, s) { if (!f) { var c = search(tableOf(s), id); if (c) f = { cmd: c, scope: s }; } });
+    if (!f && !el) {
+      scopes.forEach(function (get, s) { if (!f) { var c = index(s).byId.get(id); if (c) f = { cmd: c, scope: s }; } });
     }
     if (!f) return Promise.reject(new Error('there is no command ' + id));
     return runCmd(f.cmd, value, opts || { owner: { kind: 'script' } });
@@ -427,6 +536,11 @@
     if (!Array.isArray(list)) return list;
     var out = [];
     list.forEach(function (x) {
+      /* A command given as an object, such as an item of another command,
+         is turned into a row as one named by its id is (0.69.1), so its
+         choice is a radio row and its state is read now. A plain row
+         without an id passes through as it is. */
+      if (x && typeof x === 'object' && typeof x.id === 'string' && !x.heading) { toRow(x); return; }
       if (x === '-' || (x && typeof x === 'object')) {
         if (x && typeof x === 'object' && Array.isArray(x.items)) x = Object.assign({}, x, { items: menuRows(x.items, scope) });
         out.push(x);
@@ -438,9 +552,14 @@
         if (!warnedIds[x] && window.console) { warnedIds[x] = true; console.warn('pudl-commands: a menu names the command ' + x + ', which its scope does not have'); }
         return;
       }
-      var c = f.cmd;
-      if (val(c, 'hidden')) return;
+      toRow(f.cmd);
+    });
+    function toRow(c) {
+      /* A panel of the command's own is not a row the menu bar can draw. */
+      if (val(c, 'hidden') || typeof c.panel === 'function') return;
       var row = { id: c.id, label: val(c, 'label') || c.id };
+      if (val(c, 'detail')) row.detail = String(val(c, 'detail'));
+      if (val(c, 'bind') === false) row.bind = false;
       var glyph = val(c, 'glyph'), key = val(c, 'shortcut'), checked = val(c, 'checked'), choice = val(c, 'choice');
       if (glyph) row.glyph = glyph;
       if (key) row.shortcut = key;
@@ -452,7 +571,7 @@
       if (Array.isArray(items)) row.items = menuRows(items, scope);
       else row.run = function () { runCmd(c, val(c, 'value')).catch(function () {}); };
       out.push(row);
-    });
+    }
     /* No separator first, last or twice running. */
     return out.filter(function (r, i, all) {
       if (r !== '-') return true;
@@ -464,6 +583,7 @@
   function register(scope, table) {
     var get = typeof table === 'function' ? table : function () { return table; };
     scopes.set(scope, get);
+    forget();
     changed();
     return function () { if (scopes.get(scope) === get) scopes.delete(scope); changed(); };
   }

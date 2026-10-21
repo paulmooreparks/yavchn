@@ -13,28 +13,100 @@
        </div>
      </div>
 
-   The toolbar is one stop in the Tab order, on the last control used or
+   The toolbar is one stop in the Tab order, on the last button used or
    the first: Left and Right move along its enabled controls, Home and End
-   to its ends, and Tab leaves. A control in the state the cursor is in
-   carries aria-pressed="true" and is drawn pressed in. A menu button whose
+   to its ends, and Tab leaves. A field a reader types in keeps its own
+   keys and is a Tab stop of its own, as in a form (0.70.1): Left, Right,
+   Home and End move its caret, Left with the caret at the field's start
+   moves to the control before and Right at its end to the control after,
+   and a field that does not say where its caret is, such as a number
+   field, keeps them always and is left with Tab. A control in the state
+   the cursor is in carries aria-pressed="true" and is drawn pressed in. A menu button whose
    every row is disabled is disabled with them, and enabled again when a
    row is; the script watches the rows. pudlToolbar.enhance(root) takes in
    toolbars a host has added. */
 (function () {
   'use strict';
 
+  var CONTROL = 'button, a[href], input, select, textarea';
+
   function controls(bar) {
-    return Array.prototype.filter.call(bar.querySelectorAll('button, a[href], input, select'), function (c) {
+    return Array.prototype.filter.call(bar.querySelectorAll(CONTROL), function (c) {
       return !c.closest('.menu-panel') && !c.disabled && c.getAttribute('aria-disabled') !== 'true' && c.getClientRects().length > 0;
     });
   }
 
-  function stop(bar, on) {
-    var all = Array.prototype.filter.call(bar.querySelectorAll('button, a[href], input, select'), function (c) { return !c.closest('.menu-panel'); });
-    var live = controls(bar);
+  /* A field a reader types in or sets with the arrow keys: a text area, or
+     an input other than a box, a button, a file or a colour. A range is one,
+     since its arrows set its value. */
+  function isField(c) {
+    if (c.tagName === 'TEXTAREA') return true;
+    if (c.tagName !== 'INPUT') return false;
+    return !/^(checkbox|radio|button|submit|reset|image|file|color)$/.test(c.type);
+  }
+
+  /* Whether the caret is at the field's start, or with forward at its end,
+     with nothing selected. HTML gives selectionStart only for text, search,
+     URL, telephone and password fields and text areas, and null for every
+     other type, which then never lets an arrow key leave
+     (https://html.spec.whatwg.org/multipage/input.html#do-not-apply). */
+  function atEdge(c, forward) {
+    var s, e;
+    try { s = c.selectionStart; e = c.selectionEnd; } catch (err) { return false; }
+    if (typeof s !== 'number' || s !== e) return false;
+    return forward ? s === c.value.length : s === 0;
+  }
+
+  /* The control that is the toolbar's one tab stop. With cheap set, a stop
+     that is still enabled and not inside anything hidden is kept as it is
+     without measuring every control (0.69.3), since measuring makes the
+     browser lay out a page that may still be being built; the full check,
+     which also skips controls a fold has put out of sight, runs after a
+     fold and as focus or the arrow keys move. A tab index is written only
+     when it changes. */
+  /* Whether a fold leaves a control in sight, read from the stages rather
+     than measured: a folded group shows only its fold button, an open one
+     everything but, and a group in More shows nothing. */
+  function inSight(c, bar) {
+    if (c.disabled || c.getAttribute('aria-disabled') === 'true' || c.closest('[hidden]')) return false;
+    if (c.closest('.toolbar-more')) return bar.hasAttribute('data-toolbar-more');
+    var g = c.closest('.toolbar-group'), st = g ? Number(g.getAttribute('data-toolbar-stage')) || 1 : 1;
+    if (st >= 5) return false;
+    return !!c.closest('.toolbar-fold') === (st >= 3);
+  }
+
+  function stop(bar, on, cheap) {
+    var all = [];
+    /* Every field is a Tab stop of its own, and the toolbar's one stop is
+       among the rest (0.70.1). */
+    Array.prototype.forEach.call(bar.querySelectorAll(CONTROL), function (c) {
+      if (c.closest('.menu-panel')) return;
+      if (isField(c)) { if (c.tabIndex !== 0) c.tabIndex = 0; }
+      else all.push(c);
+    });
+    if (on && isField(on)) on = null;
+    if (cheap && !on) {
+      /* New controls are tab stops until told otherwise, so of those that
+         are, the first in sight is kept, without measuring. */
+      var keep = all.filter(function (c) { return c.tabIndex === 0 && inSight(c, bar); })[0];
+      /* With none, the first control in sight stands in now, and the full
+         check runs in the next frame, when the page is laid out anyway. */
+      if (!keep) {
+        keep = all.filter(function (c) { return inSight(c, bar); })[0];
+        if (keep && !bar.__stopCheck) {
+          bar.__stopCheck = true;
+          requestAnimationFrame(function () { bar.__stopCheck = false; if (!bar.contains(document.activeElement)) stop(bar, null); });
+        }
+      }
+      if (keep) {
+        all.forEach(function (c) { var t = c === keep ? 0 : -1; if (c.tabIndex !== t) c.tabIndex = t; });
+        return;
+      }
+    }
+    var live = controls(bar).filter(function (c) { return !isField(c); });
     if (!live.length) return;
     if (!on || live.indexOf(on) < 0) on = live.filter(function (c) { return c.tabIndex === 0; })[0] || live[0];
-    all.forEach(function (c) { c.tabIndex = c === on ? 0 : -1; });
+    all.forEach(function (c) { var t = c === on ? 0 : -1; if (c.tabIndex !== t) c.tabIndex = t; });
   }
 
   /* A menu button is disabled while its rows all are. */
@@ -52,34 +124,65 @@
   }
 
   function enhance(root) {
-    (root || document).querySelectorAll('.toolbar').forEach(function (bar) {
+    (root || document).querySelectorAll('.toolbar').forEach(enhanceBar);
+  }
+
+  /* A toolbar watches only itself (0.69.3): a change inside it updates its
+     tab stop and its menu buttons, and a folding toolbar folds again once
+     the change is done. Nothing else in the page wakes it. */
+  function enhanceBar(bar) {
       if (!bar.hasAttribute('role')) bar.setAttribute('role', 'toolbar');
       menus(bar);
-      stop(bar, null);
+      stop(bar, null, true);
       if (bar.__ready) return;
       bar.__ready = true;
       bar.addEventListener('keydown', function (e) {
-        if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-        if (e.target.closest('.menu-panel')) return;
-        var list = controls(bar), i = list.indexOf(e.target.closest('button, a[href], input, select')), next;
+        if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        if (e.target.isContentEditable || e.target.closest('.menu-panel')) return;
+        if (!/^(ArrowLeft|ArrowRight|Home|End)$/.test(e.key)) return;
+        var c = e.target.closest(CONTROL), list = controls(bar), i = list.indexOf(c), next;
         if (i < 0) return;
         var rtl = getComputedStyle(bar).direction === 'rtl';
-        if (e.key === (rtl ? 'ArrowLeft' : 'ArrowRight')) next = list[(i + 1) % list.length];
-        else if (e.key === (rtl ? 'ArrowRight' : 'ArrowLeft')) next = list[(i + list.length - 1) % list.length];
+        var forward = e.key === (rtl ? 'ArrowLeft' : 'ArrowRight');
+        var back = e.key === (rtl ? 'ArrowRight' : 'ArrowLeft');
+        /* A field keeps its keys but at its edges (0.70.1). */
+        if (isField(c) && !((forward || back) && atEdge(c, forward))) return;
+        if (forward) next = list[(i + 1) % list.length];
+        else if (back) next = list[(i + list.length - 1) % list.length];
         else if (e.key === 'Home') next = list[0];
-        else if (e.key === 'End') next = list[list.length - 1];
-        else return;
+        else next = list[list.length - 1];
         e.preventDefault();
-        stop(bar, next);
-        next.focus();
+        if (isField(next)) {
+          next.focus();
+          /* Entering a field, the caret starts at the edge it came in by. */
+          try { var at = forward ? 0 : next.value.length; next.setSelectionRange(at, at); } catch (err) { /* no caret */ }
+        } else {
+          stop(bar, next);
+          next.focus();
+        }
       });
       bar.addEventListener('focusin', function (e) {
-        var c = e.target.closest('button, a[href], input, select');
-        if (c && !c.closest('.menu-panel')) stop(bar, c);
+        var c = e.target.closest(CONTROL);
+        if (c && !c.closest('.menu-panel') && !isField(c)) stop(bar, c);
       });
-      new MutationObserver(function () { menus(bar); stop(bar, null); })
-        .observe(bar, { subtree: true, childList: true, attributes: true, attributeFilter: ['disabled', 'aria-disabled', 'hidden'] });
-    });
+      new MutationObserver(function () {
+        menus(bar); stop(bar, null, true);
+        bar.__dirty = true;
+        if (bar.__fold) soonFit(bar);
+      }).observe(bar, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['disabled', 'aria-disabled', 'hidden'] });
+  }
+
+  /* Folding again in the next frame, once however many changes come
+     before it, since an application drawing its content may change a
+     toolbar many times in one frame; or after 100 ms, when a hidden or
+     headless page runs no frame for a while. pudl:toolbar-fit says when it
+     is done. */
+  function soonFit(bar) {
+    if (bar.__fitSoon) return;
+    bar.__fitSoon = true;
+    var go = function () { if (!bar.__fitSoon) return; bar.__fitSoon = false; fit(bar); };
+    requestAnimationFrame(go);
+    setTimeout(go, 100);
   }
 
   /* === Folding (preview, docs/proposals/toolbar-commands.md) ==============
@@ -230,8 +333,10 @@
     bar.__fold = { groups: groups };
     var pending = 0;
     var again = function () { if (!pending) pending = requestAnimationFrame(function () { pending = 0; fit(bar); }); };
+    /* A change of width folds it again in the next frame; a change of what
+       it holds, which its own observer sees, once the change is done. */
     if (window.ResizeObserver) new ResizeObserver(again).observe(bar);
-    document.addEventListener('pudl:commands-change', again);
+    bar.__dirty = true;
     fit(bar);
     return bar.__fold;
   }
@@ -246,14 +351,34 @@
 
   function fits(bar) { return bar.scrollWidth <= bar.clientWidth + 1; }
 
-  function fit(bar) {
+  /* Folds the toolbar to its row, then says so with pudl:toolbar-fit on
+     the toolbar (0.69.1), so a host or a test waiting on a new width
+     knows when the folding is done rather than guessing. */
+  /* It measures only when what it holds has changed since it last folded,
+     or its width has (0.69.3); otherwise the folding it has is still
+     right, and measuring would only make the browser lay the page out. */
+  function fit(bar, force) {
+    if (!bar.__fold || !bar.isConnected) return;
+    var w = bar.clientWidth;
+    if (!force && !bar.__dirty && w === bar.__fitWidth) return;
+    bar.__dirty = false;
+    bar.__fitWidth = w;
+    foldTo(bar);
+    stop(bar, null, true);
+    bar.dispatchEvent(new CustomEvent('pudl:toolbar-fit', { bubbles: true }));
+  }
+
+  function foldTo(bar) {
     var f = bar.__fold;
     if (!f || !bar.isConnected || !bar.clientWidth) return;
     if (bar.querySelector('.menu-panel:popover-open')) return;
     f.groups.forEach(function (g) { g.setAttribute('data-toolbar-stage', '1'); });
     bar.removeAttribute('data-toolbar-more');
     if (fits(bar)) return;
-    var order = foldOrder(f.groups.filter(function (g) { return !g.hidden && g.getClientRects().length; }));
+    /* A group marked data-toolbar-keep, such as one holding a field, stays
+       on the row as it is and never folds (0.69.0); the others fold
+       around it. */
+    var order = foldOrder(f.groups.filter(function (g) { return !g.hidden && g.getClientRects().length && !g.hasAttribute('data-toolbar-keep'); }));
     for (var stage = 2; stage <= 5; stage++) {
       for (var i = 0; i < order.length; i++) {
         var g = order[i];
@@ -269,10 +394,20 @@
     (root || document).querySelectorAll('.toolbar[data-toolbar-fold]').forEach(setupFold);
   }
 
-  window.pudlToolbar = { enhance: function (root) { enhance(root); enhanceFolds(root); }, fit: fit };
-  new MutationObserver(function () { enhanceFolds(); }).observe(document.documentElement, { subtree: true, childList: true });
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { enhanceFolds(); }); else enhanceFolds();
-  new MutationObserver(function () { enhance(); }).observe(document.documentElement, { subtree: true, childList: true });
-  document.addEventListener('pudl:regions-swap', function () { enhance(); });
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { enhance(); }); else enhance();
+  window.pudlToolbar = { enhance: function (root) { enhance(root); enhanceFolds(root); }, fit: function (bar) { fit(bar, true); } };
+
+  /* Toolbars the page adds later are found among the nodes it adds, not by
+     searching the whole page after every change anywhere in it (0.69.3). */
+  new MutationObserver(function (records) {
+    records.forEach(function (r) {
+      Array.prototype.forEach.call(r.addedNodes, function (n) {
+        if (n.nodeType !== 1) return;
+        if (n.matches('.toolbar')) { enhanceBar(n); if (n.matches('[data-toolbar-fold]')) setupFold(n); }
+        if (n.firstElementChild) n.querySelectorAll('.toolbar').forEach(function (b) { enhanceBar(b); if (b.matches('[data-toolbar-fold]')) setupFold(b); });
+      });
+    });
+  }).observe(document.documentElement, { subtree: true, childList: true });
+  document.addEventListener('pudl:regions-swap', function () { enhance(); enhanceFolds(); });
+  function start() { enhance(); enhanceFolds(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
