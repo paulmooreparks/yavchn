@@ -302,11 +302,15 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     const toolbar = await page.evaluate(() => {
       const bar = document.querySelector('.win[data-win="reader-1"] .reader-toolbar');
       bar.querySelectorAll('[data-note-toggle], [data-story-pin], .story-step').forEach(b => { b.hidden = false; });
-      const boxes = [...bar.querySelectorAll('.reader-panes button, [data-note-toggle], [data-story-pin], .reader-end > a, .story-refresh')].map(b => b.getBoundingClientRect());
+      // The pane selector counts as one control: PUDL joins its keys along
+      // a shared border (0.72.0), so each key must stay inside it instead.
+      const panes = bar.querySelector('.reader-panes').getBoundingClientRect();
+      const keysInside = [...bar.querySelectorAll('.reader-panes button')].every(k => { const r = k.getBoundingClientRect(); return r.left >= panes.left - 0.5 && r.right <= panes.right + 0.5; });
+      const boxes = [...bar.querySelectorAll('.reader-panes, [data-note-toggle], [data-story-pin], .reader-end > a, .story-refresh')].map(b => b.getBoundingClientRect());
       const overlap = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
-      return { overlaps: boxes.some((a, i) => boxes.some((b, j) => i < j && overlap(a, b))), inside: boxes.every(b => b.right <= bar.getBoundingClientRect().right + 0.5) };
+      return { overlaps: boxes.some((a, i) => boxes.some((b, j) => i < j && overlap(a, b))), inside: boxes.every(b => b.right <= bar.getBoundingClientRect().right + 0.5), keysInside };
     });
-    assert.deepEqual(toolbar, { overlaps: false, inside: true });
+    assert.deepEqual(toolbar, { overlaps: false, inside: true, keysInside: true });
     await page.locator('.md-resize').focus();
     await page.keyboard.press('End');
     assert.equal(await page.locator('.story-list').isVisible(), true);
