@@ -23,9 +23,18 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     };
     await toggleMenu(page.locator('.menubar-menu:not(.menubar-one) > button.menubar-glyph').first(), false);
     await toggleMenu(page.getByRole('menuitem', { name: 'View', exact: true }), false);
+    // On a phone the menu titles fold to their glyphs, keeping their names,
+    // and on a narrower screen the bar folds into one menu.
     const touchContext = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     const touchPage = await touchContext.newPage();
     await touchPage.goto(process.argv[2] + '/hn/');
+    const feedTitle = touchPage.getByRole('menuitem', { name: 'Feed', exact: true });
+    await feedTitle.waitFor();
+    await touchPage.locator('.site-menubar .menubar-row.menubar-title-glyphs').waitFor();
+    await feedTitle.tap();
+    await touchPage.getByRole('menuitem', { name: 'Hacker News', exact: true }).waitFor();
+    await touchPage.keyboard.press('Escape');
+    await touchPage.setViewportSize({ width: 300, height: 844 });
     await touchPage.locator('.menubar-one > button').waitFor();
     await toggleMenu(touchPage.locator('.menubar-one > button'), true);
     await touchPage.locator('.menubar-one > button').tap();

@@ -63,7 +63,7 @@
     if (uncollect) rows.push({ label: uncollect.getAttribute('aria-label'), glyph: 'close', run: function () { uncollect.click(); } });
     if (row.querySelector('.story-hide')) rows.push({ label: 'Hide this story', glyph: 'close', run: function () { press(row, '.story-hide'); } });
     if (original && d.host && lib.hiding && lib.hiding.blockDomain) {
-      rows.push({ label: 'Block ' + d.host + ' across all feeds', run: function () { lib.hiding.blockDomain(d.host); } });
+      rows.push({ label: 'Block ' + d.host + ' across all feeds', danger: true, run: function () { lib.hiding.blockDomain(d.host); } });
     }
     return rows;
   }

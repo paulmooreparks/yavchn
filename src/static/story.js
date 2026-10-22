@@ -373,7 +373,7 @@
           run: function () { lib.hiding.hide(d.storyId); } },
         // A text post's host is the source itself, which is no site to block.
         { id: 'block-site', hidden: function () { return noStory() || !lib.hiding || !original() || !d.host; },
-          label: function () { return 'Block ' + d.host + ' across all feeds'; }, run: function () { lib.hiding.blockDomain(d.host); } },
+          label: function () { return 'Block ' + d.host + ' across all feeds'; }, danger: true, run: function () { lib.hiding.blockDomain(d.host); } },
         sortBy('best', 'Best first'), sortBy('newest', 'Newest first'), sortBy('oldest', 'Oldest first'),
         { id: 'collapse-all', label: 'Collapse every thread', hidden: noStory, disabled: noComments,
           reason: 'The discussion has no comments yet.', run: function () { disc.collapseAll(root, true); } },

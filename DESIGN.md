@@ -178,6 +178,22 @@ On 2026-10-22 every control YAVCHN draws itself was checked against PUDL 0.74.0,
 
 The blocked-domains list stays YAVCHN's own. PUDL's token field fits it, but PUDL documents no way for a script to change a token field's values, which the list needs when the Story menu blocks a site or another tab changes it, and none to refuse a value that is not a domain. The lookup bar keeps its own row, since its fields stretch to one height, which PUDL's row does not do.
 
+## PUDL 0.79.0 adoption
+
+This was planned on 2026-10-23 from PUDL's upgrade brief and carried out the same day, once 0.79.0 was tagged, and checked on beta from 1500px down to 390px wide in both themes.
+
+The window bar is PUDL's taskbar. YAVCHN's `div.win-bar` already had the shape PUDL expects, so the markup stayed and the code behind it went. Close all is `data-win-close-all`, and YAVCHN's close-all handler and its `aria-disabled` upkeep in `desktop.js` are gone. PUDL's Close all skips child windows, as YAVCHN's did. The bar's layout, the dock's scrolling, the minimize-all and restore-all swap and the bar's narrow sizes were deleted from `style.css`; the scroll keys, the narrowest tab width and the `.reader-site` badge rules stay. The three links lost their inline SVGs, so PUDL draws its `minimize-all`, `restore-all` and `close-all` glyphs.
+
+The taskbar's right-click menu is on, since a window's menu on its tab is what a reader expects from a taskbar, and the reader badge sits well with PUDL's accent ring in both themes. YAVCHN's own context menus are not affected, because the story-row and comment handlers only answer for their own elements.
+
+At 640px and below the window menu button is PUDL's, a window glyph and a caret. YAVCHN's chevron replacement for story windows is gone, and the button keeps a 40px touch target through `min-width` so the caret is not clipped. The rule that moves the button to the end of the title bar stays.
+
+Delete my account and Block a site across all feeds are marked `danger: true`, in the Account applet, the Story menu and the row menu. Delete my account cannot be undone. Blocking a site changes every feed at once, and it can only be undone from Settings, so it gets the warning too. Hide this story is not marked: it is the everyday dismissal on every row, Show the hidden stories brings it back, and a red row for it would dull the warning on the two commands that need one.
+
+The menu titles get glyphs: Go `home`, Applets `app`, Feed `list`, View `eye`, Window `window` and Help `info`, through `data-menu-glyph` on each title's `<li>`. Title glyphs are a preview, but they are a few attributes in one template and nothing outside YAVCHN depends on them, so a later change to the markup costs one edit. They let the menu bar fold to glyphs before it collapses into one menu. Classic at 390px now shows every title as its glyph, and the bar collapses only below that; at 640px in the Windowed view the titles are glyphs on the topbar's first row and the source switch takes the second, where 0.78 had collapsed the bar to fit everything on one row. The topbar already took two rows at 900px, so I kept this.
+
+Three of the brief's suggestions are left out of this upgrade. The ribbon is a preview that adds a row of tools under the topbar, and in a reader that row is taken from the article, so I would only try it if a reader asks for it. No applet needs to be resident, because the story applet's menus belong to the reader in front. The folding reader toolbar is a separate decision from the upgrade. Folding was ruled out because it hid the pane choice and Previous and Next on a phone; with 0.79's priorities those could stay out while Add note, Pin, Open original and Refresh fold into More, which might beat today's wrapping at 390px. I will try that on beta after the upgrade ships and bring screenshots before changing anything.
+
 ## Installable web app
 
 The shared page head links a web app manifest with a stable root identity, root scope, and standalone display. Launching at the root respects the existing browsing preference. PNG install icons derive from the existing logo, with a separate Apple touch icon. Installation uses the browser's native controls. No service worker intercepts requests or caches user-specific HTML; feeds and articles continue using the existing network and server-cache behavior. The app does not promise offline reading. This follows the current [installation requirements](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).

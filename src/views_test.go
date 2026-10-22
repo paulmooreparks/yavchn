@@ -87,7 +87,7 @@ func TestViewsAndPreference(t *testing.T) {
 				t.Errorf("%s: feed navigation visibility incorrect for %s", tc.path, marker)
 			}
 		}
-		if !tc.layer && (strings.Contains(body, `data-focus-toggle`) || strings.Contains(body, `data-close-all`)) {
+		if !tc.layer && (strings.Contains(body, `data-focus-toggle`) || strings.Contains(body, `data-win-close-all`)) {
 			t.Fatalf("desktop commands on %s", tc.path)
 		}
 	}

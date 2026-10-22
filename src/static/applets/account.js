@@ -183,7 +183,7 @@
         if (revoke || logout) items.push('-');
         if (revoke) items.push({ label: 'Sign out other devices', run: press(revoke) });
         if (logout) items.push({ label: 'Sign out this browser', run: press(logout) });
-        if (remove) items.push('-', { label: 'Delete my account…', run: press(remove) });
+        if (remove) items.push('-', { label: 'Delete my account…', danger: true, run: press(remove) });
         if (items.length) titles.push({ label: 'Manage', items: items });
         return { titles: titles };
       },

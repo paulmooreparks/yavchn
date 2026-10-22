@@ -150,57 +150,6 @@ body.desktop .md-layout {
    paint. */
 
 
-/* === The window bar =======================================================
-   At the foot of the window area, on its own surface below the windows, so
-   a window never covers it: PUDL's dock of open windows, then
-   minimise-all or restore-all and close-all. */
-.win-bar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 6px 12px;
-  background: var(--surface-alt);
-  border-top: 1px solid var(--border);
-  --ctl-h: 30px;
-}
-
-.win-bar-dock {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-  flex-wrap: nowrap;
-}
-
-.win-bar .icon-btn {
-  flex: none;
-}
-
-.win-bar .icon-btn svg {
-  width: 15px;
-  height: 15px;
-}
-
-/* Minimise-all and restore-all share one place: restore shows only when
-   it is the useful one, every window minimised; otherwise minimise-all
-   shows, disabled when nothing is open. PUDL keeps both links'
-   aria-disabled current. */
-.win-bar .restore-all[aria-disabled="true"],
-.win-bar:has(.min-all:not([aria-disabled="true"])) .restore-all {
-  display: none;
-}
-
-.win-bar:has(.min-all[aria-disabled="true"]):has(.restore-all:not([aria-disabled="true"])) .min-all {
-  display: none;
-}
-
-@media (max-width: 560px) {
-  .win-bar {
-    padding: 6px 8px;
-  }
-}
-
 /* === The story list =======================================================
    PUDL's list rows, with a pin before the link and a hide button after
    it. A story's title wraps rather than ending in an ellipsis, because a
@@ -1097,10 +1046,9 @@ kbd {
 .discussion-info { flex-wrap: wrap; }
 .discussion-info .story-bar-meta { white-space: normal; overflow: visible; }
 .story-scroll { overscroll-behavior: contain; }
-.win-bar { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+/* The window bar is PUDL's taskbar, which lays it out; YAVCHN adds the
+   scroll keys either side of the dock and the reader's site badge. */
 .taskbar-scroll > .glyph { --glyph-size: 14px; }
-.taskbar-scroll[hidden] { display: none; }
-.win-bar-dock .win-tab { flex: 0 0 auto; max-width: 250px; }
 body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 @container reader (max-width: 600px) {
   /* A narrow reader's groups wrap below the panes when they must, so the
@@ -1134,15 +1082,8 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 @media (max-width: 640px) {
   .win-head { gap: 6px; }
   .win-head:has([data-win-action="menu"]) .win-chrome { display: none; }
-  .win-head [data-win-action="menu"] { order: 5; width: 40px; height: 40px; }
-  .story-win .win-head [data-win-action="menu"]::before {
-    width: 20px; height: 20px;
-    --glyph: var(--glyph-chevron);
-  }
-  .win-bar { padding-inline: 6px; gap: 4px; }
-  .win-bar-dock .win-tab { max-width: 175px; min-height: 40px; }
-  .win-bar .icon-btn { width: 36px; height: 40px; }
-  .win-bar-dock .reader-site .visually-hidden { display: none; }
+  .win-head [data-win-action="menu"] { order: 5; min-width: 40px; height: 40px; }
+  .win-dock .reader-site .visually-hidden { display: none; }
   .site-listbar .md-filter-group { flex: 1; min-width: 0; }
   .site-listbar .md-filter { width: 100%; min-width: 0; }
   .site-listbar .feed-refresh { flex: none; }
@@ -1152,7 +1093,7 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
 }
 @media (max-width: 420px) {
   .topbar-rule { display: none; }
-  .win-bar-dock .win-tab { max-width: 145px; }
+  .win-bar > .win-dock > .win-tab { max-width: 145px; }
 }
 @media print {
   .reader-toolbar, .win-bar { display: none; }

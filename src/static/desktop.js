@@ -139,22 +139,13 @@
   });
 
   document.addEventListener('click', function (e) {
-    var t = e.target.closest && e.target.closest('[data-theme-choice], [data-focus-toggle], [data-close-all]');
+    var t = e.target.closest && e.target.closest('[data-theme-choice], [data-focus-toggle]');
     if (!t) return;
     if (t.hasAttribute('data-theme-choice')) {
       if (window.pudlSetTheme) window.pudlSetTheme(t.getAttribute('data-theme-choice'));
       syncTheme();
-    } else if (t.hasAttribute('data-focus-toggle')) {
+    } else {
       setListHidden(!listHidden());
-    } else if (plainClick(e) && window.pudlWindows) {
-      /* Close-all closes every top-level window in place; a click that
-         isn't plain follows the link to the windowless address. */
-      e.preventDefault();
-      var layer = document.querySelector('[data-win-layer]');
-      window.pudlWindows.state().open.forEach(function (key) {
-        var el = layer && layer.querySelector('.win[data-win="' + key + '"]');
-        if (el && !el.hasAttribute('data-win-parent')) window.pudlWindows.close(key);
-      });
     }
   });
 
@@ -192,16 +183,6 @@
     var a = e.target.closest && e.target.closest('dialog[open] a[data-win-open]');
     if (a && plainClick(e)) a.closest('dialog').close();
   });
-
-  function syncCloseAll() {
-    var none = !window.pudlWindows || window.pudlWindows.state().open.length === 0;
-    document.querySelectorAll('[data-close-all]').forEach(function (a) {
-      if (none) { a.setAttribute('aria-disabled', 'true'); a.tabIndex = -1; }
-      else { a.removeAttribute('aria-disabled'); a.removeAttribute('tabindex'); }
-    });
-  }
-  document.addEventListener('pudl:windows-change', syncCloseAll);
-  syncCloseAll();
 
   /* === Keys ============================================================= */
   document.addEventListener('keydown', function (e) {
@@ -347,7 +328,6 @@
   if (layerNow) placeWindows(layerNow);
 
   function init() {
-    syncCloseAll();
     /* After pudl-windows.js has brought the windows in line with the
        address, which settles a task after it starts. */
     setTimeout(autoOpen, 0);

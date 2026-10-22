@@ -7,7 +7,7 @@
   if (mode === 'window' && !new URLSearchParams(location.search).has('view')) return;
   document.querySelectorAll('a[href]').forEach(function(a) {
    var u = new URL(a.href, location.href);
-   if (u.origin !== location.origin || !listPath(u.pathname) || a.hasAttribute('data-reader-new') || a.hasAttribute('data-win-back') || a.hasAttribute('data-win-restore') || a.hasAttribute('data-close-all')) return;
+   if (u.origin !== location.origin || !listPath(u.pathname) || a.hasAttribute('data-reader-new') || a.hasAttribute('data-win-back') || a.hasAttribute('data-win-restore') || a.hasAttribute('data-win-close-all')) return;
    if (!u.searchParams.has('view') && !u.searchParams.has('open')) { u.searchParams.set('view', mode); a.href = u.pathname + u.search + u.hash; }
   });
  }
