@@ -727,9 +727,10 @@ body.app-page {
   max-width: 100%;
 }
 
+/* The words field stands as tall as the thread's select beside it. */
 .hiring-filter {
   flex: 1 1 260px;
-  height: 32px;
+  align-self: stretch;
 }
 
 .hiring-filter .md-filter {
