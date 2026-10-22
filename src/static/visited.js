@@ -54,8 +54,18 @@
     });
   }
 
-  // For Pinned's Unread filter.
-  window.yavchn.visited = { has: function (id) { return load().indexOf(id) >= 0; } };
+  // For Pinned's Unread filter, and the row's menu, which marks a story
+  // read or unread by hand.
+  window.yavchn.visited = {
+    has: function (id) { return load().indexOf(id) >= 0; },
+    set: function (id, read) {
+      if (!id) return;
+      if (read) add(id);
+      else save(load().filter(function (x) { return x !== id; }));
+      apply();
+      document.dispatchEvent(new CustomEvent('yavchn:list-change'));
+    }
+  };
 
   function visit(story) {
     if (story && story.dataset.storyId) add(story.dataset.storyId);

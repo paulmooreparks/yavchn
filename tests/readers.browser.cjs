@@ -114,6 +114,27 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     const byId = Object.fromEntries(commands.map(c => [c.id, c]));
     assert.ok(byId['pane-split'] && byId['pane-split'].choice === 'pane' && byId.pin && byId.refresh && byId['next-comment'], JSON.stringify(commands));
     assert.equal(byId.pin.shown, 'toolbar');
+    // A story row's context menu acts on that row, which PUDL keeps marked
+    // while the menu is open, and its commands are the row's own.
+    await page.locator('#row-hn-2 > a.md-item').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Open in a new reader window', exact: true }).waitFor();
+    assert.ok(await page.locator('#row-hn-2').getAttribute('data-menu-for'));
+    await page.getByRole('menuitemcheckbox', { name: 'Pin this story', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#row-hn-2 .story-pin').getAttribute('aria-pressed') === 'true');
+    assert.equal(await page.locator('#row-hn-2').getAttribute('data-menu-for'), null);
+    await page.locator('#row-hn-2 > a.md-item').click({ button: 'right' });
+    assert.equal(await page.getByRole('menuitemcheckbox', { name: 'Pin this story', exact: true }).getAttribute('aria-checked'), 'true');
+    await page.getByRole('menuitemcheckbox', { name: 'Pin this story', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#row-hn-2 .story-pin').getAttribute('aria-pressed') === 'false');
+    const read = await page.locator('#row-hn-2').evaluate(r => r.classList.contains('visited'));
+    await page.locator('#row-hn-2 > a.md-item').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: read ? 'Mark as unread' : 'Mark as read', exact: true }).click();
+    await page.waitForFunction(was => document.querySelector('#row-hn-2').classList.contains('visited') !== was, read);
+    await page.locator('#row-hn-2 > a.md-item').focus();
+    await page.keyboard.press('Shift+F10');
+    await page.getByRole('menuitem', { name: 'Open in the reader', exact: true }).waitFor();
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-menu-for]'));
     const siteTitles = () => page.locator('.menubar-menu:not(.menubar-front):not(.menubar-one) .menubar-title').allTextContents();
     assert.deepEqual((await siteTitles()).map(t => t.trim()), ['YAVCHN', 'Go', 'Applets', 'Feed', 'View', 'Window', 'Help']);
     await page.locator('.menubar-title').filter({ hasText: /^Reader$/ }).click();
