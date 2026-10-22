@@ -472,16 +472,14 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     }
     await page.keyboard.press('Escape');
     const settingsWindow = page.locator('.win[data-win="settings"]');
-    assert.equal(await settingsWindow.getAttribute('data-win-size'), 'content');
+    // Settings is an ordinary window, which the reader can resize, maximize,
+    // snap and dock.
+    assert.equal(await settingsWindow.getAttribute('data-win-size'), null);
     await page.getByRole('menuitem', { name: 'Window', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Reset position', exact: true }).waitFor();
-    assert.equal(await page.getByRole('menuitem', { name: 'Maximize', exact: true }).count(), 0);
-    assert.equal(await page.getByRole('menuitem', { name: 'Dock at the bottom', exact: true }).count(), 0);
+    await page.getByRole('menuitem', { name: 'Maximize', exact: true }).waitFor();
     await page.getByRole('menuitem', { name: 'Close all windows', exact: true }).waitFor();
     await page.keyboard.press('Escape');
-    assert.equal(await settingsWindow.locator('[data-win-action="maximize"]').isVisible(), false);
-    await settingsWindow.locator('.win-title').dblclick();
-    assert.equal(await settingsWindow.getAttribute('data-win-mode'), 'floating');
+    assert.equal(await settingsWindow.locator('[data-win-action="maximize"]').isVisible(), true);
     await settings.locator('[data-setting="theme"][value="light"]').click();
     assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
     await settings.locator('[data-setting="sort"][value="newest"]').click();

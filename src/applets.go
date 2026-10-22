@@ -154,7 +154,6 @@ func (s *Server) appletWindow(ctx context.Context, r *http.Request, key string) 
 		w.App = &appVM{Kind: "account", AccountPanel: panel}
 	case key == "settings":
 		w.IconGlyph = "gear"
-		w.ContentSized = true
 		w.Title, w.PageURL, w.Def = "Settings", "/settings", floatingAt(0.12, 0.05, 0.48, 0.86)
 		w.App = &appVM{Kind: "settings", SettingsView: savedView(r), SettingsPlacement: savedReaderPlacement(r), SettingsSide: savedSidebarSide(r)}
 	case key == "privacy" || key == "terms":
