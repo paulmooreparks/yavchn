@@ -17,12 +17,15 @@
     lobsters: { label: 'Lobsters', page: function (id) { return 'https://lobste.rs/s/' + encodeURIComponent(id); } }
   };
 
-  function copy(text) {
-    var done = function () { if (window.pudlToast) window.pudlToast('Link copied.', { kind: 'positive' }); };
+  // Shared with the comments' menu in discussion.js.
+  function copy(text, what) {
+    what = what || 'link';
+    var done = function () { if (window.pudlToast) window.pudlToast(what.charAt(0).toUpperCase() + what.slice(1) + ' copied.', { kind: 'positive' }); };
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {
-      if (window.pudlToast) window.pudlToast('The link could not be copied.', { kind: 'warn' });
+      if (window.pudlToast) window.pudlToast('The ' + what + ' could not be copied.', { kind: 'warn' });
     });
   }
+  lib.copy = copy;
   function press(row, selector) { var b = row.querySelector(selector); if (b) b.click(); }
 
   function rowsFor(row) {

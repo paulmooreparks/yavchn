@@ -116,6 +116,51 @@
 
   window.yavchn.discussion = { step: step, focusId: focusId, firstNew: firstNew, collapseAll: collapseAll };
 
+  /* A comment's context menu: a right-click on a comment, or Shift+F10 or
+     the Menu key on its focused toggle, offers what the header's small
+     controls do and a few things they can't. A link inside the comment's
+     text, or text the reader has selected, keeps the browser's own menu,
+     where open-in-new-tab and copy are expected. */
+  var SOURCE_LABELS = { hn: 'Hacker News', lobsters: 'Lobsters' };
+
+  function commentRows(comment) {
+    var story = storyOf(comment);
+    var lib = window.yavchn;
+    var header = comment.querySelector(':scope > .comment-header');
+    var author = header && header.querySelector('a.comment-author');
+    var link = header && header.querySelector('a.comment-link');
+    var text = comment.querySelector(':scope > .comment-text');
+    var parent = comment.parentElement && comment.parentElement.closest('.comment');
+    var source = SOURCE_LABELS[story && story.dataset.storySource];
+    var collapsed = comment.classList.contains('collapsed');
+    var rows = [
+      { label: collapsed ? 'Expand this comment' : 'Collapse this comment', run: function () { toggleCollapse(comment); } }
+    ];
+    if (parent) rows.push({ label: 'Go to the parent comment', run: function () { parent.scrollIntoView({ block: 'start', behavior: 'smooth' }); } });
+    if (story && topLevel(story).length > 1) {
+      rows.push({ label: 'Collapse all threads', run: function () { collapseAll(story, true); } });
+      rows.push({ label: 'Expand all threads', run: function () { collapseAll(story, false); } });
+    }
+    rows.push('-');
+    if (link) rows.push({ label: 'Open on ' + (source || 'the source site'), glyph: 'open', run: function () { link.click(); } });
+    if (author) rows.push({ label: 'Show ' + author.textContent + '’s profile', run: function () { author.click(); } });
+    rows.push('-');
+    if (link && lib.copy) rows.push({ label: 'Copy link to the comment', glyph: 'copy', run: function () { lib.copy(link.href); } });
+    if (text && lib.copy) rows.push({ label: 'Copy the comment’s text', glyph: 'copy', run: function () { lib.copy(text.innerText.trim(), 'text'); } });
+    return rows;
+  }
+
+  document.addEventListener('pudl:contextmenu', function (e) {
+    var target = e.detail && e.detail.target;
+    var comment = target && target.closest && target.closest('.story .comment[data-id]');
+    if (!comment) return;
+    if (target.closest('.comment-text a')) return;
+    var sel = window.getSelection && window.getSelection();
+    if (sel && !sel.isCollapsed && comment.contains(sel.anchorNode)) return;
+    e.detail.mark(comment);
+    e.detail.add(commentRows(comment));
+  });
+
   document.addEventListener('keydown', function (e) {
     if (!window.yavchn.plainKey(e)) return;
     if (e.key !== 'n' && e.key !== 'N' && e.key !== 'c') return;

@@ -135,6 +135,34 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.getByRole('menuitem', { name: 'Open in the reader', exact: true }).waitFor();
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('[data-menu-for]'));
+    // A comment's context menu collapses it and finds its parent, and a link
+    // in a comment's text keeps the browser's own menu.
+    await page.evaluate(() => {
+      const t = document.querySelector('.win[data-win="reader-1"] .discussion-content');
+      const c = (id, kids) => `<li class="comment" data-id="${id}"><div class="comment-header"><button type="button" class="card-toggle comment-toggle" aria-expanded="true" aria-label="Collapse this comment"></button><a class="comment-author" href="/hn/user/u${id}">u${id}</a><a class="comment-link" href="https://news.ycombinator.com/item?id=${id}" target="_blank" rel="noopener"></a></div><div class="comment-text"><p>Text ${id} <a href="https://example.com/${id}">link</a></p></div>${kids ? `<ul class="thread">${kids}</ul>` : ''}</li>`;
+      t.innerHTML = `<ul class="thread">${c('c1', c('c2'))}${c('c3')}</ul>`;
+      t.closest('.story').dispatchEvent(new CustomEvent('yavchn:show-discussion'));
+    });
+    const child = page.locator('.win[data-win="reader-1"] .comment[data-id="c2"]');
+    await child.locator(':scope > .comment-text > p').click({ button: 'right', position: { x: 2, y: 2 } });
+    await page.getByRole('menuitem', { name: 'Go to the parent comment', exact: true }).waitFor();
+    assert.ok(await child.getAttribute('data-menu-for'));
+    for (const name of ['Show uc2’s profile', 'Open on Hacker News', 'Copy link to the comment', 'Copy the comment’s text', 'Collapse all threads']) {
+      await page.getByRole('menuitem', { name, exact: true }).waitFor();
+    }
+    await page.getByRole('menuitem', { name: 'Collapse this comment', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('.comment[data-id="c2"]').classList.contains('collapsed'));
+    assert.equal(await child.locator(':scope > .comment-header > .comment-toggle').getAttribute('aria-expanded'), 'false');
+    await child.locator(':scope > .comment-header > .comment-toggle').focus();
+    await page.keyboard.press('Shift+F10');
+    await page.getByRole('menuitem', { name: 'Expand this comment', exact: true }).click();
+    await page.waitForFunction(() => !document.querySelector('.comment[data-id="c2"]').classList.contains('collapsed'));
+    assert.equal(await page.evaluate(() => {
+      let asked = 0;
+      const link = document.querySelector('.comment[data-id="c3"] .comment-text a');
+      link.dispatchEvent(new CustomEvent('pudl:contextmenu', { bubbles: true, detail: { target: link, add: () => { asked++; }, mark: () => {} } }));
+      return asked;
+    }), 0);
     const siteTitles = () => page.locator('.menubar-menu:not(.menubar-front):not(.menubar-one) .menubar-title').allTextContents();
     assert.deepEqual((await siteTitles()).map(t => t.trim()), ['YAVCHN', 'Go', 'Applets', 'Feed', 'View', 'Window', 'Help']);
     await page.locator('.menubar-title').filter({ hasText: /^Reader$/ }).click();
