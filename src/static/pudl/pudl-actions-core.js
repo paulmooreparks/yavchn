@@ -7,10 +7,6 @@
    vendor/), the list of capabilities the project offers, and for
    artifacts a describe(data) that measures and hashes them.
 
-   Taken from parkscomputing.com's applet-actions-core.js, which took the
-   contract from GK Companion; the rules are theirs, unchanged, except that
-   the capability list is the project's.
-
    It defines globalThis.pudlActionsCore:
      CAPABILITIES                   PUDL's starting list
      MAX_JSON

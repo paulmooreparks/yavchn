@@ -49,7 +49,7 @@
     if (original) rows.push({ label: 'Open the original', glyph: 'open', run: function () { window.open(original, '_blank', 'noopener'); } });
     if (source) rows.push({ label: 'Open on ' + source.label, glyph: 'link', run: function () { window.open(source.page(d.id), '_blank', 'noopener'); } });
     rows.push('-');
-    if (row.querySelector('.story-pin')) rows.push({ label: 'Pin this story', checked: pinned, run: function () { press(row, '.story-pin'); } });
+    if (row.querySelector('.story-pin')) rows.push({ label: 'Pin this story', glyph: 'pin', checked: pinned, run: function () { press(row, '.story-pin'); } });
     if (lib.library) {
       var collections = lib.library.storyMenu(row)[0];
       if (collections) rows.push(collections);

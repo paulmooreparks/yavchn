@@ -6,9 +6,9 @@
    reader is in. It holds at most two menus. The host menu is always
    there; the host renders it as a hidden list in the bar:
 
-     <nav class="menubar" data-menubar aria-label="Parks Computing">
+     <nav class="menubar" data-menubar aria-label="Example">
        <ul data-menubar-source hidden>
-         <li><img src="/logo.svg" alt=""> Parks Computing
+         <li><img src="/logo.svg" alt=""> Example
            <ul><li><a href="/">Home</a></li><li>-</li><li>Elsewhere</li>…</ul></li>
          <li>View<ul>…</ul></li>
          <li data-menubar-if="windows">Window<ul>…</ul></li>
@@ -65,8 +65,8 @@
   var MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform || '');
   /* Keys a page cannot have, or that every field needs: the browser's
      window and tab keys, and the editing keys. A desktop host, which has
-     no browser around it, may take the browser's (GK Companion's
-     pudl-desktop-host-keys.md); the rest stay reserved everywhere. */
+     no browser around it, may take the browser's; the rest stay reserved
+     everywhere. */
   var BROWSER_KEYS = ['Mod+N', 'Mod+T', 'Mod+W', 'Mod+Shift+N', 'Mod+Shift+T', 'Mod+Shift+W'];
   var RESERVED = ['Mod+Q', 'Mod+Tab', 'Mod+Shift+Q', 'Mod+Shift+Tab', 'Mod+A', 'Mod+C', 'Mod+X', 'Mod+V'];
   function desktop() { return !!bar && bar.getAttribute('data-menubar-host') === 'desktop'; }
@@ -112,8 +112,7 @@
      submenus, in order. */
   function readList(ul) {
     var out = [];
-    /* A list marked data-menu-radio holds rows of which one is on (GK
-       Companion's pudl-host-row-radio.md). */
+    /* A list marked data-menu-radio holds rows of which one is on. */
     var radio = ul.hasAttribute('data-menu-radio') ? 'markup-' + (++uid) : null;
     Array.prototype.forEach.call(ul.children, function (li) {
       if (li.tagName !== 'LI') return;
@@ -221,7 +220,7 @@
     });
     if (navs.length) return { kind: 'article', scope: f, nav: navs[0] };
     /* A window whose content offers no menu still has what every window
-       offers, under its title (from YAVCHN's PUDL-PROPOSAL.md, B6). */
+       offers, under its title. */
     if (f.key) return { kind: 'window', scope: f };
     return null;
   }
@@ -391,7 +390,7 @@
 
   /* === Letters =========================================================== */
 
-  /* A title's or row's letter (GK Companion's pudl-title-mnemonics.md): the
+  /* A title's or row's letter: the
      one it declares, if it is in the label and not already taken where it
      stands, or else the first letter of its first word, then of a later
      word, then any letter of the label, the first not taken; a label

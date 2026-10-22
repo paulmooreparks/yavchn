@@ -2,18 +2,16 @@
    with defer, after pudl-applets.js. An applet publishes actions, which a
    script, the page, a command or an agent calls by reference, with input
    and output checked against their schemas, without opening the applet's
-   window unless the action is about a window. The contract is GK
-   Companion's, as parkscomputing.com runs it; this is that site's broker,
-   made PUDL's.
+   window unless the action is about a window.
 
    An applet's define() names its manifest:
 
      pudlApplets.define('dice', { src: '/js/dice.js', ver: '3', actions: '/js/dice-actions.json' });
 
-     { "id": "parks.dice", "version": "1.0.0", "apiVersion": 1,
+     { "id": "example.dice", "version": "1.0.0", "apiVersion": 1,
        "title": "Dice", "description": "…",
        "module": "dice-actions.js",     optional, beside the manifest
-       "actions": [ { "ref": "parks.dice/roll@1", "title", "description",
+       "actions": [ { "ref": "example.dice/roll@1", "title", "description",
                       "inputSchema", "outputSchema",
                       "capabilities": [], "replay": "pure",
                       "handles": "open",   optional: a handles verb, below
@@ -31,7 +29,7 @@
 
    The module hands its handlers over:
 
-     pudlApplets.provide('parks.dice', { 'roll@1': function (input, ctx) { return { output: { … } }; } });
+     pudlApplets.provide('example.dice', { 'roll@1': function (input, ctx) { return { output: { … } }; } });
 
    A handler resolves to { output, artifacts, request }: output an object;
    artifacts, with artifact.create, a list of { key, name, mime, data },
@@ -76,9 +74,9 @@
    opts: id, owner { kind, id }, grant, runMs (60 s), answerMs (10 min).
    pudl:applet-invocation fires on the document as each record changes.
 
-   window.pudlActions is the same functions under the name parkscomputing.com
-   and the applet package format used first. It is deprecated, says so
-   once in the console, and goes at PUDL 1.0. */
+   window.pudlActions is the same functions under an earlier name, which
+   the applet package format also used. It is deprecated, says so once in
+   the console, and goes at PUDL 1.0. */
 (function () {
   'use strict';
   if (window.pudlApplets && window.pudlApplets.invoke) return;
