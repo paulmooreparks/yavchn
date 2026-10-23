@@ -560,8 +560,28 @@
 
   function setupFold(bar) {
     if (bar.__fold) return bar.__fold;
-    var groups = Array.prototype.filter.call(bar.children, function (g) { return g.classList.contains('toolbar-group'); });
-    groups.forEach(function (g) {
+    bar.__fold = { groups: [] };
+    foldParts(bar);
+    var pending = 0;
+    var again = function () { if (!pending) pending = requestAnimationFrame(function () { pending = 0; fit(bar); }); };
+    /* A change of width folds it again in the next frame; a change of what
+       it holds, which its own observer sees, once the change is done. */
+    if (window.ResizeObserver) new ResizeObserver(again).observe(bar);
+    bar.__dirty = true;
+    fit(bar);
+    return bar.__fold;
+  }
+
+  /* The parts folding adds: each group's caption at its start and its fold
+     menu at its end, and the toolbar's More menu at its end. A page that
+     draws a group's contents again, as a list of pins is drawn again, may
+     take them away with the old contents, so they are put back each time
+     what the toolbar holds changes, and a group the page adds later joins
+     the folding (0.79.1). Nothing moves that is already in its place. */
+  function foldParts(bar) {
+    var f = bar.__fold;
+    f.groups = Array.prototype.filter.call(bar.children, function (g) { return g.classList.contains('toolbar-group'); });
+    f.groups.forEach(function (g) {
       /* A command bar's menu group (0.78.0) is named Menus, shows the
          menu glyph, and folds after every other group into that glyph
          alone. */
@@ -574,41 +594,43 @@
       var name = nameOf(g), glyph = g.getAttribute('data-toolbar-glyph');
       if (!g.hasAttribute('role')) g.setAttribute('role', 'group');
       if (name && !g.hasAttribute('aria-label')) g.setAttribute('aria-label', name);
-      if (g.hasAttribute('data-toolbar-group') && !g.querySelector(':scope > .toolbar-label')) {
-        var label = el('span', 'toolbar-label', { 'aria-hidden': 'true' });
-        label.textContent = name;
-        g.insertBefore(label, g.firstChild);
+      if (g.hasAttribute('data-toolbar-group')) {
+        var label = g.querySelector(':scope > .toolbar-label');
+        if (!label) {
+          label = el('span', 'toolbar-label', { 'aria-hidden': 'true' });
+          label.textContent = name;
+        }
+        if (g.firstChild !== label) g.insertBefore(label, g.firstChild);
       }
-      var fold = foldMenu('toolbar-fold', glyph, name || 'More');
-      if (menusGroup) fold.wrap.querySelector('.menu-btn').setAttribute('data-toolbar-glyph-only', '');
-      g.appendChild(fold.wrap);
-      fold.panel.addEventListener('beforetoggle', function (e) {
+      var wrap = g.querySelector(':scope > .toolbar-fold');
+      if (!wrap) {
+        var fold = foldMenu('toolbar-fold', glyph, name || 'More');
+        if (menusGroup) fold.wrap.querySelector('.menu-btn').setAttribute('data-toolbar-glyph-only', '');
+        fold.panel.addEventListener('beforetoggle', function (e) {
+          if (e.newState !== 'open') return;
+          fold.panel.textContent = '';
+          groupRows(g, fold.panel);
+        });
+        wrap = fold.wrap;
+      }
+      if (g.lastElementChild !== wrap) g.appendChild(wrap);
+    });
+    var moreWrap = bar.querySelector(':scope > .toolbar-more');
+    if (!moreWrap) {
+      var more = foldMenu('toolbar-more', null, bar.getAttribute('data-toolbar-more-text') || 'More');
+      more.panel.addEventListener('beforetoggle', function (e) {
         if (e.newState !== 'open') return;
-        fold.panel.textContent = '';
-        groupRows(g, fold.panel);
+        more.panel.textContent = '';
+        var at = more.wrap.querySelector('.menu-btn');
+        bar.__fold.groups.forEach(function (g) {
+          if (g.getAttribute('data-toolbar-stage') !== '5') return;
+          headingIn(more.panel, nameOf(g));
+          groupRows(g, more.panel, at);
+        });
       });
-    });
-    var more = foldMenu('toolbar-more', null, bar.getAttribute('data-toolbar-more-text') || 'More');
-    bar.appendChild(more.wrap);
-    more.panel.addEventListener('beforetoggle', function (e) {
-      if (e.newState !== 'open') return;
-      more.panel.textContent = '';
-      var at = more.wrap.querySelector('.menu-btn');
-      groups.forEach(function (g) {
-        if (g.getAttribute('data-toolbar-stage') !== '5') return;
-        headingIn(more.panel, nameOf(g));
-        groupRows(g, more.panel, at);
-      });
-    });
-    bar.__fold = { groups: groups };
-    var pending = 0;
-    var again = function () { if (!pending) pending = requestAnimationFrame(function () { pending = 0; fit(bar); }); };
-    /* A change of width folds it again in the next frame; a change of what
-       it holds, which its own observer sees, once the change is done. */
-    if (window.ResizeObserver) new ResizeObserver(again).observe(bar);
-    bar.__dirty = true;
-    fit(bar);
-    return bar.__fold;
+      moreWrap = more.wrap;
+    }
+    if (bar.lastElementChild !== moreWrap) bar.appendChild(moreWrap);
   }
 
   /* The order groups fold in: those at the end last, then lower priority
@@ -634,8 +656,9 @@
     var changed = bar.__dirty || force;
     bar.__dirty = false;
     bar.__fitWidth = w;
-    if (changed) least(bar);
+    if (changed) { foldParts(bar); least(bar); }
     foldTo(bar);
+    nameFolded(bar);
     stop(bar, null, true);
     bar.dispatchEvent(new CustomEvent('pudl:toolbar-fit', { bubbles: true }));
   }
@@ -643,7 +666,7 @@
   /* The widths the toolbar needs unfolded and folded as far as it goes,
      as --toolbar-most and --toolbar-least on it, so a host laying out
      several things that fold, such as a topbar, can share its room among
-     them (preview). They are measured when what the toolbar holds
+     them (0.79.0). They are measured when what the toolbar holds
      changes, not as its width does. */
   function foldable(f) {
     return foldOrder(f.groups.filter(function (g) { return !g.hidden && g.getClientRects().length && !g.hasAttribute('data-toolbar-keep'); }));
@@ -683,6 +706,30 @@
     bar.style.setProperty('--toolbar-least', low + 'px');
     f.groups.forEach(function (g, i) { if (was[i] == null) g.removeAttribute('data-toolbar-stage'); else g.setAttribute('data-toolbar-stage', was[i]); });
     if (more) bar.setAttribute('data-toolbar-more', ''); else bar.removeAttribute('data-toolbar-more');
+  }
+
+  /* A control shown as its glyph alone, its group at stage 2, takes its
+     words as its accessible name and its tooltip while its words are
+     hidden, as a glyph-only command does (0.80.0). Only a name this gives
+     is taken back when the group opens out again; one the control had of
+     its own, such as a choice's state, is never touched. */
+  function nameFolded(bar) {
+    var f = bar.__fold;
+    if (!f) return;
+    f.groups.forEach(function (g) {
+      var bare = g.getAttribute('data-toolbar-stage') === '2';
+      g.querySelectorAll(':scope :is(button, a):has(> .glyph):has(> .toolbar-words)').forEach(function (c) {
+        if (c.closest('.toolbar-fold, .menu-panel') || c.hasAttribute('data-toolbar-glyph-only')) return;
+        var words = c.querySelector(':scope > .toolbar-words').textContent.trim();
+        if (bare && words) {
+          if (c.__pudlFoldName || !c.hasAttribute('aria-label')) { c.setAttribute('aria-label', words); c.__pudlFoldName = true; }
+          if (c.__pudlFoldTip || (!c.hasAttribute('data-tooltip') && !c.hasAttribute('title'))) { c.setAttribute('data-tooltip', words); c.__pudlFoldTip = true; }
+        } else {
+          if (c.__pudlFoldName) { c.removeAttribute('aria-label'); c.__pudlFoldName = false; }
+          if (c.__pudlFoldTip) { c.removeAttribute('data-tooltip'); c.__pudlFoldTip = false; }
+        }
+      });
+    });
   }
 
   function foldTo(bar) {

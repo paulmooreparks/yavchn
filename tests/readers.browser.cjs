@@ -148,7 +148,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     // in a comment's text keeps the browser's own menu.
     await page.evaluate(() => {
       const t = document.querySelector('.win[data-win="reader-1"] .discussion-content');
-      const c = (id, kids) => `<li class="comment" data-id="${id}"><div class="comment-header"><button type="button" class="card-toggle comment-toggle" aria-expanded="true" aria-label="Collapse this comment"></button><a class="comment-author" href="/hn/user/u${id}">u${id}</a><a class="comment-link" href="https://news.ycombinator.com/item?id=${id}" target="_blank" rel="noopener"></a></div><div class="comment-text"><p>Text ${id} <a href="https://example.com/${id}">link</a></p></div>${kids ? `<ul class="thread">${kids}</ul>` : ''}</li>`;
+      const c = (id, kids) => `<li class="comment" data-id="${id}"><div class="comment-header"><button type="button" class="card-toggle comment-toggle" aria-expanded="true" aria-label="Collapse this comment"></button><a class="comment-author" href="/hn/user/u${id}">u${id}</a><a class="comment-link" href="https://news.ycombinator.com/item?id=${id}" target="_blank" rel="noopener"></a><button type="button" data-row-actions></button></div><div class="comment-text"><p>Text ${id} <a href="https://example.com/${id}">link</a></p></div>${kids ? `<ul class="thread">${kids}</ul>` : ''}</li>`;
       t.innerHTML = `<ul class="thread">${c('c1', c('c2'))}${c('c3')}</ul>`;
       t.closest('.story').dispatchEvent(new CustomEvent('yavchn:show-discussion'));
     });
@@ -166,6 +166,15 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.keyboard.press('Shift+F10');
     await page.getByRole('menuitem', { name: 'Expand this comment', exact: true }).click();
     await page.waitForFunction(() => !document.querySelector('.comment[data-id="c2"]').classList.contains('collapsed'));
+    // The header's actions button opens the same menu, shown on the
+    // header under the pointer.
+    const actions = page.locator('.win[data-win="reader-1"] .comment[data-id="c3"] > .comment-header > [data-row-actions]');
+    await page.locator('.win[data-win="reader-1"] .comment[data-id="c3"] > .comment-header').hover();
+    await actions.click();
+    await page.getByRole('menuitem', { name: 'Collapse this comment', exact: true }).waitFor();
+    assert.ok(await page.locator('.win[data-win="reader-1"] .comment[data-id="c3"]').getAttribute('data-menu-for'));
+    assert.equal(await page.getByRole('menuitem', { name: 'Go to the parent comment', exact: true }).count(), 0);
+    await page.keyboard.press('Escape');
     assert.equal(await page.evaluate(() => {
       let asked = 0;
       const link = document.querySelector('.comment[data-id="c3"] .comment-text a');
@@ -523,12 +532,26 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     assert.equal(await page.evaluate(() => window.yavchn.sort.get()), 'newest');
     await page.evaluate(() => window.yavchn.sort.set('oldest'));
     assert.equal(await settings.locator('[data-setting="sort"][aria-pressed="true"]').getAttribute('value'), 'oldest');
-    await settings.locator('.filters-add input').fill('https://www.a.example/path');
-    await settings.getByRole('button', { name: 'Block', exact: true }).click();
+    // Blocked domains are PUDL token fields: a pasted link becomes its
+    // domain, the other field follows, and a value that is no domain is
+    // refused with PUDL's form error.
+    const blockField = settings.getByRole('combobox', { name: 'Blocked domains' });
+    await blockField.fill('https://www.a.example/path');
+    await blockField.press('Enter');
     assert.equal(await page.locator('#row-hn-1').evaluate(el => el.classList.contains('filtered')), true);
-    assert.equal(await page.locator('#filters-dialog .filters-list-remove[data-domain="a.example"]').count(), 1);
-    await settings.getByRole('button', { name: 'Unblock a.example', exact: true }).click();
+    assert.deepEqual(await page.evaluate(() => window.pudlCombo.tokens(document.querySelector('#filters-dialog input[name="domains"]')).values()), ['a.example']);
+    assert.deepEqual(await page.evaluate(() => JSON.parse(window.yavchnStorage.getItem('yavchn-blocked-domains'))), ['a.example']);
+    await blockField.fill('not a domain');
+    await blockField.press('Enter');
+    await settings.locator('.form-error').filter({ hasText: 'Enter a domain' }).waitFor();
+    assert.equal(await blockField.inputValue(), 'not a domain');
+    await blockField.fill('');
+    await page.evaluate(() => window.yavchn.hiding.blockDomain('b.example'));
+    assert.deepEqual(await page.evaluate(() => window.pudlCombo.tokens(document.querySelector('[data-win="settings"] input[name="domains"]')).values()), ['a.example', 'b.example']);
+    await settings.getByRole('button', { name: 'Remove a.example', exact: true }).click();
     assert.equal(await page.locator('#row-hn-1').evaluate(el => el.classList.contains('filtered')), false);
+    assert.deepEqual(await page.evaluate(() => JSON.parse(window.yavchnStorage.getItem('yavchn-blocked-domains'))), ['b.example']);
+    await settings.getByRole('button', { name: 'Remove b.example', exact: true }).click();
     assert.equal(await settings.locator('button[name="placement"][aria-pressed="true"]').getAttribute('value'), 'floating');
     const oldPlacement = await page.evaluate(() => JSON.stringify(window.pudlWindows.state().place));
     await settings.locator('button[name="placement"][value="maximized"]').click();

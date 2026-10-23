@@ -1,7 +1,10 @@
 /* Domain filters, kept in this browser under yavchn-blocked-domains. A
    story whose host is a blocked domain, or a subdomain of one, is hidden
-   from every list. The list of domains is edited in the filters dialog,
-   which the View menu opens. */
+   from every list. The list is edited in PUDL token fields, one in the
+   filters dialog, which the View menu opens, and one in Settings. Storage
+   is the list; each field shows it, and a reader's edit in one is saved
+   and drawn into the others, which a script's set() does without firing
+   change, so the fields never echo each other. */
 (function () {
   'use strict';
   var KEY = 'yavchn-blocked-domains';
@@ -45,60 +48,43 @@
     });
   }
 
+  var FIELD = '[data-domain-filters] input[name="domains"]';
+
+  // Draws the saved list into every field; PUDL takes in a field that
+  // arrived with a window first, so it has its tokens.
   function renderList() {
-    document.querySelectorAll('[data-domain-filters]').forEach(function (container) {
-    var ul = container.querySelector('.filters-list');
-    var empty = container.querySelector('.filters-empty');
-    var arr = load().sort();
-    ul.textContent = '';
-    if (empty) empty.hidden = arr.length > 0;
-    arr.forEach(function (d) {
-      var li = document.createElement('li');
-      li.className = 'filters-list-item';
-      var name = document.createElement('span');
-      name.className = 'filters-list-name';
-      name.textContent = d;
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'icon-btn filters-list-remove';
-      btn.setAttribute('aria-label', 'Unblock ' + d);
-      btn.dataset.domain = d;
-      li.appendChild(name);
-      li.appendChild(btn);
-      ul.appendChild(li);
-    });
+    document.querySelectorAll(FIELD).forEach(function (input) {
+      if (window.pudlCombo && !window.pudlCombo.tokens(input)) window.pudlCombo.enhance(input.closest('[data-domain-filters]'));
+      var t = window.pudlCombo && window.pudlCombo.tokens(input);
+      if (t) t.set(load());
     });
   }
 
-  document.addEventListener('submit', function (e) {
-    var form = e.target.closest('.filters-add');
-    if (!form) return;
-    e.preventDefault();
-    var input = form.querySelector('input[name="domain"]');
-    var d = normalize(input.value);
-    if (!d) {
-      input.setCustomValidity('Enter a domain like example.com');
-      input.reportValidity();
-      return;
-    }
-    input.setCustomValidity('');
-    var arr = load();
-    if (arr.indexOf(d) < 0) { arr.push(d); save(arr); }
-    input.value = '';
-    renderList();
+  function changed() {
     apply();
     document.dispatchEvent(new CustomEvent('yavchn:list-change'));
+  }
+
+  // Every value, typed, pasted or set from storage, is cleaned down to
+  // its domain, and anything that is not one is refused.
+  document.addEventListener('pudl:token-check', function (e) {
+    if (!e.target.matches(FIELD)) return;
+    var d = normalize(e.detail.value);
+    if (d) e.detail.replace(d);
+    else e.detail.refuse('Enter a domain, such as example.com, or paste a link.');
   });
-  document.addEventListener('input', function (e) {
-    if (e.target.matches('.filters-add input[name="domain"]')) e.target.setCustomValidity('');
-  });
-  document.addEventListener('click', function (e) {
-    var btn = e.target.closest('.filters-list-remove');
-    if (!btn) return;
-    save(load().filter(function (x) { return x !== btn.dataset.domain; }));
-    renderList();
-    apply();
-    document.dispatchEvent(new CustomEvent('yavchn:list-change'));
+
+  // A reader's edit: the field's values are the list.
+  document.addEventListener('change', function (e) {
+    if (!e.target.matches(FIELD)) return;
+    var t = window.pudlCombo && window.pudlCombo.tokens(e.target);
+    if (!t) return;
+    save(t.values());
+    document.querySelectorAll(FIELD).forEach(function (input) {
+      var other = input !== e.target && window.pudlCombo.tokens(input);
+      if (other) other.set(load());
+    });
+    changed();
   });
   renderList();
   document.addEventListener('pudl:window-open', renderList);
@@ -111,8 +97,7 @@
     var arr = load();
     if (arr.indexOf(d) < 0) { arr.push(d); save(arr); }
     renderList();
-    apply();
-    document.dispatchEvent(new CustomEvent('yavchn:list-change'));
+    changed();
   };
 
   window.addEventListener('storage', function (e) {

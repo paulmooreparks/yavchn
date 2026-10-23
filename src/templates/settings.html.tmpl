@@ -101,15 +101,10 @@
 
 {{ define "domainfilters" }}
 <div data-domain-filters>
-  <p>Stories from these domains are hidden from every list. Subdomains match too: blocking <code>substack.com</code> also hides <code>danluu.substack.com</code>.</p>
-  <ul class="filters-list" aria-label="Blocked domains"></ul>
-  <p class="filters-empty" hidden>No domains are blocked.</p>
-  <form class="filters-add">
-    <label class="form-label" for="{{ . }}-filters-input">Block a domain</label>
-    <div class="filters-add-row">
-      <input class="form-input" id="{{ . }}-filters-input" type="text" name="domain" placeholder="example.com" autocomplete="off" spellcheck="false" required>
-      <button class="btn" type="submit">Block</button>
-    </div>
-  </form>
+  <p>Stories from these domains are hidden from every list. Subdomains match too: blocking <code>substack.com</code> also hides <code>danluu.substack.com</code>. Type a domain, or paste a link to block its site, and press Enter.</p>
+  <label class="form-label" for="{{ . }}-filters-input">Blocked domains</label>
+  <span class="combo" data-combo-tokens>
+    <input class="form-input" id="{{ . }}-filters-input" type="text" name="domains" placeholder="example.com" autocomplete="off" spellcheck="false">
+  </span>
 </div>
 {{ end }}

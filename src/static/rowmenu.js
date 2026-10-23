@@ -1,6 +1,6 @@
-/* The story list's context menu: a right-click on a row, or Shift+F10 or
-   the Menu key on the row that has focus, opens PUDL's context menu of
-   what can be done with that story. PUDL marks the row while the menu is
+/* The story list's context menu: a right-click or a long press on a row,
+   or Shift+F10 or the Menu key on the row that has focus, opens PUDL's
+   context menu of what can be done with that story. PUDL marks the row while the menu is
    open (detail.mark), so the reader sees which story the commands act on.
 
    Each command is one the list already has, done the same way: the pin,

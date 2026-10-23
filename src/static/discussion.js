@@ -116,8 +116,9 @@
 
   window.yavchn.discussion = { step: step, focusId: focusId, firstNew: firstNew, collapseAll: collapseAll };
 
-  /* A comment's context menu: a right-click on a comment, or Shift+F10 or
-     the Menu key on its focused toggle, offers what the header's small
+  /* A comment's context menu: a right-click or a long press on a comment,
+     its header's actions button, or Shift+F10 or the Menu key on its
+     focused toggle, offers what the header's small
      controls do and a few things they can't. A link inside the comment's
      text, or text the reader has selected, keeps the browser's own menu,
      where open-in-new-tab and copy are expected. */

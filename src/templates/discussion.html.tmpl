@@ -7,6 +7,7 @@
     {{ if gt .Descendants 0 }}<span class="comment-collapsed-count">[{{ .Descendants }} replies]</span>{{ end }}
     <span class="badge accent comment-new-badge">new</span>
     <a class="comment-link" href="{{ .HNURL }}" target="_blank" rel="noopener" aria-label="Open this comment on the source site" title="Open this comment on the source site"><span class="glyph" style="--glyph: var(--glyph-open)" aria-hidden="true"></span></a>
+    <button type="button" data-row-actions></button>
   </div>
   <div class="comment-text">{{ .HTML }}</div>
   {{ if .Children }}

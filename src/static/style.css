@@ -869,6 +869,16 @@ a.comment-author {
 
 .comment-link:hover { color: var(--accent); }
 .comment-link > .glyph { --glyph-size: 12px; }
+/* PUDL's actions button opens the comment's menu, shown on the header
+   under the pointer or with focus; the source link before it keeps the
+   end of the line, so the button stands right after it. */
+.comment-header > [data-row-actions] { margin-inline-start: 0; align-self: center; }
+/* The menu marks the whole comment rather than its header, so the button
+   stays shown and pressed in while the menu is open, as PUDL draws a
+   marked row's. */
+.comment[data-menu-for] > .comment-header > [data-row-actions] {
+  visibility: visible; color: var(--text); background: var(--raise-active-bg); box-shadow: var(--raise-active-shadow);
+}
 
 .comment-text {
   font-size: var(--text-sm);
@@ -950,66 +960,6 @@ kbd {
 .dialog-body code {
   font-family: var(--mono);
   font-size: .9em;
-}
-
-.filters-list {
-  list-style: none;
-  margin: var(--space-3) 0;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  max-height: 40vh;
-  overflow-y: auto;
-}
-
-.filters-list:empty {
-  display: none;
-}
-
-.filters-list-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
-  border-bottom: 1px solid var(--surface-alt);
-  color: var(--text);
-}
-
-.filters-list-item:last-child { border-bottom: 0; }
-
-.filters-list-name {
-  font-family: var(--mono);
-  font-size: var(--text-sm);
-}
-
-.filters-list-remove {
-  width: 26px;
-  height: 26px;
-  padding: 0;
-}
-
-.filters-list-remove::before {
-  content: "";
-  width: 11px;
-  height: 11px;
-  background: currentColor;
-  -webkit-mask: var(--glyph-close) center / contain no-repeat;
-  mask: var(--glyph-close) center / contain no-repeat;
-}
-
-.filters-empty {
-  font-style: italic;
-}
-
-.filters-add-row {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.filters-add-row .form-input {
-  flex: 1;
-  min-width: 0;
 }
 
 /* Classic feeds use the full page without a window workspace. */
@@ -1176,5 +1126,4 @@ img.account-avatar { border-radius: 50%; }
   .source-switch:has(.source-seg :is([data-source="pinned"], [data-source="find"])[aria-current]) .menu-btn-label::before {
     forced-color-adjust: none; background-color: CanvasText;
   }
-  .filters-list-remove::before { forced-color-adjust: none; background: ButtonText; }
 }
