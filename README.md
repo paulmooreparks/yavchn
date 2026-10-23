@@ -39,7 +39,7 @@ Choose **View > Windowed** for the desktop or **View > Classic** for page-based 
 
 ## Live Site
 
-The site is live at https://yavchn.com/ if you'd like to try it out. Visitors to https://yavchn.parkscomputing.com/ can choose **Start migration**, save their browser data to a file, and import it into yavchn.com through **YAVCHN > Settings > Move your browser data**. Backups stay on your device. Import replaces matching storage entries and preserves other entries; browsing view and new-window placement preferences must be set again. Login development runs separately at https://beta.yavchn.com/.
+The site is live at https://yavchn.com/ if you'd like to try it out. Visitors to https://yavchn.parkscomputing.com/ can choose **Start migration**, save their browser data to a file, and import it into yavchn.com through **YAVCHN > Settings > Move your browser data**. Backups stay on your device. Import replaces matching storage entries and preserves other entries; browsing view and new-window placement preferences must be set again.
 
 ## Running Locally
 
@@ -83,7 +83,7 @@ Serves on `http://localhost:8080`.
 
 ## Docker
 
-```
+```bash
 docker build -t yavchn .
 docker run --rm -p 8080:8080 yavchn
 ```
@@ -92,7 +92,7 @@ YAVCHN is a single-binary distroless image. The SQLite article cache is in `/hom
 
 When a publisher asks for an article's readable copy to be removed, exclude it from the reader with the same binary. Give one article's address, or a host to exclude a whole site and its subdomains:
 
-```
+```bash
 docker exec yavchn /yavchn takedown add https://example.com/post
 docker exec yavchn /yavchn takedown add example.com
 docker exec yavchn /yavchn takedown list
