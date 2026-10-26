@@ -590,6 +590,7 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.getByRole('menuitem', { name: 'Copy replies link', exact: true }).waitFor();
     await page.getByRole('menuitem', { name: 'Close window', exact: true }).click();
     await page.waitForFunction(() => !document.querySelector('.win[data-win="replies"]'));
+    await page.waitForFunction(() => !document.querySelector('.menubar-front'));
     assert.equal(await page.locator('.menubar-front').count(), 0);
     // Help opens the privacy policy as a window, and the About box's link
     // to the terms closes the box so the window it opens is in view.

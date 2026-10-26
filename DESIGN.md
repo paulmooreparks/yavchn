@@ -200,6 +200,14 @@ The blocked-domains list in the Domain filters dialog and in Settings is a PUDL 
 
 A long press opens the story-row and comment menus on any touch screen, iOS included, since 0.81.0; lifting the finger does not follow the row's link. Each comment's header ends in PUDL's actions button, after the link to the source, which opens the comment's menu and shows on the header under the pointer or with focus (Paul, 2026-10-23). The menu marks the whole comment, so YAVCHN keeps the button shown and pressed in while the menu is open, as PUDL does for a marked row. The story rows have no actions button, because their pin and hide buttons already fill the column it would stand in.
 
+## PUDL 0.85.0 adoption
+
+YAVCHN vendors PUDL 0.85.0 unchanged (2026-10-25). The upgrade includes the menu lifecycle and narrow taskbar fixes released since 0.81.2. Annotations, shared-dock splits and outline resizing remain disabled; adopting them requires a separate design for YAVCHN's behavior. Existing notes continue using YAVCHN's storage and controls.
+
+## PUDL 0.89.0 adoption
+
+YAVCHN vendors PUDL 0.89.0 unchanged (2026-10-26), replacing the pending 0.85.0 distribution update. Taskbar reordering remains disabled, and YAVCHN does not add title-bar status chips or load the optional native-window adapter. This upgrade preserves the current taskbar order and window controls.
+
 ## Installable web app
 
 The shared page head links a web app manifest with a stable root identity, root scope, and standalone display. Launching at the root respects the existing browsing preference. PNG install icons derive from the existing logo, with a separate Apple touch icon. Installation uses the browser's native controls. No service worker intercepts requests or caches user-specific HTML; feeds and articles continue using the existing network and server-cache behavior. The app does not promise offline reading. This follows the current [installation requirements](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).

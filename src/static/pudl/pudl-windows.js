@@ -4,8 +4,8 @@
 
    The URL is the whole state. A page with windows open can be bookmarked,
    reloaded and shared, and Back and Forward step between sets of open
-   windows. Opening a window pushes a history entry, and every other change
-   replaces the current one.
+   windows. Opening a window or changing a split dock's arrangement pushes
+   a history entry; ordinary activation and placement replace the current one.
 
    A page may have default windows, standing furniture such as a panel of
    site links, named on the layer with data-win-default="site,help". An
@@ -126,6 +126,7 @@
   var cancelGesture = null;
   var policyStamp = '';
   var syncing = 0;
+  var restoreSerial = 0;
   var required = [];
   var dockGroups = {};
   var dockPeek = {};
@@ -140,6 +141,198 @@
   }
   function sharedEdge(edge) { return sharedEdges().indexOf(edge) >= 0; }
   function sideEdge(edge) { return edge === 'left' || edge === 'right'; }
+  function splitEdge(edge) { return sharedEdge(edge) && layer.hasAttribute('data-win-dock-splits'); }
+  function cloneTree(t) { return t ? JSON.parse(JSON.stringify(t)) : null; }
+  function treeGroups(t) { return !t ? [] : t.type === 'group' ? [t] : treeGroups(t.first).concat(treeGroups(t.second)); }
+  function treeNodes(t) { return !t || t.type === 'group' ? [] : [t].concat(treeNodes(t.first), treeNodes(t.second)); }
+  function dockTree(st, edge) { return splitEdge(edge) && st.docks && st.docks[edge] && st.docks[edge].tree; }
+  function groupFor(st, edge, key) { return treeGroups(dockTree(st, edge)).filter(function (g) { return g.order.indexOf(key) >= 0; })[0]; }
+  function freshId(tree) {
+    var used = treeGroups(tree).concat(treeNodes(tree)).map(function (t) { return t.id; }), i = 1;
+    while (used.indexOf('g' + i) >= 0) i++;
+    return 'g' + i;
+  }
+  /* Version 1 accepts one axis per edge. Bounds apply to restored data,
+     independently of the screen size on which it was saved. */
+  function validDockTree(raw, edge) {
+    if (!raw || raw.v !== 1) return null;
+    var seen = new Set(), keys = new Set(), count = 0;
+    function visit(t, depth) {
+      if (!t || depth > 32 || ++count > 255 || typeof t.id !== 'string' || !KEY_RE.test(t.id) || t.id.length > 80 || seen.has(t.id)) throw Error('dock tree');
+      seen.add(t.id);
+      if (t.type === 'group') {
+        if (!Array.isArray(t.order) || t.order.length > 256) throw Error('dock group');
+        var order = t.order.map(function (k) {
+          if (typeof k !== 'string' || !KEY_RE.test(k) || keys.has(k)) throw Error('dock member');
+          keys.add(k); return k;
+        });
+        return { type: 'group', id: t.id, order: order, selected: order.indexOf(t.selected) >= 0 ? t.selected : order[0] || null };
+      }
+      if (t.type !== 'split' || t.axis !== (sideEdge(edge) ? 'y' : 'x') || !Number.isFinite(t.ratio)) throw Error('dock split');
+      return { type: 'split', id: t.id, axis: t.axis, ratio: Math.max(0.01, Math.min(0.99, t.ratio)), first: visit(t.first, depth + 1), second: visit(t.second, depth + 1) };
+    }
+    try { return visit(raw.tree, 0); } catch (err) { return null; }
+  }
+  function normalizeDockTree(st, edge, members, d) {
+    if (!dockTree(st, edge)) return;
+    function prune(t) {
+      if (t.type === 'group') {
+        t.order = t.order.filter(function (k) { return members.indexOf(k) >= 0; });
+        t.order = required.filter(function (k) { return t.order.indexOf(k) >= 0; }).concat(t.order.filter(function (k) { return !requiredWindow(k); }));
+        return t.order.length ? t : null;
+      }
+      t.first = prune(t.first); t.second = prune(t.second);
+      return !t.first ? t.second : !t.second ? t.first : t;
+    }
+    d.tree = prune(d.tree);
+    var groups = treeGroups(d.tree);
+    if (!groups.length) { delete d.tree; delete d.activeGroup; return; }
+    var activeGroup = groups.filter(function (g) { return g.id === d.activeGroup; })[0] || groups[0];
+    members.forEach(function (k) { if (!groupFor(st, edge, k)) activeGroup.order.push(k); });
+    groups.forEach(function (g) {
+      if (g.order.indexOf(st.top) >= 0 && !st.min[st.top]) { g.selected = st.top; activeGroup = g; }
+      if (g.order.indexOf(g.selected) < 0 || st.min[g.selected]) g.selected = g.order.filter(function (k) { return !st.min[k]; })[0] || g.order[0];
+    });
+    d.activeGroup = activeGroup.id;
+    d.selected = activeGroup.selected;
+    d.order = groups.reduce(function (all, g) { return all.concat(g.order); }, []);
+    if (groups.length === 1) { delete d.tree; delete d.activeGroup; }
+  }
+  function dockBounds(edge) {
+    var w = layer.clientWidth, h = layer.clientHeight;
+    var top = dockSizePx('top'), bottom = dockSizePx('bottom');
+    return sideEdge(edge) ? { x: edge === 'left' ? 0 : w - dockSizePx(edge), y: top, w: dockSizePx(edge), h: Math.max(0, h - top - bottom) }
+      : { x: 0, y: edge === 'top' ? 0 : h - dockSizePx(edge), w: w, h: dockSizePx(edge) };
+  }
+  function dockSizePx(edge) {
+    var value = getComputedStyle(layer).getPropertyValue('--dock-' + edge).trim();
+    return value.indexOf('%') >= 0 ? parseFloat(value) / 100 * (sideEdge(edge) ? layer.clientWidth : layer.clientHeight) : parseFloat(value) || 0;
+  }
+  function dockTrack() { return matchMedia('(pointer: coarse)').matches ? 20 : 12; }
+  function groupMin(g, edge) {
+    return Math.max.apply(null, [80].concat(g.order.map(function (k) {
+      return wins[k] ? pxOf(wins[k], sideEdge(edge) ? '--win-min-h' : '--win-min-w', sideEdge(edge) ? 200 : 320) + (sideEdge(edge) ? 40 : 0) : 80;
+    })));
+  }
+  function treeMin(t, edge, st) {
+    if (!t) return 0;
+    if (t.type === 'group') return t.order.some(function (k) { return !st.min[k]; }) ? groupMin(t, edge) : sideEdge(edge) ? 40 : 80;
+    var a = treeMin(t.first, edge, st), b = treeMin(t.second, edge, st);
+    return a + b + (a && b ? dockTrack() : 0);
+  }
+  function treeShowing(t, st) { return treeGroups(t).some(function (g) { return g.order.some(function (k) { return !st.min[k]; }); }); }
+  function splitPresentation(st, edge) {
+    var tree = dockTree(st, edge);
+    if (!tree) return 'single';
+    if (railMode(st, edge)) return 'collapsed';
+    var bounds = dockBounds(edge);
+    return treeMin(tree, edge, st) > (sideEdge(edge) ? bounds.h : bounds.w) ? 'single' : 'split';
+  }
+  function paneFront(st, edge, key) {
+    var g = groupFor(st, edge, key);
+    return g && splitPresentation(st, edge) === 'split' ? g.selected : edgeFront(st, edge);
+  }
+  function splitDestination(st, key, edge, dest) {
+    if (!splitEdge(edge) || !dest || restricted(key) || (dockOnly(key) && !sideEdge(edge))) return false;
+    var groups = treeGroups(dockTree(st, edge));
+    var g = groups.filter(function (item) { return item.id === dest.group; })[0];
+    if (!g && dest.group === 'main' && !groups.length) g = { order: dockMembers(st, edge) };
+    if (!g || ['tab', 'before', 'after'].indexOf(dest.position) < 0) return false;
+    if (dest.position === 'tab') return true;
+    if (treeNodes(dockTree(st, edge)).length >= 127) return false;
+    function depth(t, id, n) { if (!t) return -1; if (t.id === id) return n; return t.type === 'split' ? Math.max(depth(t.first, id, n + 1), depth(t.second, id, n + 1)) : -1; }
+    if (depth(dockTree(st, edge), dest.group, 0) >= 31) return false;
+    if (splitPresentation(st, edge) === 'single' && groups.length > 1) return false;
+    if (g.order.indexOf(key) >= 0 && g.order.length === 1) return false;
+    var remaining = { order: g.order.filter(function (k) { return k !== key; }) };
+    var need = groupMin(remaining, edge) + groupMin({ order: [key] }, edge) + dockTrack();
+    var r = paneRects[edge] && paneRects[edge][dest.group];
+    var bounds = r || dockBounds(edge);
+    return !railMode(st, edge) && need <= (sideEdge(edge) ? bounds.h : bounds.w);
+  }
+  var paneRects = {}, paneSplitters = {};
+  var dockDropPreview = null;
+  function dockDropAt(key, x, y) {
+    var outer = layer.getBoundingClientRect(), px = x - outer.left, py = y - outer.top;
+    var specs = layoutDockPanes(state).specs;
+    for (var i = 0; i < specs.length; i++) {
+      var s = specs[i], edge = s.edge;
+      if (!splitEdge(edge) || !s.members.length || restricted(key) || (dockOnly(key) && !sideEdge(edge))) continue;
+      var r = s.rect || dockBounds(edge);
+      if (px < r.x || px > r.x + r.w || py < r.y || py > r.y + r.h) continue;
+      var pos = sideEdge(edge) ? (py - r.y) / r.h : (px - r.x) / r.w;
+      var where = pos < 0.25 ? 'before' : pos > 0.75 ? 'after' : 'tab';
+      var group = s.pane || { id: groupFor(state, edge, edgeFront(state, edge)) ? groupFor(state, edge, edgeFront(state, edge)).id : 'main' };
+      var dest = { group: group.id, position: where };
+      if (!splitDestination(state, key, edge, dest)) {
+        dest.position = 'tab';
+        if (!splitDestination(state, key, edge, dest)) continue;
+      }
+      return { edge: edge, destination: dest, rect: r };
+    }
+    /* The outer target creates a dock even when that edge is empty. */
+    var edge = px <= SNAP_PX ? 'left' : px >= layer.clientWidth - SNAP_PX ? 'right' : py <= SNAP_PX ? 'top' : py >= layer.clientHeight - SNAP_PX ? 'bottom' : null;
+    if (edge && splitEdge(edge) && !dockMembers(state, edge).length && (!dockOnly(key) || sideEdge(edge))) {
+      var r = { x: 0, y: 0, w: layer.clientWidth, h: layer.clientHeight };
+      if (sideEdge(edge)) { r.w *= DOCK_SIZE; if (edge === 'right') r.x = layer.clientWidth - r.w; }
+      else { r.h *= DOCK_SIZE; if (edge === 'bottom') r.y = layer.clientHeight - r.h; }
+      return { edge: edge, rect: r };
+    }
+    return null;
+  }
+  function showDockDrop(drop) {
+    if (!drop) { if (dockDropPreview) dockDropPreview.hidden = true; return; }
+    if (!dockDropPreview) { dockDropPreview = document.createElement('div'); dockDropPreview.className = 'win-dock-drop'; dockDropPreview.setAttribute('aria-hidden', 'true'); layer.appendChild(dockDropPreview); }
+    var r = Object.assign({}, drop.rect), dest = drop.destination, where = dest && dest.position;
+    if (where && where !== 'tab') {
+      if (sideEdge(drop.edge)) { r.h /= 2; if (where === 'after') r.y += r.h; }
+      else { r.w /= 2; if (where === 'after') r.x += r.w; }
+    }
+    rectStyle(dockDropPreview, r); dockDropPreview.hidden = false; dockDropPreview.style.zIndex = String(4 * state.open.length + 5);
+    dockDropPreview.textContent = !dest ? text('dock-' + drop.edge, DOCK_WORDS[drop.edge]) : where === 'tab' ? text('dock-add-tab', 'Add as tab') : sideEdge(drop.edge)
+      ? (where === 'before' ? text('dock-split-above', 'Split above') : text('dock-split-below', 'Split below'))
+      : (where === 'before' ? text('dock-split-left', 'Split left') : text('dock-split-right', 'Split right'));
+  }
+  function placeInDock(st, key, edge, dest) {
+    if (!splitDestination(st, key, edge, dest)) return null;
+    var work = docked(st, key, edge), d = dockRecord(work, edge);
+    if (!d.tree) d.tree = { type: 'group', id: 'main', order: dockMembers(st, edge), selected: d.selected };
+    var target = treeGroups(d.tree).filter(function (g) { return g.id === dest.group; })[0];
+    treeGroups(d.tree).forEach(function (g) { g.order = g.order.filter(function (k) { return k !== key; }); });
+    if (dest.position === 'tab') { target.order.push(key); target.selected = key; d.activeGroup = target.id; }
+    else {
+      var leaf = { type: 'group', id: freshId(d.tree), order: [key], selected: key };
+      var node = { type: 'split', id: '', axis: sideEdge(edge) ? 'y' : 'x', ratio: 0.5,
+        first: dest.position === 'before' ? leaf : target, second: dest.position === 'before' ? target : leaf };
+      node.id = freshId({ type: 'split', id: '', first: d.tree, second: leaf });
+      function replace(t) { if (t === target) return node; if (t.type === 'split') { t.first = replace(t.first); t.second = replace(t.second); } return t; }
+      d.tree = replace(d.tree); d.activeGroup = leaf.id;
+    }
+    return work;
+  }
+  function dockArrange(edge, action, groupId) {
+    if (!dockTree(state, edge)) return;
+    var work = copy(state), d = dockRecord(work, edge), groups = treeGroups(d.tree);
+    if (action === 'merge') { d.order = groups.reduce(function (a, g) { return a.concat(g.order); }, []); delete d.tree; delete d.activeGroup; }
+    else if (action === 'equalize') {
+      var bounds = dockBounds(edge), length = sideEdge(edge) ? bounds.h : bounds.w, track = dockTrack();
+      var unit = (length - (groups.length - 1) * track) / groups.length;
+      function equal(t) {
+        if (t.type === 'group') return 1;
+        var a = equal(t.first), b = equal(t.second);
+        var ratio = unit > 0 ? (a * unit + (a - 1) * track) / ((a + b) * unit + (a + b - 2) * track) : a / (a + b);
+        t.ratio = Math.max(0.01, Math.min(0.99, ratio)); return a + b;
+      }
+      equal(d.tree);
+    } else if (action === 'swap') {
+      var i = groups.findIndex(function (g) { return g.id === groupId; });
+      if (i < 0 || groups.length < 2) return;
+      var a = groups[i], b = groups[(i + 1) % groups.length];
+      var order = a.order, selected = a.selected;
+      a.order = b.order; a.selected = b.selected; b.order = order; b.selected = selected;
+    } else return;
+    commit(work, true);
+  }
   function requiredWindow(key) { return required.indexOf(key) >= 0; }
   function dockOnly(key) { return !!wins[key] && wins[key].hasAttribute('data-win-dock-only'); }
   function railThreshold() {
@@ -163,7 +356,8 @@
   function baseRail(st, edge) {
     var d = st.docks && st.docks[edge];
     var mode = d ? d.mode : 'auto';
-    return !!st.min[edgeFront(st, edge)] || mode === 'rail' || (mode === 'auto' && autoCollapsed(edge));
+    var minimizedDock = dockTree(st, edge) ? dockMembers(st, edge).every(function (k) { return !!st.min[k]; }) : !!st.min[edgeFront(st, edge)];
+    return minimizedDock || mode === 'rail' || (mode === 'auto' && autoCollapsed(edge));
   }
 
   /* Room to ask for (issue #16): a window marked data-win-room with a CSS
@@ -228,6 +422,11 @@
   }
   function dockMembers(st, edge) {
     var members = defaultMembers(st, edge);
+    var tree = dockTree(st, edge);
+    if (tree) {
+      var flat = treeGroups(tree).reduce(function (a, g) { return a.concat(g.order); }, []).filter(function (k) { return members.indexOf(k) >= 0; });
+      return flat.concat(members.filter(function (k) { return flat.indexOf(k) < 0; }));
+    }
     var order = st.docks && st.docks[edge] && st.docks[edge].order;
     if (!order) return members;
     var fixed = members.filter(requiredWindow), rest = members.filter(function (k) { return !requiredWindow(k); });
@@ -238,12 +437,14 @@
      counted from the first of them. */
   function reordered(st, edge, key, index) {
     st = copy(st);
-    var members = dockMembers(st, edge);
+    var pane = groupFor(st, edge, key);
+    var members = pane ? pane.order : dockMembers(st, edge);
     var rest = members.filter(function (k) { return !requiredWindow(k); });
     if (requiredWindow(key) || rest.indexOf(key) < 0) return st;
     rest.splice(rest.indexOf(key), 1);
     rest.splice(Math.max(0, Math.min(rest.length, index)), 0, key);
-    dockRecord(st, edge).order = members.filter(requiredWindow).concat(rest);
+    if (pane) pane.order = members.filter(requiredWindow).concat(rest);
+    else dockRecord(st, edge).order = members.filter(requiredWindow).concat(rest);
     return st;
   }
   function dockMode(edge, mode) {
@@ -254,7 +455,8 @@
     delete dockPeek[edge];
     commit(st, false);
     var hiddenFocus = document.activeElement && document.activeElement.closest('.win[hidden]');
-    if (hiddenFocus && dockGroups[edge]) dockGroups[edge].querySelector('.win-dock-toggle').focus();
+    var toggle = layer.querySelector('.win-dock-group[data-dock-edge="' + edge + '"] .win-dock-toggle:not([hidden])');
+    if (hiddenFocus && toggle) toggle.focus();
   }
 
   function normalizeDocks(st) {
@@ -269,14 +471,18 @@
       if (members.indexOf(d.selected) < 0) d.selected = members[0] || null;
       if (d.size == null && members.length) d.size = st.place[d.selected].s || DOCK_SIZE;
       if (d.size != null) members.forEach(function (key) { st.place[key].s = d.size; });
+      normalizeDockTree(st, edge, members, d);
+      if (!d.tree && d.order && d.order.join(',') === defaultMembers(st, edge).join(',')) delete d.order;
       if (dockPeek[edge] !== d.selected || !railMode(st, edge) || st.min[d.selected]) delete dockPeek[edge];
     });
   }
 
   function closeDockTab(key, edge, reason) {
+    var pane = groupFor(state, edge, key), candidates = pane && pane.order.filter(function (k) { return k !== key; });
     close(key, reason);
     if (wins[key]) return;
-    var tab = dockGroups[edge].querySelector('[aria-selected="true"]');
+    var survivor = candidates && candidates.filter(function (k) { return state.open.indexOf(k) >= 0; })[0];
+    var tab = survivor ? layer.querySelector('[data-dock-key="' + CSS.escape(survivor) + '"]') : layer.querySelector('.win-dock-group[data-dock-edge="' + edge + '"] [aria-selected="true"]');
     if (tab) tab.focus();
   }
 
@@ -358,14 +564,17 @@
 
   function positionDockMenus(group) {
     var bounds = group.getBoundingClientRect(), list = group.querySelector('.win-dock-tablist'), clip = list.getBoundingClientRect();
+    var rtl = getComputedStyle(group).direction === 'rtl';
     group.querySelectorAll('[data-dock-menu]').forEach(function (button) {
       var entry = list.querySelector('[data-dock-entry="' + CSS.escape(button.getAttribute('data-dock-menu')) + '"]');
       if (!entry) { button.remove(); return; }
       var rail = group.hasAttribute('data-dock-rail');
       var rect = entry.getBoundingClientRect();
-      button.hidden = rail || rect.right > clip.right + 1 || rect.left < clip.left - 1 || rect.bottom > clip.bottom + 1 || rect.top < clip.top - 1;
-      button.style.left = (rect.right - bounds.left - (rail ? 13 : 23)) + 'px';
-      button.style.top = (rect.top - bounds.top + (rect.height - 18) / 2) + 'px';
+      var left = rtl ? rect.left + 5 : rect.right - 23;
+      var top = Math.max(clip.top, Math.min(rect.top + (rect.height - 18) / 2, clip.top + list.clientHeight - 18));
+      button.hidden = rail || left < clip.left - 1 || left + 18 > clip.left + list.clientWidth + 1;
+      button.style.left = (left - bounds.left) + 'px';
+      button.style.top = (top - bounds.top) + 'px';
     });
   }
 
@@ -379,7 +588,7 @@
   }
 
   function focusDockTab(edge, key) {
-    var group = dockGroups[edge], tab = group && group.querySelector('[data-dock-key="' + CSS.escape(key) + '"]');
+    var tab = layer.querySelector('[data-dock-key="' + CSS.escape(key) + '"]'), group = tab && tab.closest('.win-dock-group');
     if (!tab) return;
     group.querySelectorAll('[role="tab"]').forEach(function (t) { t.tabIndex = t === tab ? 0 : -1; });
     tab.focus();
@@ -389,7 +598,8 @@
      place among the ordinary tabs. */
   function moveDockTab(edge, key, step) {
     if (requiredWindow(key)) return;
-    var rest = dockMembers(state, edge).filter(function (k) { return !requiredWindow(k); });
+    var pane = groupFor(state, edge, key);
+    var rest = (pane ? pane.order : dockMembers(state, edge)).filter(function (k) { return !requiredWindow(k); });
     var i = rest.indexOf(key);
     if (i < 0 || i + step < 0 || i + step >= rest.length) return;
     commit(reordered(state, edge, key, i + step), false);
@@ -402,16 +612,20 @@
   function dragDockTab(e, group, edge) {
     var tab = e.button === 0 && e.target.closest('[data-dock-key]');
     if (!tab || e.ctrlKey || e.metaKey || e.altKey) return;
+    /* Preserve native strip scrolling on touch screens. Placement remains
+       available through each tab's menu without a drag gesture. */
+    if (splitEdge(edge) && e.pointerType === 'touch') return;
     var key = tab.getAttribute('data-dock-key');
-    if (requiredWindow(key)) return;
+    if (requiredWindow(key) && !splitEdge(edge)) return;
     var others = Array.from(group.querySelectorAll('.win-dock-entry')).filter(function (entry) {
       var k = entry.getAttribute('data-dock-entry');
       return k !== key && !requiredWindow(k);
     });
-    if (!others.length) return;
+    if (!others.length && !splitEdge(edge)) return;
     var vertical = iconRail(state, edge), rtl = getComputedStyle(group).direction === 'rtl';
     var startX = e.clientX, startY = e.clientY, moving = false, index = -1, mark = null;
     var id = e.pointerId;
+    var drop = null, outside = false;
 
     function placeAt(x, y) {
       var at = vertical ? y : x;
@@ -449,7 +663,12 @@
         group.setAttribute('data-dock-dragging', key);
       }
       ev.preventDefault();
-      placeAt(ev.clientX, ev.clientY);
+      var bounds = group.getBoundingClientRect();
+      outside = ev.clientX < bounds.left - 8 || ev.clientX > bounds.right + 8 || ev.clientY < bounds.top - 8 || ev.clientY > bounds.bottom + 8;
+      drop = outside && splitEdge(edge) ? dockDropAt(key, ev.clientX, ev.clientY) : null;
+      showDockDrop(drop);
+      mark.hidden = outside;
+      if (!outside && others.length) placeAt(ev.clientX, ev.clientY);
     }
     function finish(ev, keep) {
       document.removeEventListener('pointermove', move, true);
@@ -458,12 +677,16 @@
       document.removeEventListener('keydown', escape, true);
       if (!moving) return;
       if (mark) mark.remove();
+      showDockDrop(null);
       group.removeAttribute('data-dock-dragging');
       if (tab.hasPointerCapture && tab.hasPointerCapture(id)) tab.releasePointerCapture(id);
       /* The click a drag ends with does not select the tab. */
       group.__dragged = true;
       setTimeout(function () { group.__dragged = false; }, 0);
-      if (keep && index >= 0) {
+      if (keep && drop) {
+        var work = drop.destination ? placeInDock(state, key, drop.edge, drop.destination) : docked(state, key, drop.edge);
+        if (work) { commit(work, true); focusDockTab(drop.edge, key); }
+      } else if (keep && !outside && index >= 0 && !requiredWindow(key)) {
         commit(reordered(state, edge, key, index), false);
         focusDockTab(edge, key);
       }
@@ -482,15 +705,133 @@
     document.addEventListener('keydown', escape, true);
   }
 
+  function layoutDockPanes(st) {
+    var specs = [], splits = [];
+    paneRects = {};
+    sharedEdges().forEach(function (edge) {
+      paneRects[edge] = {};
+      var tree = dockTree(st, edge), bounds = dockBounds(edge), mode = splitPresentation(st, edge);
+      function layout(t, r) {
+        if (t.type === 'group') {
+          paneRects[edge][t.id] = r;
+          specs.push({ edge: edge, pane: t, rect: r, members: t.order, selected: t.selected }); return;
+        }
+        var a = treeMin(t.first, edge, st), b = treeMin(t.second, edge, st);
+        if (!a) { if (b) layout(t.second, r); return; }
+        if (!b) { layout(t.first, r); return; }
+        var vertical = sideEdge(edge), length = vertical ? r.h : r.w, track = dockTrack(), available = length - track;
+        var firstShowing = treeShowing(t.first, st), secondShowing = treeShowing(t.second, st);
+        var first = !firstShowing ? a : !secondShowing ? available - b : Math.max(a, Math.min(available - b, available * t.ratio));
+        var r1 = Object.assign({}, r), r2 = Object.assign({}, r), handle = Object.assign({}, r);
+        if (vertical) { r1.h = first; handle.y += first; handle.h = track; r2.y += first + track; r2.h -= first + track; }
+        else { r1.w = first; handle.x += first; handle.w = track; r2.x += first + track; r2.w -= first + track; }
+        if (firstShowing && secondShowing) splits.push({ edge: edge, node: t, rect: handle, length: available, min: a / available, max: 1 - b / available, ratio: first / available });
+        layout(t.first, r1); layout(t.second, r2);
+      }
+      if (tree && mode === 'split') layout(tree, bounds);
+      else specs.push({ edge: edge, members: dockMembers(st, edge), selected: edgeFront(st, edge) });
+    });
+    return { specs: specs, splits: splits };
+  }
+  function rectStyle(el, r) {
+    ['left', 'top', 'width', 'height'].forEach(function (name, i) { styleProp(el, name, [r.x, r.y, r.w, r.h][i] + 'px'); });
+    styleProp(el, 'right', 'auto'); styleProp(el, 'bottom', 'auto');
+  }
+  function outlineResize(win) {
+    var mode = win && win.getAttribute('data-win-resize-mode');
+    return (mode == null ? layer.getAttribute('data-win-resize-mode') : mode) === 'outline';
+  }
+  function resizePreview(r) {
+    rectStyle(ghost, r);
+    ghost.hidden = false;
+  }
+  function renderDockDividers(splits) {
+    var wanted = new Set();
+    splits.forEach(function (s) {
+      var id = s.edge + '/' + s.node.id, el = paneSplitters[id]; wanted.add(id);
+      if (!el) {
+        el = document.createElement('div'); el.className = 'win-dock-splitter'; el.tabIndex = 0;
+        el.setAttribute('role', 'separator'); el.id = 'pudl-dock-splitter-' + s.edge + '-' + s.node.id;
+        el.addEventListener('keydown', function (e) {
+          var now = el.__split, vertical = sideEdge(now.edge), delta = e.shiftKey ? 0.1 : 0.01, next;
+          if (e.key === 'Enter') next = 0.5;
+          else if (e.key === 'Home') next = now.min;
+          else if (e.key === 'End') next = now.max;
+          else if (e.key === (vertical ? 'ArrowUp' : 'ArrowLeft')) next = now.ratio - delta;
+          else if (e.key === (vertical ? 'ArrowDown' : 'ArrowRight')) next = now.ratio + delta;
+          else return;
+          e.preventDefault(); e.stopPropagation(); setDockRatio(now.edge, now.node.id, next);
+        });
+        el.addEventListener('dblclick', function () { setDockRatio(el.__split.edge, el.__split.node.id, 0.5); });
+        el.addEventListener('pointerdown', function (e) {
+          if (e.button !== 0) return;
+          e.preventDefault(); e.stopPropagation(); el.focus();
+          var start = copy(state), now = el.__split, vertical = sideEdge(now.edge), at = vertical ? e.clientY : e.clientX, id = e.pointerId;
+          var outline = outlineResize(), work = start, frame = 0, last = at;
+          el.setPointerCapture(id); el.classList.add('dragging');
+          function step() {
+            frame = 0;
+            work = copy(start);
+            var n = treeNodes(dockTree(work, now.edge)).filter(function (t) { return t.id === now.node.id; })[0];
+            n.ratio = Math.max(now.min, Math.min(now.max, now.ratio + (last - at) / now.length));
+            if (outline) {
+              var rect = Object.assign({}, now.rect);
+              rect[vertical ? 'y' : 'x'] += (n.ratio - now.ratio) * now.length;
+              resizePreview(rect);
+            } else apply(work);
+          }
+          function move(ev) {
+            if (ev.pointerId !== id) return;
+            last = vertical ? ev.clientY : ev.clientX;
+            if (!frame) frame = requestAnimationFrame(step);
+          }
+          function end(ev) {
+            if (ev.pointerId != null && ev.pointerId !== id) return;
+            cancelGesture = null;
+            document.removeEventListener('pointermove', move, true); document.removeEventListener('pointerup', end, true);
+            document.removeEventListener('pointercancel', end, true); document.removeEventListener('keydown', escape, true);
+            el.classList.remove('dragging'); if (el.hasPointerCapture(id)) el.releasePointerCapture(id);
+            if (frame) { cancelAnimationFrame(frame); if (ev.type === 'pointerup') step(); }
+            showGhost(null);
+            if (ev.type === 'pointerup') commit(outline ? work : state, true); else if (ev.type !== 'policy') apply(start);
+          }
+          function escape(ev) { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); end(ev); } }
+          document.addEventListener('pointermove', move, true); document.addEventListener('pointerup', end, true);
+          document.addEventListener('pointercancel', end, true); document.addEventListener('keydown', escape, true);
+          cancelGesture = function () { end({ type: 'policy' }); };
+        });
+        layer.appendChild(el); paneSplitters[id] = el;
+      }
+      el.__split = s; rectStyle(el, s.rect); el.style.zIndex = String(4 * state.open.length + 3);
+      el.setAttribute('aria-orientation', sideEdge(s.edge) ? 'horizontal' : 'vertical');
+      var primary = treeGroups(s.node.first);
+      el.setAttribute('aria-label', text('dock-divider', '{title}, {edge} dock divider').replace('{title}', primary.map(function (g) { return fullTitle(g.selected); }).join(', ')).replace('{edge}', text('dock-' + s.edge, DOCK_WORDS[s.edge])));
+      el.setAttribute('aria-valuenow', Math.round(s.ratio * 10000) / 100); el.setAttribute('aria-valuemin', Math.round(s.min * 10000) / 100); el.setAttribute('aria-valuemax', Math.round(s.max * 10000) / 100);
+      el.setAttribute('aria-controls', primary.map(function (g) { return wins[g.selected] && wins[g.selected].id; }).filter(Boolean).join(' '));
+    });
+    Object.keys(paneSplitters).forEach(function (id) { if (!wanted.has(id)) { var el = paneSplitters[id]; if (el === document.activeElement) { var tab = layer.querySelector('[role="tab"][aria-selected="true"]'); if (tab) tab.focus(); } el.remove(); delete paneSplitters[id]; } });
+  }
+  function setDockRatio(edge, id, value) {
+    if (!Number.isFinite(value)) return;
+    var work = copy(state), node = treeNodes(dockTree(work, edge)).filter(function (t) { return t.id === id; })[0];
+    if (!node) return;
+    var current = paneSplitters[edge + '/' + id];
+    node.ratio = current ? Math.max(current.__split.min, Math.min(current.__split.max, value)) : Math.max(0.01, Math.min(0.99, value));
+    commit(work, true);
+  }
   function renderDockGroups() {
     if (!sharedDocks()) return;
-    sharedEdges().forEach(function (edge) {
-      var members = dockMembers(state, edge), group = dockGroups[edge];
+    var layout = layoutDockPanes(state), wantedGroups = new Set();
+    state.open.forEach(function (k) { if (wins[k]) wins[k].removeAttribute('data-win-dock-pane'); });
+    layout.specs.forEach(function (spec) {
+      var edge = spec.edge, members = spec.members, groupId = spec.pane ? edge + '/' + spec.pane.id : edge;
+      wantedGroups.add(groupId);
+      var group = dockGroups[groupId];
       if (!group) {
         /* A strip the server drew is adopted, its tabs links to the
            addresses that select them, so a page without script can switch
            tabs too (issue #14); otherwise one is built. */
-        group = layer.querySelector(':scope > .win-dock-group[data-dock-edge="' + edge + '"]');
+        group = layer.querySelector(':scope > .win-dock-group[data-dock-edge="' + edge + '"]' + (spec.pane ? '[data-dock-pane="' + spec.pane.id + '"]' : ':not([data-dock-pane])'));
         if (!group) {
           group = document.createElement('div');
           group.className = 'win-dock-group';
@@ -510,12 +851,20 @@
           toggleButton.innerHTML = '<span class="glyph" aria-hidden="true"></span>';
           group.appendChild(toggleButton);
         }
-        dockGroups[edge] = group;
-        if (window.ResizeObserver) new ResizeObserver(function () {
-          var selectedTab = group.querySelector('[role="tab"][aria-selected="true"]');
-          if (selectedTab) selectedTab.parentElement.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-          positionDockMenus(group);
-        }).observe(group);
+        dockGroups[groupId] = group;
+        if (window.ResizeObserver) {
+          group.__resizeObserver = new ResizeObserver(function () {
+            if (group.__resizeFrame) return;
+            group.__resizeFrame = requestAnimationFrame(function () {
+              group.__resizeFrame = 0;
+              if (!group.isConnected) return;
+              var selectedTab = group.querySelector('[role="tab"][aria-selected="true"]');
+              if (selectedTab) selectedTab.parentElement.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+              positionDockMenus(group);
+            });
+          });
+          group.__resizeObserver.observe(group);
+        }
         group.querySelector('.win-dock-tablist').addEventListener('scroll', function () { positionDockMenus(group); });
         group.querySelector('.win-dock-tablist').setAttribute('aria-label', text('dock-' + edge, DOCK_WORDS[edge]));
         group.addEventListener('click', function (e) {
@@ -525,6 +874,7 @@
             var menuKey = menu.getAttribute('data-dock-menu');
             if (railMode(state, edge)) dockPeek[edge] = menuKey;
             commit(raised(state, menuKey), false);
+            positionDockMenus(group);
             var panel = document.getElementById('win-menu-' + menuKey);
             panel.setAttribute('data-menu-anchor', menu.id);
             openMenu(menuKey);
@@ -576,8 +926,22 @@
       }
       group.hidden = !members.length;
       var collapsed = railMode(state, edge), rail = iconRail(state, edge);
-      var selected = edgeFront(state, edge), list = group.querySelector('.win-dock-tablist');
+      var selected = spec.selected, list = group.querySelector('.win-dock-tablist');
+      setAttr(list, 'aria-label', text('dock-' + edge, DOCK_WORDS[edge]) + (spec.pane ? ': ' + fullTitle(selected) : ''));
+      if (spec.pane) {
+        group.setAttribute('data-dock-pane', spec.pane.id);
+        var strip = Object.assign({}, spec.rect, { h: 40 });
+        if (edge === 'top') strip.y += spec.rect.h - 40;
+        rectStyle(group, strip);
+        members.forEach(function (k) {
+          var win = wins[k]; if (!win) return;
+          win.setAttribute('data-win-dock-pane', spec.pane.id);
+          ['--dock-pane-x', '--dock-pane-y', '--dock-pane-w', '--dock-pane-h'].forEach(function (p, i) { styleProp(win, p, [spec.rect.x, spec.rect.y, spec.rect.w, spec.rect.h][i] + 'px'); });
+        });
+      }
+      var firstPane = !spec.pane || spec === layout.specs.filter(function (s) { return s.edge === edge; })[0];
       var dockToggle = group.querySelector('.win-dock-toggle');
+      dockToggle.hidden = !firstPane;
       if (edge === 'left' || rail) {
         if (group.firstElementChild !== dockToggle) group.insertBefore(dockToggle, list);
       } else if (list.nextElementSibling !== dockToggle) group.insertBefore(dockToggle, list.nextElementSibling);
@@ -619,6 +983,8 @@
           group.appendChild(menuButton);
         }
         var wrapper = tab.parentElement;
+        var membership = groupFor(state, edge, key);
+        wrapper.toggleAttribute('data-dock-boundary', !spec.pane && !!membership && i > 0 && membership.order[0] === key);
         wrapper.classList.toggle('section-tab', !rail);
         tab.classList.toggle('icon-btn', rail);
         tab.toggleAttribute('data-dock-peek', collapsed && dockPeek[edge] === key && !state.min[key]);
@@ -633,6 +999,7 @@
         setAttr(menuControl, 'title', menuControl.getAttribute('aria-label'));
         windowMark(tab, key);
         var win = wins[key];
+        if (!win) return;
         if (!win.id) win.id = 'pudl-dock-panel-' + key;
         setAttr(tab, 'aria-controls', win.id);
         setAttr(tab, 'aria-selected', String(key === selected));
@@ -657,6 +1024,14 @@
          many times the windows are laid out before it (0.69.3). */
       soonPositionDockMenus(group);
     });
+    Object.keys(dockGroups).forEach(function (id) {
+      if (wantedGroups.has(id)) return;
+      var old = dockGroups[id];
+      if (old.__resizeObserver) old.__resizeObserver.disconnect();
+      if (old.__resizeFrame) cancelAnimationFrame(old.__resizeFrame);
+      old.remove(); delete dockGroups[id];
+    });
+    renderDockDividers(layout.splits);
     state.open.forEach(function (key) {
       var win = wins[key], saved = dockRoles.get(win);
       if (!saved || sharedEdge(shownEdge(state, key))) return;
@@ -700,12 +1075,14 @@
       if (place[k].zone) place[k].zone = Object.assign({}, place[k].zone);
     });
     var out = { open: st.open.slice(), top: st.top, min: Object.assign({}, st.min), place: place, recent: recentOf(st) };
+    out.taskbarOrder = taskbarKeys(st);
     if (!gridEmpty(st.grid)) out.grid = copyGrid(st.grid);
     if (st.docks) {
       out.docks = {};
       Object.keys(st.docks).forEach(function (edge) {
         out.docks[edge] = Object.assign({}, st.docks[edge]);
         if (st.docks[edge].order) out.docks[edge].order = st.docks[edge].order.slice();
+        if (st.docks[edge].tree) out.docks[edge].tree = cloneTree(st.docks[edge].tree);
       });
     }
     return out;
@@ -1101,6 +1478,7 @@
     var q = new URLSearchParams(location.search);
     if (!q.has('open')) return null;
     var st = { open: keyList(q.get('open')), top: null, min: {}, place: {} };
+    st.taskbarOrder = keyList(q.get('tb.order'));
     sharedEdges().forEach(function (edge) {
       var m = /^(auto|open|rail):([A-Za-z0-9_-]*)(?::([0-9.]*))?(?::([A-Za-z0-9_,-]*))?$/.exec(q.get('d.' + edge) || '');
       if (m) {
@@ -1110,6 +1488,13 @@
         if (m[3] && size > 0 && size <= DOCK_MAX) st.docks[edge].size = size;
         var order = keyList(m[4]);
         if (order.length) st.docks[edge].order = order;
+      }
+      var raw = q.get('ds.' + edge);
+      if (splitEdge(edge) && raw && raw.length <= 32768) {
+        try {
+          var split = JSON.parse(raw), tree = validDockTree(split, edge);
+          if (tree) { var d = dockRecord(st, edge); d.tree = tree; d.activeGroup = split.activeGroup; }
+        } catch (err) { /* An invalid split leaves the ordinary dock available. */ }
       }
     });
     keyList(q.get('min')).forEach(function (k) {
@@ -1134,6 +1519,8 @@
     var dockPreference = st.docks && Object.keys(st.docks).some(function (edge) { return st.docks[edge].mode !== 'auto' || st.docks[edge].size != null || !!st.docks[edge].order; });
     if (!st.open.length && !dockPreference) return [];
     var parts = ['open=' + st.open.join(',')];
+    var taskOrder = taskbarKeys(st), defaultOrder = st.open.filter(function (k) { return !parentOf(st, k); });
+    if (taskOrder.join(',') !== defaultOrder.join(',')) parts.push('tb.order=' + taskOrder.join(','));
     if (st.top) parts.push('top=' + st.top);
     var mins = st.open.filter(function (k) { return st.min[k]; });
     if (mins.length) parts.push('min=' + mins.join(','));
@@ -1144,6 +1531,7 @@
     if (st.docks) ['left', 'right', 'top', 'bottom'].forEach(function (edge) {
       var d = st.docks[edge];
       if (!d) return;
+      if (splitEdge(edge) && d.tree) parts.push('ds.' + edge + '=' + encodeURIComponent(JSON.stringify({ v: 1, activeGroup: d.activeGroup, tree: d.tree })));
       /* Only what the default would not give back is written (issue #13).
          Read without a selection, a dock selects the window in front if it
          holds it, or else its first tab; read without a size, a dock that
@@ -1203,7 +1591,7 @@
       if (!seg) return;
       var raw = seg.split('=')[0], k = raw;
       try { k = decodeURIComponent(k.replace(/\+/g, ' ')); } catch (e) { /* leave as is */ }
-      if (k === 'open' || k === 'top' || k === 'min' || k === 'grid' || k.indexOf('p.') === 0 || (/^d\.(left|right|top|bottom)$/.test(k) && sharedEdge(k.slice(2)))) return;
+      if (k === 'open' || k === 'top' || k === 'min' || k === 'grid' || k === 'tb.order' || k.indexOf('p.') === 0 || (/^d\.(left|right|top|bottom)$/.test(k) && sharedEdge(k.slice(2))) || (/^ds\.(left|right|top|bottom)$/.test(k) && splitEdge(k.slice(3)))) return;
       var owner = scopedOwner(k);
       if (owner) {
         if (rename && owner.key === rename.from) { parts.push(owner.prefix + '.' + rename.to + seg.slice(raw.length)); return; }
@@ -1244,7 +1632,7 @@
      rather than hiding it. */
   function isHidden(st, key) {
     var edge = shownEdge(st, key);
-    if (sharedEdge(edge)) return edgeFront(st, edge) !== key || (railMode(st, edge) && dockPeek[edge] !== key);
+    if (sharedEdge(edge)) return paneFront(st, edge, key) !== key || (railMode(st, edge) && dockPeek[edge] !== key) || (!!dockTree(st, edge) && !!st.min[key]);
     if (edge) return edgeFront(st, edge) !== key;
     var p = parentOf(st, key);
     return !!(st.min[key] || (p && st.min[p]));
@@ -1436,6 +1824,12 @@
     if (!el || e.button !== 0 || !layer.contains(el)) return;
     e.preventDefault();
     var lines = splitLines(el), r = innerRect(), mins = gridMins(state), work = withGrid();
+    var outline = outlineResize(), start = copy(state), origin = layer.getBoundingClientRect();
+    var previews = outline ? lines.map(function () {
+      var preview = document.createElement('div');
+      preview.className = 'win-ghost'; preview.hidden = true;
+      preview.setAttribute('aria-hidden', 'true'); layer.appendChild(preview); return preview;
+    }) : [];
     lines.forEach(function (l) { pinLines(work.grid, state, l[0], l[1]); });
     var lastX = e.clientX, lastY = e.clientY, frame = 0, movedAny = false;
     el.setPointerCapture(e.pointerId);
@@ -1443,10 +1837,16 @@
     layer.classList.add('dragging');
     function step() {
       frame = 0;
-      lines.forEach(function (l) {
+      lines.forEach(function (l, i) {
         var f = l[0] === 'x' ? (lastX - r.left) / r.width : (lastY - r.top) / r.height;
         work.grid[l[0]][l[1]] = clampLine(work.grid, mins, l[0], l[1], f);
+        if (outline) {
+          var at = work.grid[l[0]][l[1]], vertical = l[0] === 'x';
+          rectStyle(previews[i], { x: r.left - origin.left + (vertical ? at * r.width - 1 : 0), y: r.top - origin.top + (vertical ? 0 : at * r.height - 1), w: vertical ? 2 : r.width, h: vertical ? r.height : 2 });
+          previews[i].hidden = false;
+        }
       });
+      if (outline) return;
       var view = copy(work);
       view.grid = copyGrid(work.grid);
       apply(view);
@@ -1457,14 +1857,26 @@
       movedAny = true;
       if (!frame) frame = requestAnimationFrame(step);
     }
-    function up() {
-      if (frame) { cancelAnimationFrame(frame); step(); }
+    function up(ev) {
+      if (frame) { cancelAnimationFrame(frame); if (!outline || ev.type === 'pointerup') step(); }
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', up);
       el.removeEventListener('pointercancel', up);
       el.classList.remove('dragging');
       layer.classList.remove('dragging');
-      if (movedAny) commit(withGrid(), false);
+      previews.forEach(function (preview) { preview.remove(); });
+      document.removeEventListener('keydown', escape, true);
+      if (outline) {
+        cancelGesture = null;
+        if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+        if (movedAny && ev.type === 'pointerup') commit(work, true);
+        else if (ev.type !== 'policy') apply(start);
+      } else if (movedAny) commit(withGrid(), false);
+    }
+    function escape(ev) { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); up({ type: 'escape' }); } }
+    if (outline) {
+      document.addEventListener('keydown', escape, true);
+      cancelGesture = function () { up({ type: 'policy' }); };
     }
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up);
@@ -1761,9 +2173,15 @@
     if (restricted(key) || (dockOnly(key) && edge !== 'left' && edge !== 'right')) return copy(st);
     st = raised(st, key);
     var p = st.place[key];
+    var oldEdge = dockEdge(p);
     if (edge) {
       p.mode = 'dock-' + edge;
       if (p.s == null) p.s = DOCK_SIZE;
+      if (edge !== oldEdge && dockTree(st, edge)) {
+        var d = dockRecord(st, edge), groups = treeGroups(d.tree);
+        var group = groups.filter(function (g) { return g.id === d.activeGroup; })[0] || groups[0];
+        group.order.push(key); group.selected = key;
+      }
     } else {
       p.mode = 'floating';
       /* A window marked data-win-undock="<zone>" leaves its dock for that
@@ -1891,6 +2309,8 @@
   }
 
   function apply(st) {
+    if (taskbarDrag) taskbarDrag.cancel();
+    st.taskbarOrder = taskbarKeys(st);
     st.open.forEach(function (k) {
       var p = st.place[k];
       if (p && dockOnly(k) && p.mode !== 'dock-left' && p.mode !== 'dock-right') {
@@ -1904,6 +2324,7 @@
     });
     normalizeDocks(st);
     roomRails = roomFor(st);
+    setDocks(st);
     /* The grid's moved lines: those no snapped window uses are forgotten,
        and those that squeeze a window are let back. The halves are drawn
        by the stylesheet, from the middle line. */
@@ -1918,6 +2339,7 @@
     Object.keys(wins).forEach(function (k) {
       if (st.open.indexOf(k) >= 0) return;
       var gone = wins[k];
+      if (gone.__winStatuses) gone.__winStatuses.destroy();
       delete wins[k];
       delete lastFocus[k];
       gone.dispatchEvent(new CustomEvent('pudl:window-close', { bubbles: true, detail: { key: k, reason: closing[k] || 'address' } }));
@@ -1983,6 +2405,7 @@
     syncPane();
     renderSplitters(st);
     announceSeen(st);
+    if (taskbarArrangement) taskbarArrangement.refresh();
   }
 
   /* Every window button and dock tab is a real link to the state it
@@ -2075,7 +2498,7 @@
         var k = a.getAttribute('data-win-tab');
         if (k && !have.has(k)) have.set(k, a); else a.remove();
       });
-      var want = state.open.filter(function (k) {
+      var want = taskbarKeys(state).filter(function (k) {
         return !parentOf(state, k) && !(dock.hasAttribute('data-win-dock-omit-docked') && shownEdge(state, k));
       });
       have.forEach(function (a, k) { if (want.indexOf(k) < 0) { a.remove(); have.delete(k); } });
@@ -2088,6 +2511,10 @@
         if (dock.children[i] !== a) dock.insertBefore(a, dock.children[i] || null);
         var cls = 'win-tab' + (state.min[k] ? ' minimized' : '');
         if (a.className !== cls) a.className = cls;
+        if (taskbarReorderEnabled() && dock.closest('.win-bar')) {
+          a.draggable = false;
+          setAttr(a, 'aria-keyshortcuts', 'Alt+Shift+ArrowLeft Alt+Shift+ArrowRight');
+        } else a.removeAttribute('aria-keyshortcuts');
         setAttr(a, 'href', urlFor(tabbed(state, k)));
         if (k === topRoot) setAttr(a, 'aria-current', 'true'); else if (a.hasAttribute('aria-current')) a.removeAttribute('aria-current');
         windowMark(a, k, state.min[k] ? text('minimized', '{title} (minimized)').split('{title}').join(fullTitle(k)) : fullTitle(k));
@@ -2178,10 +2605,11 @@
     });
   }
 
-  /* Applies a state and records it in the URL. Opening a window pushes a
-     history entry; everything else replaces the current one. */
+  /* Applies a state and records it in the URL. Opening a window and split
+     arrangement operations push history; ordinary placement replaces it. */
   function commit(st, push, rename) {
     clearTimeout(urlTimer);
+    if (rename && taskbarArrangement) taskbarArrangement.remap(rename.from, rename.to);
     apply(st);
     var url = urlFor(st, rename);
     if (url !== location.pathname + location.search + location.hash) {
@@ -2484,6 +2912,7 @@
       head.tabIndex = 0;
       labelHead(key);
       addMenu(el, key, head);
+      setupStatuses(el, head);
     }
 
     /* Where reset returns the window: the placement its markup gave it as
@@ -2496,6 +2925,83 @@
     var body = el.querySelector('.win-body');
     if (body && !body.hasAttribute('tabindex')) body.tabIndex = 0;
     return el;
+  }
+
+  /* Statuses inherit the header palette. Only their own header and small
+     status group are observed; transcript mutations do not trigger fits. */
+  var statusId = 0;
+  function setupStatuses(win, head) {
+    var group = head.querySelector(':scope > .win-statuses');
+    if (!group || win.__winStatuses) return;
+    var button = document.createElement('button');
+    button.type = 'button'; button.className = 'win-btn win-status-toggle';
+    button.setAttribute('aria-label', text('status', 'Window status'));
+    button.setAttribute('data-tooltip', text('status', 'Window status')); button.title = text('status', 'Window status');
+    button.setAttribute('aria-haspopup', 'dialog');
+    var glyph = document.createElement('span'); glyph.className = 'glyph'; glyph.style.setProperty('--glyph', 'var(--glyph-info)'); glyph.setAttribute('aria-hidden', 'true'); button.appendChild(glyph);
+    var panel = document.createElement('div'); panel.className = 'popover win-status-popover'; panel.id = 'win-status-' + (++statusId);
+    panel.setAttribute('popover', 'auto'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', text('status', 'Window status'));
+    var close = document.createElement('button'); close.type = 'button'; close.className = 'btn btn-sm'; close.textContent = text('status-dismiss', 'Dismiss');
+    close.setAttribute('popovertarget', panel.id); close.setAttribute('popovertargetaction', 'hide');
+    /* The owning window may be hidden in a collapsed dock. Keep its
+       read-only popup outside that hidden subtree. */
+    var list = document.createElement('ul'); panel.append(list, close); layer.appendChild(panel);
+    button.setAttribute('popovertarget', panel.id); group.appendChild(button);
+    var frame = 0, disposed = false, menuReturnTarget = null;
+    function statuses() { return Array.prototype.filter.call(group.querySelectorAll(':scope > .win-status'), function (s) { return !s.hidden && s.textContent.trim(); }); }
+    function refresh() {
+      list.textContent = '';
+      statuses().forEach(function (s) { var row = document.createElement('li'); row.textContent = s.textContent.trim(); if (s.classList.contains('strong')) row.style.fontWeight = '700'; list.appendChild(row); });
+    }
+    function fit() {
+      frame = 0;
+      if (disposed || !win.isConnected) return;
+      var returnFocus = document.activeElement === button || panel.contains(document.activeElement);
+      group.hidden = !statuses().length;
+      if (group.hidden) { if (panel.matches(':popover-open')) panel.hidePopover(); if (returnFocus && head.getClientRects().length) head.focus({ preventScroll: true }); return; }
+      if (!head.getClientRects().length) return;
+      group.removeAttribute('data-win-status-compact');
+      var title = head.querySelector('.win-title');
+      var vertical = getComputedStyle(head).writingMode !== 'horizontal-tb';
+      var compact = vertical || head.scrollWidth > head.clientWidth + 1 || (title && title.scrollWidth > title.clientWidth + 1);
+      group.toggleAttribute('data-win-status-compact', !!compact);
+      if (!compact && panel.matches(':popover-open')) {
+        panel.hidePopover();
+      }
+      if (!compact && returnFocus) head.focus({ preventScroll: true });
+      if (panel.matches(':popover-open')) refresh();
+    }
+    function schedule() { if (!disposed && !frame) frame = requestAnimationFrame(fit); }
+    var ro = window.ResizeObserver ? new ResizeObserver(schedule) : null;
+    var title = head.querySelector('.win-title');
+    if (ro) { ro.observe(head); ro.observe(group); if (title) ro.observe(title); }
+    var mo = new MutationObserver(function (records) {
+      if (records.some(function (r) { return r.target !== button && !(r.target === group && r.type === 'attributes'); })) schedule();
+    });
+    mo.observe(group, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'class', 'style'] });
+    mo.observe(head, { childList: true });
+    if (title) mo.observe(title, { subtree: true, childList: true, characterData: true });
+    panel.addEventListener('beforetoggle', function (e) {
+      if (e.newState === 'open') refresh();
+      else if (menuReturnTarget && panel.contains(document.activeElement) && menuReturnTarget.isConnected && menuReturnTarget.getClientRects().length) menuReturnTarget.focus({ preventScroll: true });
+    });
+    win.__winStatuses = {
+      available: function () { return statuses().length > 0; },
+      open: function () {
+        if (!statuses().length) return;
+        var key = win.getAttribute('data-win');
+        var candidates = [button, head].concat(Array.prototype.slice.call(document.querySelectorAll('[data-dock-key="' + CSS.escape(key) + '"], [data-win-tab="' + CSS.escape(key) + '"]')));
+        var anchor = candidates.filter(function (c) { return c && c.getClientRects().length && !c.closest('.menu-panel, .context-menu'); })[0];
+        if (!anchor) anchor = head.getClientRects().length ? head : null;
+        if (!anchor) return;
+        if (!anchor.id) anchor.id = 'win-status-anchor-' + (++statusId);
+        menuReturnTarget = anchor; panel.setAttribute('data-menu-anchor', anchor.id); panel.showPopover();
+      },
+      destroy: function () { disposed = true; if (frame) cancelAnimationFrame(frame); if (panel.matches(':popover-open')) panel.hidePopover(); panel.remove(); if (ro) ro.disconnect(); mo.disconnect(); }
+    };
+    button.addEventListener('click', function () { menuReturnTarget = null; panel.removeAttribute('data-menu-anchor'); });
+    if (document.fonts) document.fonts.ready.then(schedule);
+    schedule();
   }
 
   /* === The window menu =====================================================
@@ -2583,6 +3089,7 @@
       } }, extra || {});
     }
     var page = win.querySelector('.win-head a[data-win-action="page"]');
+    if (win.__winStatuses && win.__winStatuses.available()) list.push(command('status', text('status', 'Window status'), 'status'));
     if (page) list.push(command('page', text('page', 'Open as a page'), 'page'));
     if (shareURL(key)) list.push(command('copy-link', text('copy-link', 'Copy the link'), 'copy-link'));
     var minId = dock ? (state.min[key] ? 'expand' : 'collapse') : (state.min[key] ? 'unminimize' : 'minimize');
@@ -2605,11 +3112,36 @@
     /* Docking at any of the four edges, the one the window is docked at
        ticked, and Undock last on a docked window. */
     if (!sized && !fixed) {
-      var edges = (dockOnly(key) ? ['left', 'right'] : DOCK_EDGES).map(function (edge) {
-        return command('dock:' + edge, text('dock-' + edge, DOCK_WORDS[edge]), 'dock:' + edge, { checked: dock === edge });
+      var edges = [];
+      (dockOnly(key) ? ['left', 'right'] : DOCK_EDGES).forEach(function (edge) {
+        var label = text('dock-' + edge, DOCK_WORDS[edge]), members = dockMembers(state, edge);
+        if (!splitEdge(edge) || !members.length) { edges.push(command('dock:' + edge, label, 'dock:' + edge, { checked: dock === edge })); return; }
+        var groups = treeGroups(dockTree(state, edge));
+        if (!groups.length) groups = [{ id: 'main', order: members, selected: edgeFront(state, edge) }];
+        groups.forEach(function (g, i) {
+          var name = fullTitle(g.selected || g.order[0]) + (groups.length > 1 ? ' (' + (i + 1) + ')' : '');
+          ['tab', 'before', 'after'].forEach(function (position) {
+            var words = position === 'tab' ? text('dock-as-tab', 'As tab with {title}')
+              : sideEdge(edge) ? (position === 'before' ? text('dock-above', 'Above {title}') : text('dock-below', 'Below {title}'))
+                : (position === 'before' ? text('dock-left-of', 'Left of {title}') : text('dock-right-of', 'Right of {title}'));
+            var id = 'dockto:' + edge + ':' + g.id + ':' + position;
+            var allowed = splitDestination(state, key, edge, { group: g.id, position: position });
+            edges.push(command(id, label + ': ' + words.replace('{title}', name), id, { disabled: !allowed, detail: allowed ? '' : text('dock-no-room', 'Not enough room, or the source pane would be empty') }));
+          });
+        });
+        var full = sideEdge(edge) ? text('dock-full-height', 'Full height') : text('dock-full-width', 'Full width');
+        var mergeId = 'dockmerge:' + edge;
+        edges.push(command(mergeId, label + ': ' + full + (groups.length > 1 ? ', ' + text('dock-merge', 'merge panes') : ''), mergeId));
       });
       if (dock && !dockOnly(key)) edges.push('-', command('undock', text('undock', 'Undock'), 'undock'));
       list.push({ id: 'dock', label: text('dock-menu', 'Dock'), mnemonic: text('dock-mnemonic', '') || undefined, items: edges });
+    }
+    if (dockTree(state, dock) && !fixed) {
+      ['equalize', 'swap', 'merge'].forEach(function (action) {
+        var words = { equalize: 'Equalize panes', swap: 'Swap with next pane', merge: 'Merge panes' };
+        var id = 'dockarrange:' + dock + ':' + action;
+        list.push(command(id, text('dock-' + action + '-panes', words[action]), id));
+      });
     }
     if (!requiredWindow(key)) list.push(command('close', text('close', 'Close'), 'close', { danger: true }));
     return list;
@@ -2692,14 +3224,15 @@
 
   function runCommand(key, cmd) {
     if (!wins[key]) return;
-    if (restricted(key) && (['maximize', 'dock', 'undock', 'reset'].indexOf(cmd) >= 0 || /^(snap|dock):/.test(cmd))) return;
+    if (restricted(key) && (['maximize', 'dock', 'undock', 'reset'].indexOf(cmd) >= 0 || /^(snap|dock|dockto|dockmerge|dockarrange):/.test(cmd))) return;
     var p = state.place[key];
     if (cmd === 'page') {
       /* The link carries the command out itself, so its target and rel
          apply, as they do from the title bar. */
       var a = wins[key].querySelector('.win-head a[data-win-action="page"]');
       if (a) a.click();
-    } else if (cmd === 'copy-link') copyLink(key);
+    } else if (cmd === 'status') { if (wins[key].__winStatuses) wins[key].__winStatuses.open(); }
+    else if (cmd === 'copy-link') copyLink(key);
     else if (cmd === 'minimize') commit(state.min[key] ? raised(state, key) : minimized(state, key), false);
     else if (cmd === 'maximize') commit(maximizeToggled(state, key), false);
     else if (cmd === 'dock') commit(docked(state, key, dockEdge(p) ? null : 'bottom'), false);
@@ -2707,6 +3240,22 @@
     else if (cmd.indexOf('dock:') === 0) {
       var edge = cmd.slice(5);
       if (DOCK_EDGES.indexOf(edge) >= 0 && dockEdge(p) !== edge) commit(docked(state, key, edge), false);
+    }
+    else if (cmd.indexOf('dockto:') === 0) {
+      var to = cmd.split(':'), work = placeInDock(state, key, to[1], { group: to[2], position: to[3] });
+      if (work) commit(work, true);
+    }
+    else if (cmd.indexOf('dockmerge:') === 0) {
+      var mergeEdge = cmd.slice(10);
+      if (!splitEdge(mergeEdge) || (dockOnly(key) && !sideEdge(mergeEdge))) return;
+      var merged = docked(state, key, mergeEdge), record = dockRecord(merged, mergeEdge);
+      if (record.tree) record.order = treeGroups(record.tree).reduce(function (a, g) { return a.concat(g.order); }, []);
+      delete record.tree; delete record.activeGroup;
+      commit(merged, true);
+    }
+    else if (cmd.indexOf('dockarrange:') === 0) {
+      var arrange = cmd.split(':'), pane = groupFor(state, arrange[1], key);
+      dockArrange(arrange[1], arrange[2], pane && pane.id);
     }
     else if (cmd === 'reset') commit(resetPlaced(state, key), false);
     else if (cmd === 'close') {
@@ -3019,6 +3568,8 @@
         st.place[key] = clampPlacement(initialPlacement(key, el, st.open.length - 1, null, from || null), innerW(), innerH(), narrowPolicy(el) === 'maximized' ? { w: 0, h: 0 } : null);
       } else {
         st.open.splice(st.open.indexOf(oldKey) + 1, 0, key);
+        if (taskbarArrangement) taskbarArrangement.remap(oldKey, key);
+        st.taskbarOrder = taskbarKeys(st).map(function (k) { return k === oldKey ? key : k; }).filter(function (k, i, all) { return all.indexOf(k) === i; });
         st.place[key] = Object.assign({}, st.place[oldKey]);
         delete st.min[key];
         markClosing(oldKey, 'replace');
@@ -3057,10 +3608,16 @@
     var el = wins[oldKey];
     var st = copy(state);
     st.open[st.open.indexOf(oldKey)] = key;
+    st.taskbarOrder = st.taskbarOrder.map(function (k) { return k === oldKey ? key : k; });
     if (st.top === oldKey) st.top = key;
     [st.min, st.place].forEach(function (m) { move(m, oldKey, key); });
     Object.keys(st.docks || {}).forEach(function (edge) {
       if (st.docks[edge].selected === oldKey) st.docks[edge].selected = key;
+      if (st.docks[edge].order) st.docks[edge].order = st.docks[edge].order.map(function (k) { return k === oldKey ? key : k; });
+      treeGroups(dockTree(st, edge)).forEach(function (g) {
+        g.order = g.order.map(function (k) { return k === oldKey ? key : k; });
+        if (g.selected === oldKey) g.selected = key;
+      });
       if (dockPeek[edge] === oldKey) dockPeek[edge] = key;
     });
     [wins, openers, closing, homes, menuRuns, lastFocus].forEach(function (m) { move(m, oldKey, key); });
@@ -3147,6 +3704,7 @@
   /* Brings the page in line with a URL, after Back or Forward or at start.
      An address that names no windows opens the page's default windows. */
   function sync(push) {
+    var serial = ++restoreSerial;
     syncing++;
     var named = readURL();
     var st = named || { open: defaults.slice(), top: null, min: {}, place: {} };
@@ -3155,13 +3713,14 @@
     var missing = st.open.filter(function (k) { return !wins[k]; });
     var loaded = {};
     return Promise.all(missing.map(function (k) {
-      return load(k).then(function (el) { loaded[k] = el; adopt(el); announceOpen(el); return null; },
+      return load(k).then(function (el) { if (serial !== restoreSerial) return null; loaded[k] = el; adopt(el); announceOpen(el); return null; },
                           function (err) {
                             if (window.console) console.warn('pudl-windows:', err.message);
                             return k;
                           });
     })).then(function (failed) {
       syncing--;
+      if (serial !== restoreSerial) return;
       failed.forEach(function (k) { if (k) st = closed(st, k); });
       /* A change made meanwhile from the arrangement before this one, such
          as one a listener on pudl:window-open makes, takes out the windows
@@ -3244,6 +3803,7 @@
   function gesture(e, key, edge) {
     if (restricted(key) || (dockOnly(key) && !edge)) return;
     var el = wins[key];
+    var beforeGesture = copy(state);
     var target = e.currentTarget;
     var outer = layer.getBoundingClientRect();
     var r = innerRect();
@@ -3253,6 +3813,8 @@
     var base = start, baseX = e.clientX, baseY = e.clientY;
     var lastX = baseX, lastY = baseY;
     var cur = start, snap = null, moved = false, frame = 0;
+    var outline = !!edge && outlineResize(el), startBox = el.getBoundingClientRect();
+    var dockDrop = null;
     /* A window sized by its content moves at the size it has, which its
        placement does not record, and never snaps, since a zone is a size. */
     var sized = contentSized(key);
@@ -3304,8 +3866,20 @@
       var reach = { bottom: outer.bottom - lastY, top: lastY - outer.top, left: lastX - outer.left, right: outer.right - lastX }[dockSide];
       var s = Math.min(DOCK_MAX, Math.max((head + 60) / span, reach / span));
       cur = Object.assign({}, start, { s: s });
+      if (outline) {
+        var box = { x: startBox.left - outer.left, y: startBox.top - outer.top, w: startBox.width, h: startBox.height };
+        if (dockSide === 'left' || dockSide === 'right') {
+          box.w = s * outer.width;
+          if (dockSide === 'right') box.x = outer.width - box.w;
+        } else {
+          box.h = s * outer.height;
+          if (dockSide === 'bottom') box.y = outer.height - box.h;
+        }
+        resizePreview(box); return;
+      }
       layer.style.setProperty('--dock-' + dockSide, (Math.round(s * 1000) / 10) + '%');
       el.style.setProperty('--win-dock-size', fmt(s));
+      if (splitEdge(dockSide)) renderDockGroups();
     }
 
     function step() {
@@ -3315,12 +3889,16 @@
       var dy = (lastY - baseY) / r.height;
       if (edge) {
         cur = resizeFrom(base, edge, dx, dy, min);
-        setPlacement(el, cur);
+        if (outline) resizePreview({ x: r.left - outer.left + cur.x * r.width, y: r.top - outer.top + cur.y * r.height, w: cur.w * r.width, h: cur.h * r.height });
+        else setPlacement(el, cur);
         return;
       }
       cur = clampPlacement({ mode: 'floating', x: base.x + dx, y: base.y + dy, w: base.w, h: base.h, s: base.s }, r.width, r.height, min);
       el.style.transform = 'translate(' + (cur.x - base.x) * r.width + 'px, ' + (cur.y - base.y) * r.height + 'px)';
+      dockDrop = sized ? null : dockDropAt(key, lastX, lastY);
+      showDockDrop(dockDrop);
       var s = sized ? null : snapAt(lastX, lastY, r, outer);
+      if (dockDrop) s = null;
       if (s !== snap) { snap = s; showGhost(s); }
     }
 
@@ -3336,6 +3914,7 @@
 
     function end(ev) {
       cancelGesture = null;
+      document.removeEventListener('keydown', escapeGesture, true);
       target.removeEventListener('pointermove', move);
       target.removeEventListener('pointerup', end);
       target.removeEventListener('pointercancel', end);
@@ -3344,6 +3923,7 @@
       if (frame) { cancelAnimationFrame(frame); if (ev.type !== 'policy') step(); }
       layer.classList.remove('dragging');
       showGhost(null);
+      showDockDrop(null);
       el.classList.remove('win-moving');
       el.style.transform = '';
       if (ev.type === 'policy') {
@@ -3365,9 +3945,17 @@
       suppressClick = true;
       setTimeout(function () { suppressClick = false; }, 0);
       var st = raised(state, key);
+      if (ev.type === 'escape' || (ev.type === 'pointercancel' && (outline || layer.hasAttribute('data-win-dock-splits')))) {
+        if (target.hasPointerCapture(e.pointerId)) target.releasePointerCapture(e.pointerId);
+        apply(beforeGesture); return;
+      }
       if (ev.type === 'pointercancel') {
         commit(st, false);
         return;
+      }
+      if (!edge && dockDrop) {
+        var placed = dockDrop.destination ? placeInDock(state, key, dockDrop.edge, dockDrop.destination) : docked(state, key, dockDrop.edge);
+        if (placed) { commit(placed, true); focusWindow(key); return; }
       }
       if (edge && dockSide) {
         st.place[key] = cur;
@@ -3380,12 +3968,14 @@
           if (st.place[key].s == null) st.place[key].s = DOCK_SIZE;
         } else if (snap) inZone(st.place[key], zoneOf(ZONES[snap]));
       }
-      commit(st, false);
+      commit(st, outline);
     }
 
     target.addEventListener('pointermove', move);
     target.addEventListener('pointerup', end);
     target.addEventListener('pointercancel', end);
+    function escapeGesture(ev) { if (ev.key === 'Escape' && moved) { ev.preventDefault(); ev.stopPropagation(); end({ type: 'escape' }); } }
+    document.addEventListener('keydown', escapeGesture, true);
     cancelGesture = function () { end({ type: 'policy' }); };
   }
 
@@ -3505,12 +4095,200 @@
      windows that still do not fit, from the last, leave the dock for a
      More button after it, whose menu lists them. The button of the window
      in front always stays. Nothing scrolls. */
+  var taskbarDrag = null, taskbarArrangement = null, taskbarLive = null;
+  function taskbarReorderEnabled() { return !!layer && layer.hasAttribute('data-win-taskbar-reorder'); }
+  function taskbarKeys(st) {
+    var roots = st.open.filter(function (k) { return !parentOf(st, k); });
+    return (st.taskbarOrder || []).concat(roots).filter(function (k, i, all) { return roots.indexOf(k) >= 0 && all.indexOf(k) === i; });
+  }
+  function taskbarProjection(dock) {
+    return taskbarKeys(state).filter(function (k) { return !dock.hasAttribute('data-win-dock-omit-docked') || !shownEdge(state, k); });
+  }
+  function announceTaskbar(key, order, preview) {
+    if (!taskbarLive) { taskbarLive = document.createElement('div'); taskbarLive.className = 'visually-hidden'; taskbarLive.setAttribute('role', 'status'); document.body.appendChild(taskbarLive); }
+    taskbarLive.textContent = text(preview ? 'taskbar-preview-moved' : 'taskbar-moved', preview ? 'Preview places {title} at position {position} of {count}.' : '{title} moved to position {position} of {count}.').replace('{title}', fullTitle(key)).replace('{position}', order.indexOf(key) + 1).replace('{count}', order.length);
+  }
+  function focusTaskbar(dock, key) {
+    var tab = Array.from(dock.children).find(function (t) { return t.getAttribute('data-win-tab') === key; });
+    var bar = dock.closest('.win-bar');
+    if (bar) fitBar(bar);
+    var target = tab && tab.getClientRects().length ? tab : bar && bar.querySelector('.win-bar-more');
+    if (target) target.focus({ preventScroll: true });
+  }
+  function setTaskbarOrder(order, key, dock) {
+    if (!taskbarReorderEnabled()) return false;
+    var before = taskbarKeys(state), st = copy(state);
+    st.taskbarOrder = order;
+    st.taskbarOrder = taskbarKeys(st);
+    if (st.taskbarOrder.join(',') === before.join(',')) return false;
+    var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.win-bar [data-win-dock] > [data-win-tab]');
+    var focusedDock = focused && focused.parentElement, focusedKey = focused && focused.getAttribute('data-win-tab');
+    commit(st, true);
+    if (dock) focusTaskbar(dock, key);
+    else if (focusedDock) focusTaskbar(focusedDock, focusedKey);
+    if (key) announceTaskbar(key, dock ? taskbarProjection(dock) : taskbarKeys(state));
+    return true;
+  }
+  function reorderTaskbar(key, destination, dock) {
+    if (!taskbarReorderEnabled() || !destination || typeof destination !== 'object') return false;
+    var fields = Object.keys(destination);
+    if (fields.length !== 1 || ['before', 'after', 'edge'].indexOf(fields[0]) < 0) return false;
+    var order = taskbarKeys(state), at = order.indexOf(key), field = fields[0], target = destination[field];
+    if (at < 0 || (field === 'edge' ? ['start', 'end'].indexOf(target) < 0 : target === key || order.indexOf(target) < 0)) return false;
+    order.splice(at, 1);
+    var index = field === 'edge' ? (target === 'start' ? 0 : order.length) : order.indexOf(target) + (field === 'after' ? 1 : 0);
+    order.splice(index, 0, key);
+    return setTaskbarOrder(order, key, dock);
+  }
+  function taskbarOrderCommands(dock, key) {
+    function move(kind) {
+      var list = taskbarProjection(dock), i = list.indexOf(key);
+      if (i < 0) return;
+      var other = kind === 'first' ? list[0] : kind === 'last' ? list[list.length - 1] : list[i + (kind === 'earlier' ? -1 : 1)];
+      if (!other || other === key) return;
+      var destination = {}; destination[kind === 'earlier' || kind === 'first' ? 'before' : 'after'] = other;
+      reorderTaskbar(key, destination, dock);
+    }
+    var list = taskbarProjection(dock), index = list.indexOf(key);
+    return [
+      { label: text('taskbar-earlier', 'Move earlier'), disabled: index <= 0, run: function () { move('earlier'); } },
+      { label: text('taskbar-later', 'Move later'), disabled: index < 0 || index === list.length - 1, run: function () { move('later'); } },
+      { label: text('taskbar-first', 'Move to beginning'), disabled: index <= 0, run: function () { move('first'); } },
+      { label: text('taskbar-last', 'Move to end'), disabled: index < 0 || index === list.length - 1, run: function () { move('last'); } },
+      '-', { label: text('taskbar-arrange', 'Arrange taskbar'), run: function () { arrangeTaskbar(dock, key); } }
+    ];
+  }
+  function arrangeTaskbar(dock, selected) {
+    if (!taskbarReorderEnabled() || !dock || !dock.closest('.win-bar') || !dock.isConnected) return false;
+    if (taskbarArrangement) taskbarArrangement.close();
+    var anchor = dock.closest('.win-bar').querySelector('.win-bar-arrange');
+    if (!anchor) return false;
+    var panel = document.createElement('div'); panel.className = 'popover win-taskbar-arrangement'; panel.id = 'pudl-taskbar-arrangement';
+    panel.setAttribute('popover', 'auto'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', text('taskbar-arrange', 'Arrange taskbar'));
+    if (!anchor.id) anchor.id = 'pudl-taskbar-arrange-' + (++statusId);
+    panel.setAttribute('data-menu-anchor', anchor.id);
+    var title = document.createElement('h2'); title.className = 'popover-title'; title.textContent = text('taskbar-arrange', 'Arrange taskbar');
+    var list = document.createElement('select'); list.className = 'form-select'; list.size = 8; list.setAttribute('aria-label', text('taskbar-items', 'Taskbar windows'));
+    var actions = document.createElement('div'); actions.className = 'toolbar win-taskbar-tools'; actions.setAttribute('role', 'toolbar'); actions.setAttribute('aria-label', text('taskbar-arrange', 'Arrange taskbar')); actions.setAttribute('data-toolbar-fold', '');
+    var moveGroup = document.createElement('div'); moveGroup.className = 'toolbar-group'; moveGroup.setAttribute('aria-label', text('taskbar-order', 'Taskbar order')); moveGroup.setAttribute('data-toolbar-glyph', 'sort');
+    var finishGroup = document.createElement('div'); finishGroup.className = 'toolbar-group'; finishGroup.setAttribute('aria-label', text('taskbar-apply', 'Apply order')); finishGroup.setAttribute('data-toolbar-glyph', 'check'); finishGroup.setAttribute('data-toolbar-priority', '10'); finishGroup.setAttribute('data-toolbar-end', '');
+    actions.append(moveGroup, finishGroup);
+    function actionButton(label, glyph, primary) {
+      var button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-sm' + (primary ? ' btn-primary' : ''); button.setAttribute('aria-label', label); button.setAttribute('data-toolbar-glyph-only', ''); button.title = label; button.setAttribute('data-tooltip', label);
+      var icon = document.createElement('span'); icon.className = 'glyph'; icon.setAttribute('aria-hidden', 'true'); icon.style.setProperty('--glyph', 'var(--glyph-' + glyph + ')');
+      var words = document.createElement('span'); words.className = 'toolbar-words'; words.textContent = label; button.append(icon, words); return button;
+    }
+    var draft = taskbarKeys(state), moves = [], disposed = false, renamedSelection = null;
+    function shownDraft() { var eligible = taskbarProjection(dock); return draft.filter(function (k) { return eligible.indexOf(k) >= 0; }); }
+    function draw() {
+      if (disposed) return;
+      var value = renamedSelection || list.value || selected, live = taskbarKeys(state);
+      renamedSelection = null;
+      draft = draft.filter(function (k) { return live.indexOf(k) >= 0; });
+      live.forEach(function (k) { if (draft.indexOf(k) < 0) draft.push(k); });
+      var shown = shownDraft(); list.textContent = '';
+      shown.forEach(function (k) { var option = document.createElement('option'); option.value = k; option.textContent = fullTitle(k); list.appendChild(option); });
+      if (shown.indexOf(value) >= 0) list.value = value; else if (shown.length) list.selectedIndex = 0;
+      var i = shown.indexOf(list.value);
+      moves.forEach(function (b, n) { b.disabled = i < 0 || (n === 0 || n === 2 ? i === 0 : i === shown.length - 1); });
+    }
+    ['earlier', 'later', 'first', 'last'].forEach(function (kind, n) {
+      var b = actionButton(text('taskbar-' + kind, ['Move earlier', 'Move later', 'Move to beginning', 'Move to end'][n]), ['arrow-up', 'arrow-down', 'sort-up', 'sort-down'][n]);
+      b.addEventListener('click', function () {
+        var shown = shownDraft(), key = list.value, i = shown.indexOf(key);
+        var target = kind === 'first' ? shown[0] : kind === 'last' ? shown[shown.length - 1] : shown[i + (kind === 'earlier' ? -1 : 1)];
+        if (!target || target === key) return;
+        draft.splice(draft.indexOf(key), 1);
+        draft.splice(draft.indexOf(target) + (kind === 'later' || kind === 'last' ? 1 : 0), 0, key);
+        draw(); list.focus(); announceTaskbar(key, shownDraft(), true);
+      }); moves.push(b); moveGroup.appendChild(b);
+    });
+    list.addEventListener('change', draw);
+    function close() {
+      if (disposed) return;
+      var ownsFocus = panel.contains(document.activeElement) || document.activeElement === document.body;
+      disposed = true;
+      if (panel.matches(':popover-open')) panel.hidePopover();
+      panel.remove(); taskbarArrangement = null;
+      if (ownsFocus && anchor.isConnected && anchor.getClientRects().length) anchor.focus({ preventScroll: true });
+    }
+    var applyButton = actionButton(text('taskbar-apply', 'Apply order'), 'check', true);
+    applyButton.addEventListener('click', function () { if (!dock.isConnected || !taskbarReorderEnabled()) { close(); return; } draw(); var key = list.value, order = draft.slice(); close(); setTaskbarOrder(order, key, null); });
+    var cancel = actionButton(text('taskbar-cancel', 'Cancel'), 'close'); cancel.addEventListener('click', close);
+    finishGroup.append(applyButton, cancel); panel.append(title, list, actions); document.body.appendChild(panel);
+    taskbarArrangement = { refresh: draw, close: close, remap: function (from, to) { draft = draft.map(function (k) { return k === from ? to : k; }); if (list.value === from) renamedSelection = to; } };
+    panel.addEventListener('toggle', function (e) { if (e.newState === 'closed') close(); });
+    draw(); panel.showPopover(); if (window.pudlToolbar) window.pudlToolbar.enhance(panel); return true;
+  }
+  function dragTaskbar(e) {
+    var tab = e.target.closest && e.target.closest('.win-bar [data-win-dock] > [data-win-tab]');
+    if (!tab || !taskbarReorderEnabled() || e.button !== 0 || e.pointerType === 'touch' || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+    var dock = tab.parentElement, key = tab.getAttribute('data-win-tab'), start = e.clientX, id = e.pointerId;
+    var targets = Array.from(dock.children).filter(function (t) { return t !== tab && t.hasAttribute('data-win-tab') && t.getClientRects().length; });
+    if (!targets.length) return;
+    var rtl = getComputedStyle(dock).direction === 'rtl', viewportWidth = innerWidth, viewportHeight = innerHeight;
+    var moving = false, marker = null, destination = null, frame = 0, latest = null, ended = false;
+    function cleanup() {
+      if (ended) return;
+      ended = true;
+      if (frame) cancelAnimationFrame(frame);
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); document.removeEventListener('keydown', escape, true);
+      window.removeEventListener('blur', cancel); window.removeEventListener('resize', cancel); tab.removeEventListener('lostpointercapture', cancel);
+      if (marker) marker.remove(); tab.classList.remove('win-taskbar-dragging'); taskbarDrag = null;
+      if (tab.hasPointerCapture(id)) tab.releasePointerCapture(id);
+      if (moving) window.addEventListener('pointerdown', clearSuppression, { once: true, capture: true });
+      fitBarsSoon();
+    }
+    function cancel(event) {
+      if (event && event.type === 'pointercancel' && event.pointerId !== id) return;
+      if (!moving && latest && Math.abs(latest.clientX - start) >= 6) { moving = true; window.addEventListener('click', suppressClick, true); }
+      destination = null;
+      cleanup();
+    }
+    function escape(event) { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancel(); } }
+    function move(event) {
+      if (event.pointerId !== id) return;
+      latest = { clientX: event.clientX, clientY: event.clientY, pointerId: id };
+      if (!frame) frame = requestAnimationFrame(function () { frame = 0; preview(latest, false); });
+    }
+    function preview(event, ending) {
+      if (!taskbarReorderEnabled() || innerWidth !== viewportWidth || innerHeight !== viewportHeight || (getComputedStyle(dock).direction === 'rtl') !== rtl) { cancel(); return; }
+      if (!moving && Math.abs(event.clientX - start) < 6) return;
+      if (!moving) {
+        moving = true; if (!ending) tab.setPointerCapture(id); tab.classList.add('win-taskbar-dragging');
+        marker = document.createElement('div'); marker.className = 'win-taskbar-marker'; marker.setAttribute('aria-hidden', 'true'); document.body.appendChild(marker);
+        window.addEventListener('click', suppressClick, true);
+      }
+      var bounds = dock.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) { destination = null; marker.hidden = true; return; }
+      var next = targets.find(function (t) { var r = t.getBoundingClientRect(); return rtl ? event.clientX > (r.left + r.right) / 2 : event.clientX < (r.left + r.right) / 2; });
+      var target = next || targets[targets.length - 1], rect = target.getBoundingClientRect();
+      destination = {}; destination[next ? 'before' : 'after'] = target.getAttribute('data-win-tab');
+      marker.setAttribute('data-label', text(next ? 'taskbar-before' : 'taskbar-after', next ? 'Before {title}' : 'After {title}').replace('{title}', fullTitle(destination[next ? 'before' : 'after'])));
+      marker.setAttribute('data-align', event.clientX > innerWidth / 2 ? 'end' : 'start');
+      marker.toggleAttribute('data-below', bounds.top < 40);
+      marker.hidden = false; marker.style.left = (next ? (rtl ? rect.right : rect.left) : (rtl ? rect.left : rect.right)) + 'px'; marker.style.top = bounds.top + 'px'; marker.style.height = bounds.height + 'px';
+    }
+    function clearSuppression() { window.removeEventListener('click', suppressClick, true); window.removeEventListener('pointerdown', clearSuppression, true); }
+    function suppressClick(event) { if (event.detail && event.target.closest && event.target.closest('.win-bar') === dock.closest('.win-bar')) { event.preventDefault(); event.stopImmediatePropagation(); } clearSuppression(); }
+    function up(event) { if (event.pointerId !== id) return; if (latest) preview({ clientX: event.clientX, clientY: event.clientY }, true); if (ended) return; var drop = moving && destination; cleanup(); if (drop) reorderTaskbar(key, drop, dock); }
+    taskbarDrag = { dock: dock, cancel: cancel };
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); document.addEventListener('keydown', escape, true);
+    window.addEventListener('blur', cancel); window.addEventListener('resize', cancel); tab.addEventListener('lostpointercapture', cancel);
+  }
   function fitBar(bar) {
     var dock = bar.querySelector(':scope > [data-win-dock]');
+    if (taskbarDrag && taskbarDrag.dock === dock) return;
+    var arrange = bar.querySelector(':scope > .win-bar-arrange');
+    if (taskbarReorderEnabled() && dock && !arrange) {
+      arrange = document.createElement('button'); arrange.type = 'button'; arrange.className = 'icon-btn win-bar-arrange';
+      arrange.setAttribute('aria-label', text('taskbar-arrange', 'Arrange taskbar')); arrange.title = text('taskbar-arrange', 'Arrange taskbar'); arrange.setAttribute('data-tooltip', arrange.title);
+      arrange.addEventListener('click', function () { arrangeTaskbar(dock); }); dock.insertAdjacentElement('afterend', arrange);
+    } else if (!taskbarReorderEnabled() && arrange) arrange.remove();
     if (!dock || !bar.getClientRects().length) return;
     var more = bar.querySelector(':scope > .win-bar-more');
     var tabs = Array.prototype.slice.call(dock.querySelectorAll(':scope > [data-win-tab]'));
-    tabs.forEach(function (t) { t.removeAttribute('data-win-tab-over'); });
+    tabs.forEach(function (t) { t.removeAttribute('data-win-tab-over'); t.removeAttribute('data-win-tab-squeeze'); });
     bar.removeAttribute('data-win-bar-compact');
     /* Each button shrinks to 120px, or its own width where that is less,
        so a short title is never padded out. */
@@ -3538,6 +4316,10 @@
     var gone = [];
     var order = tabs.slice().reverse().filter(function (t) { return t.getAttribute('aria-current') !== 'true'; });
     for (var i = 0; i < order.length && over(); i++) { order[i].setAttribute('data-win-tab-over', ''); gone.unshift(order[i]); }
+    /* The front window's button, alone, may still be too wide for what is
+       left; it then shrinks below its floor, its title cut further
+       (0.82.1). */
+    if (over()) tabs.forEach(function (t) { if (!t.hasAttribute('data-win-tab-over')) t.setAttribute('data-win-tab-squeeze', ''); });
     more.__over = gone;
     var words = text('more-windows', '{n} more').replace('{n}', gone.length);
     more.textContent = words;
@@ -3549,6 +4331,10 @@
     var rows = (more.__over || []).map(function (t) {
       return { label: (t.getAttribute('aria-label') || t.textContent).trim(), run: function () { t.click(); } };
     });
+    if (taskbarReorderEnabled()) {
+      if (rows.length) rows.push('-');
+      rows.push({ label: text('taskbar-arrange', 'Arrange taskbar'), run: function () { arrangeTaskbar(more.parentElement.querySelector('[data-win-dock]')); } });
+    }
     var r = more.getBoundingClientRect();
     var low = (r.top + r.bottom) / 2 > window.innerHeight / 2;
     window.pudlMenu.openAt(Math.round(r.left), Math.round(low ? r.top - 4 : r.bottom + 4), rows,
@@ -3773,6 +4559,15 @@
     document.addEventListener('click', onBarEdge, true);
     document.addEventListener('contextmenu', onBarEdge, true);
     watchBars();
+    document.addEventListener('pointerdown', dragTaskbar);
+    document.addEventListener('keydown', function (e) {
+      if (e.defaultPrevented || !taskbarReorderEnabled() || !e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey || ['ArrowLeft', 'ArrowRight'].indexOf(e.key) < 0) return;
+      var tab = e.target.closest && e.target.closest('.win-bar [data-win-dock] > [data-win-tab]');
+      if (!tab) return;
+      e.preventDefault();
+      var rtl = getComputedStyle(tab.parentElement).direction === 'rtl';
+      taskbarOrderCommands(tab.parentElement, tab.getAttribute('data-win-tab'))[(e.key === 'ArrowLeft') !== rtl ? 0 : 1].run();
+    });
     window.addEventListener('keydown', onSwitchKeyDown, true);
     window.addEventListener('keyup', onSwitchKeyUp, true);
     window.addEventListener('blur', function () { switchEnd(); });
@@ -3787,9 +4582,9 @@
        on the layer or the dock turns it off. */
     document.addEventListener('pudl:contextmenu', function (e) {
       if (e.defaultPrevented || !e.detail || (e.detail.count && e.detail.count())) return;
-      var tab = e.target && e.target.closest && e.target.closest('[data-win-tab]');
+      var tab = e.target && e.target.closest && e.target.closest('[data-win-tab], [data-dock-key], [data-dock-menu]');
       if (!tab || tab.closest('[data-win-tab-menu="off"]') || layer.getAttribute('data-win-tab-menu') === 'off') return;
-      var key = tab.getAttribute('data-win-tab');
+      var key = tab.getAttribute('data-win-tab') || tab.getAttribute('data-dock-key') || tab.getAttribute('data-dock-menu');
       if (!wins[key]) return;
       var all = menuCommands(key);
       var own = all.filter(function (c) { return !c.items && c.id !== 'close'; });
@@ -3797,6 +4592,8 @@
       var close = all.filter(function (c) { return c.id === 'close'; });
       var content = contentCommands(wins[key], key);
       var rows = [];
+      var taskbarDock = tab.closest('.win-bar [data-win-dock]');
+      if (taskbarReorderEnabled() && taskbarDock) rows.push({ label: text('taskbar-order', 'Taskbar order'), items: taskbarOrderCommands(taskbarDock, key) });
       [own, lists, content, close].forEach(function (part) {
         if (!part.length) return;
         if (rows.length) rows.push('-');
@@ -3818,14 +4615,16 @@
       var bar = e.target && e.target.closest && e.target.closest('.win-bar');
       if (!bar || bar.getAttribute('data-win-bar-menu') === 'off' || e.target.closest('[data-win-tab]')) return;
       if (!bar.querySelector('[data-win-dock]')) return;
-      e.detail.add([
+      var taskbarRows = [
         { label: text('minimize-all', 'Minimize all'), glyph: 'minimize-all', disabled: !anyShowing(state), run: function () { commit(allMinimized(state), false); } },
         { label: text('restore-all', 'Restore all'), glyph: 'restore-all', disabled: !anyMinimized(state), run: restoreAll },
         '-',
         { label: text('close-all', 'Close all windows'), danger: true, disabled: !closable(state).length, run: function () {
           closable(state).forEach(function (k) { if (state.open.indexOf(k) >= 0) close(k); });
         } }
-      ]);
+      ];
+      if (taskbarReorderEnabled()) taskbarRows.push('-', { label: text('taskbar-arrange', 'Arrange taskbar'), run: function () { arrangeTaskbar(bar.querySelector('[data-win-dock]')); } });
+      e.detail.add(taskbarRows);
     });
 
     /* The window menu is built as it opens. beforetoggle does not bubble,
@@ -3850,7 +4649,7 @@
        it, and back when it widens again. */
     function refreshPolicy() {
       if (syncing || !state.open.length) return;
-      var stamp = String(narrowLayer()) + ':' + sharedEdges().map(autoCollapsed).join(',') + ':' + Object.keys(roomFor(state)).join(',') + state.open.map(function (k) { return k + ':' + restricted(k); }).join(',');
+      var stamp = String(narrowLayer()) + ':' + (layer.hasAttribute('data-win-dock-splits') ? layer.clientWidth + ',' + layer.clientHeight : '') + ':' + sharedEdges().map(autoCollapsed).join(',') + ':' + Object.keys(roomFor(state)).join(',') + state.open.map(function (k) { return k + ':' + restricted(k); }).join(',');
       if (stamp === policyStamp) return;
       policyStamp = stamp;
       if (cancelGesture) cancelGesture();
@@ -3865,7 +4664,11 @@
       layer.dispatchEvent(new CustomEvent('pudl:windows-policy', { bubbles: true }));
     }
     window.addEventListener('resize', refreshPolicy);
-    if (window.ResizeObserver) new ResizeObserver(refreshPolicy).observe(layer);
+    var policyFrame = 0;
+    if (window.ResizeObserver) new ResizeObserver(function () {
+      if (!layer.hasAttribute('data-win-dock-splits')) { refreshPolicy(); return; }
+      if (!policyFrame) policyFrame = requestAnimationFrame(function () { policyFrame = 0; refreshPolicy(); });
+    }).observe(layer);
     new MutationObserver(refreshPolicy).observe(layer, { subtree: true, attributes: true,
       attributeFilter: ['data-win-narrow', 'data-win-narrow-width', 'data-win-size', 'data-win-dock-rail-width', 'data-win-dock-collapse-height', 'data-win-room'] });
     new MutationObserver(function () {
@@ -3873,6 +4676,9 @@
       renderDockGroups();
     }).observe(layer, { subtree: true, attributes: true,
       attributeFilter: ['data-win-glyph', 'data-win-attention', 'data-win-running', 'data-win-progress'] });
+    new MutationObserver(function () {
+      Object.keys(dockGroups).forEach(function (id) { soonPositionDockMenus(dockGroups[id]); });
+    }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['dir'] });
     document.addEventListener('pointerdown', dismissDockPeek, true);
     document.addEventListener('focusin', dismissDockPeek);
     document.addEventListener('keydown', function (e) {
@@ -3883,7 +4689,7 @@
       var key = dockPeek[edge];
       delete dockPeek[edge];
       apply(state);
-      var tab = dockGroups[edge] && dockGroups[edge].querySelector('[data-dock-key="' + CSS.escape(key) + '"]');
+      var tab = layer.querySelector('[data-dock-key="' + CSS.escape(key) + '"]');
       if (tab) tab.focus();
     });
 
@@ -3904,11 +4710,17 @@
         focusWindow(key);
       },
       minimize: function (key) { if (wins[key]) commit(minimized(state, key), false); },
-      dock: function (key, edge) {
+      dock: function (key, edge, destination) {
         if (!wins[key] || restricted(key) || (edge != null && SIDES.indexOf(edge) < 0)) return;
-        commit(docked(state, key, edge || null), false);
+        var work = destination ? placeInDock(state, key, edge, destination) : docked(state, key, edge || null);
+        if (work) commit(work, !!destination);
       },
       dockMode: dockMode,
+      dockArrange: dockArrange,
+      dockRatio: setDockRatio,
+      reorderTaskbar: reorderTaskbar,
+      arrangeTaskbar: function (dock) { return arrangeTaskbar(dock || document.querySelector('.win-bar [data-win-dock]')); },
+      dockPresentation: function (edge) { return sharedEdge(edge) ? splitPresentation(state, edge) : null; },
       /* zone is a name from ZONES, a rectangle {x, y, w, h} of fractions,
          which is moved to the nearest sixths, or null to float again. */
       snap: function (key, zone) {

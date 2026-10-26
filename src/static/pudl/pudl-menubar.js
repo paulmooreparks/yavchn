@@ -614,6 +614,8 @@
 
   function titleButton(t, m) {
     var b = el('button', 'menubar-title', { type: 'button', role: 'menuitem', 'aria-haspopup': 'menu', 'aria-expanded': 'false', tabindex: '-1', id: 'menubar-t' + (++uid) });
+    b.setAttribute('title', t.label);
+    b.setAttribute('data-tooltip', t.label);
     if (t.id) b.setAttribute('data-menu-id', t.id);
     if (t.content) t.content.forEach(function (n) {
       var c = n.cloneNode(true);
@@ -707,8 +709,20 @@
      bar collapses or opens out, or the page's regions or policy change. */
   function render(force) {
     if (!bar) return;
+    var previous = openTitle && panel && panel.matches(':popover-open') ? openTitle._menu : null;
+    var previousSource = frontSrc;
+    var panelFocus = panel && panel.contains(document.activeElement);
+    function survivingTitle() {
+      if (!previous) return null;
+      return titles().find(function (t) {
+        var m = t._menu;
+        if (previous.all) return m.all;
+        return m.menu && m.menu.kind === previous.menu.kind && m.menu.name === previous.menu.name &&
+          (previous.title.id ? m.title.id === previous.title.id : m.title.label === previous.title.label) &&
+          (m.menu.kind !== 'front' || sameSource(previousSource, frontSrc));
+      });
+    }
     if (force) lastSig = null;
-    closeAll(false);
     frontSrc = findFront();
     menuScope = frontScope();
     menus = assemble();
@@ -721,7 +735,23 @@
       return [m.kind, m.name, m.titles.map(function (t) { return (t.id || '') + ':' + t.label + ':' + (t.letter || '') + ':' + (t.content ? t.content.length : '') + ':' + (t.glyph || ''); }).join(','),
         (m.pins || []).map(function (p) { return p.label + '@' + p.href; }).join(',')].join('|');
     }).join(';');
-    if (sig === lastSig && built.firstChild) { rebind(); syncRibbon(); return; }
+    if (sig === lastSig && built.firstChild) {
+      rebind(); syncRibbon();
+      if (previous) {
+        var surviving = survivingTitle();
+        var selectedLabel = document.activeElement && document.activeElement._item && document.activeElement._item.label;
+        if (!surviving) closeAll(false);
+        else {
+          open(surviving, null);
+          if (panelFocus) {
+            var row = items(panel).find(function (r) { return r._item && r._item.label === selectedLabel; }) || items(panel)[0];
+            if (row) row.focus();
+          }
+        }
+      }
+      return;
+    }
+    closeAll(false);
     lastSig = sig;
     var focusedIndex = -1;
     if (built && built.contains(document.activeElement)) focusedIndex = titles().indexOf(document.activeElement);
@@ -766,6 +796,8 @@
     if (key !== '' && list[0]) list[0].setAttribute('accesskey', key || 'm');
     if (focusedIndex >= 0 && keep) keep.focus();
     syncRibbon();
+    var reopen = survivingTitle();
+    if (reopen) open(reopen, panelFocus ? 'first' : null);
   }
 
   /* Whether the full bar fits, measured with it showing, in one pass, so
@@ -825,18 +857,8 @@
     }
     collapsed = needed > room + 0.5;
     if (collapsed) built.classList.remove('menubar-ribbon-on', 'menubar-title-glyphs');
-    built.querySelectorAll('.menubar-glyphed').forEach(function (t) {
-      if (glyphsOnly && !collapsed) t.setAttribute('data-tooltip', t.getAttribute('aria-label'));
-      else t.removeAttribute('data-tooltip');
-    });
-    /* A front title cut short by its ellipsis shows its whole words as its
-       tooltip (0.80.0). */
-    built.querySelectorAll('.menubar-front > .menubar-title').forEach(function (t) {
-      var w = t.querySelector(':scope > .menubar-words');
-      var cut = !!w && !collapsed && w.getClientRects().length > 0 && w.scrollWidth > w.clientWidth + 1;
-      if (cut && !t.hasAttribute('data-tooltip')) { t.setAttribute('data-tooltip', w.textContent.trim()); t.__pudlCutTip = true; }
-      else if (!cut && t.__pudlCutTip) { t.removeAttribute('data-tooltip'); t.__pudlCutTip = false; }
-    });
+    /* Title tips remain available in every folding stage, including
+       ribbon tabs whose words are still visible. */
     level = collapsed ? 3 : pinsCollapsed ? 2 : glyphsOnly ? 1 : 0;
     built.classList.toggle('menubar-pins-collapsed', pinsCollapsed && !collapsed);
     built.classList.toggle('menubar-collapsed', collapsed);
@@ -870,7 +892,7 @@
   /* Shares the topbar's room, sizes each thing that folds, and says how
      much the bar has. */
   function arrange(top, full, low) {
-    var kids = Array.prototype.filter.call(top.children, function (k) { return !k.hidden && k.getClientRects().length; });
+    var kids = Array.prototype.filter.call(top.children, function (k) { return !k.hidden && k.getClientRects().length && getComputedStyle(k).position !== 'absolute'; });
     var parts = [];
     kids.forEach(function (k, i) {
       var p = null;
@@ -895,10 +917,14 @@
       else p.el.style.flex = '0 0 ' + Math.ceil(p.full) + 'px';
     });
     var cs = getComputedStyle(top);
-    var end = top.getBoundingClientRect().right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight);
-    var reach = -Infinity;
-    kids.forEach(function (k) { reach = Math.max(reach, k.getBoundingClientRect().right + (parseFloat(getComputedStyle(k).marginRight) || 0)); });
-    var deficit = reach - end;
+    var rtl = cs.direction === 'rtl', bounds = top.getBoundingClientRect();
+    var end = rtl ? bounds.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft) : bounds.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight);
+    var reach = rtl ? Infinity : -Infinity;
+    kids.forEach(function (k) {
+      var rect = k.getBoundingClientRect(), style = getComputedStyle(k);
+      reach = rtl ? Math.min(reach, rect.left - (parseFloat(style.marginLeft) || 0)) : Math.max(reach, rect.right + (parseFloat(style.marginRight) || 0));
+    });
+    var deficit = rtl ? end - reach : reach - end;
     parts.slice().sort(function (a, b) { return (a.order - b.order) || (a.i - b.i); }).forEach(function (p) {
       var give = deficit > 0.5 ? (p.all ? p.full - p.low : Math.min(deficit, p.full - p.low)) : 0;
       p.size = p.full - give;
@@ -1046,7 +1072,15 @@
   }
 
   function open(title, focusWhere) {
-    if (!currentTarget()) { render(); return; }
+    if (!currentTarget()) {
+      var prior = title._menu;
+      render();
+      title = titles().find(function (t) {
+        var info = t._menu;
+        return prior.all ? info.all : info.menu && prior.menu.kind === info.menu.kind && prior.menu.name === info.menu.name && prior.title.label === info.title.label;
+      });
+      if (!title || !currentTarget()) return;
+    }
     /* Unfolded into a ribbon, a title is a tab: it chooses its row of
        tools rather than opening a menu, whatever way it was reached. */
     if (ribbonActive() && !title._menu.all && hasTools(title)) { chooseTab(title, focusWhere); return; }
@@ -1172,8 +1206,7 @@
     var scopeEl = c.owner ? c.owner.scope.scope : document;
     if (fromMenu) {
       closeAll(false);
-      if (returnTo && returnTo.isConnected && returnTo !== document.body) returnTo.focus({ preventScroll: true });
-      else if (document.activeElement && built.contains(document.activeElement)) document.activeElement.blur();
+      restoreFocus('command');
     }
     if (c.run) { try { c.run(); } catch (err) { if (window.console) console.warn('pudl-menubar:', err); } return; }
     if (c.href != null && c.href.charAt(0) === '#' && c.href.length > 1) {
@@ -1288,7 +1321,7 @@
         e.preventDefault();
         if (openTitle && panel.matches(':popover-open')) closeAll(true);
         /* With no panel open, Escape leaves the bar for where focus was. */
-        else if (returnTo && returnTo.isConnected && returnTo !== document.body) returnTo.focus({ preventScroll: true });
+        else restoreFocus('escape');
       } else if (!isPin && e.key.length === 1 && /\S/.test(e.key) && !e.shiftKey) {
         /* A letter opens the title that has it. */
         var hit = list.filter(function (x) { return x.getAttribute('data-letter') === e.key.toLowerCase(); })[0];
@@ -1346,14 +1379,39 @@
      with no other key between and no loss of focus between, so Alt+Tab
      does nothing on its return. While the modifier is held the titles
      show their letters. */
-  var altArmed = false;
-  function focusBar() {
-    var list = titles();
-    if (!list.length) return;
+  var altArmed = false, enteringBar = false;
+  function ownsFocus(target) {
+    return target && (bar.contains(target) || (panel && panel.contains(target)) || (sub && sub.contains(target)));
+  }
+  function usableReturnTarget(target) {
+    if (!target || target.nodeType !== 1 || target.ownerDocument !== document || !target.isConnected || typeof target.focus !== 'function' || target.matches(':disabled') || target.closest('[inert],[hidden]') || !target.getClientRects().length) return false;
+    var style = getComputedStyle(target);
+    return style.visibility !== 'hidden' && style.visibility !== 'collapse';
+  }
+  function restoreFocus(reason) {
+    var target = returnTo;
+    returnTo = null;
+    if (target !== document.body && usableReturnTarget(target)) {
+      target.focus({ preventScroll: true });
+      if (document.activeElement === target) bar.dispatchEvent(new CustomEvent('pudl:menubar-return-focus', { bubbles: true, detail: { target: target, reason: reason } }));
+    } else if (ownsFocus(document.activeElement)) document.activeElement.blur();
+  }
+  function focusBar(options) {
+    if (!bar || !built || !usableReturnTarget(bar)) return false;
+    var list = titles().filter(usableReturnTarget);
+    if (!list.length) return false;
     var a = document.activeElement;
-    if (a && !bar.contains(a)) returnTo = a;
+    var explicit = options && options.returnTo;
+    if (!ownsFocus(a)) {
+      if (explicit != null && (!usableReturnTarget(explicit) || ownsFocus(explicit))) return false;
+      returnTo = explicit || a;
+    }
     list.forEach(function (x) { x.tabIndex = x === list[0] ? 0 : -1; });
-    list[0].focus();
+    enteringBar = true;
+    try { list[0].focus(); } finally { enteringBar = false; }
+    var focused = document.activeElement === list[0];
+    if (!focused) returnTo = null;
+    return focused;
   }
   function chordHeld(e) { return MAC ? (e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey) : (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey); }
   function onAccelDown(e) {
@@ -1371,7 +1429,7 @@
     e.preventDefault();
     if (!currentTarget()) render();
     var a = document.activeElement;
-    if (a && !bar.contains(a)) returnTo = a;
+    if (a && !ownsFocus(a)) returnTo = a;
     if (collapsed) {
       var one = built.querySelector('.menubar-one .menubar-title');
       open(one, 'first');
@@ -1435,6 +1493,13 @@
     var slot = document.querySelector('[data-menubar-ribbon-slot]');
     (slot || top || bar.parentNode).appendChild(ribbonToggle);
     ribbonRow = el('div', 'menubar-ribbon', { hidden: '' });
+    var chooser = el('button', 'btn btn-sm menu-btn menubar-ribbon-tabs', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
+    chooser.textContent = text('ribbon-tabs', 'Ribbon tabs');
+    chooser.addEventListener('click', function () { openRibbonTabs(chooser); });
+    chooser.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); openRibbonTabs(chooser); }
+    });
+    ribbonRow.appendChild(chooser);
     (top || bar).insertAdjacentElement('afterend', ribbonRow);
     ribbonRow.addEventListener('click', onRibbonClick);
     /* A press on a command keeps focus where the reader was working, so a
@@ -1459,6 +1524,27 @@
 
   function barTitles() {
     return Array.prototype.slice.call(built.querySelectorAll('.menubar-menu:not(.menubar-one) > .menubar-title:not(.menubar-pins-more)'));
+  }
+
+  function openRibbonTabs(button) {
+    if (!ribbonActive() || !window.pudlMenu || !window.pudlMenu.openAt) return;
+    var rows = barTitles().filter(hasTools).map(function (t) {
+      return { label: t._menu.title.label, radio: true, checked: t.getAttribute('aria-selected') === 'true', run: function () {
+        if (t.isConnected) chooseTab(t, false);
+      } };
+    });
+    var r = button.getBoundingClientRect();
+    var panel = window.pudlMenu.openAt(getComputedStyle(button).direction === 'rtl' ? r.right : r.left, r.bottom + 4, rows,
+      { owner: button, 'for': button, label: text('ribbon-tabs', 'Ribbon tabs'), edges: { top: r.top - 4, bottom: r.bottom + 4 } });
+    if (!panel) return;
+    button.setAttribute('aria-expanded', 'true');
+    button.setAttribute('aria-controls', panel.id);
+    panel.addEventListener('toggle', function closed(e) {
+      if (e.newState !== 'closed') return;
+      button.setAttribute('aria-expanded', 'false');
+      button.removeAttribute('aria-controls');
+      panel.removeEventListener('toggle', closed);
+    });
   }
 
   function sideOf(t) { return t._menu.menu.kind === 'front' ? 'front' : 'host'; }
@@ -1511,6 +1597,18 @@
     }
     ribbonRow.hidden = !on;
     var list = barTitles();
+    var chooser = ribbonRow.querySelector('.menubar-ribbon-tabs');
+    var needsChooser = on && built.classList.contains('menubar-title-glyphs') && list.some(function (x) { return hasTools(x) && x.classList.contains('menubar-glyphed'); });
+    if (chooser && !needsChooser) {
+      var chooserPanel = document.getElementById(chooser.getAttribute('aria-controls'));
+      var returnFocus = document.activeElement === chooser || (chooserPanel && chooserPanel.contains(document.activeElement));
+      if (chooserPanel && chooserPanel.matches(':popover-open')) chooserPanel.hidePopover();
+      if (returnFocus) {
+        var selected = chosenTitle(list, chosen.last) || chosenTitle(list, 'front') || chosenTitle(list, 'host') || list[0];
+        if (selected) selected.focus();
+      }
+    }
+    if (chooser) chooser.hidden = !needsChooser;
     var groups = built.querySelectorAll(':scope > .menubar-menu:not(.menubar-one)');
     function asMenu(x) {
       x.setAttribute('role', 'menuitem');
@@ -1711,11 +1809,11 @@
        arrival by what focus left. */
     built.addEventListener('pointerdown', function () {
       var a = document.activeElement;
-      if (a && !bar.contains(a)) returnTo = a;
+      if (a && !ownsFocus(a)) returnTo = a;
     });
     bar.addEventListener('focusin', function (e) {
       var from = e.relatedTarget;
-      if (from && !bar.contains(from)) returnTo = from;
+      if (!enteringBar && from && !ownsFocus(from)) returnTo = from;
     });
     built.addEventListener('click', onBarPointer);
     built.addEventListener('pointerover', onBarPointer);
@@ -1759,19 +1857,22 @@
       if (measuring) return;
       measuring = requestAnimationFrame(function () {
         measuring = 0;
-        if (panel && panel.matches(':popover-open')) return;
         var was = level;
         fitStale = true;
         fit();
         if (was !== level) render(true);
+        else if (panel && panel.matches(':popover-open') && window.pudlMenu) window.pudlMenu.place(panel);
       });
     };
     var ro = window.ResizeObserver ? new ResizeObserver(refit) : null;
+    var direction = new MutationObserver(refit);
+    direction.observe(document.documentElement, { attributes: true, attributeFilter: ['dir'] });
     if (ro) ro.observe(bar);
     /* A topbar that shares its room is shared again as it changes width,
        and as a toolbar in it comes to need more room or less. */
     var top = bar.parentNode && bar.parentNode.classList && bar.parentNode.classList.contains('topbar') ? bar.parentNode : null;
     if (top) {
+      direction.observe(top, { attributes: true, attributeFilter: ['dir'] });
       if (ro) ro.observe(top);
       top.addEventListener('pudl:toolbar-fit', function (e) {
         var k = e.target;
@@ -1793,6 +1894,7 @@
   }
 
   window.pudlMenubar = {
+    focus: function (options) { return focusBar(options); },
     /* Rows are read afresh as each menu opens, so a refresh builds the bar
        again only when its menus, titles or pins read differently (0.69.3);
        an applet may call it whenever its commands change. */
