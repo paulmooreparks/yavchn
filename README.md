@@ -58,7 +58,7 @@ Serves on `http://localhost:8080`.
 - `github.com/microcosm-cc/bluemonday`: HTML sanitisation for extracted articles and comment bodies.
 - `golang.org/x/net/html`: rewriting links to other threads so they open as windows, and the text excerpts in profiles and the replies watcher.
 - `modernc.org/sqlite`: pure-Go SQLite for the article-extraction cache.
-- [PUDL](https://github.com/paulmooreparks/pudl) v0.89.0 for the stylesheet, floating windows, menu bar, applet runtime, regions and splitters, copied unchanged from its release into `src/static/pudl/`. Pages load the minified copies in `min/`, which have the same names as the readable files and source maps pointing at them. Update it by copying a newer release's `dist/` over that folder.
+- [PUDL](https://github.com/paulmooreparks/pudl) v0.89.2 for the stylesheet, floating windows, menu bar, applet runtime, regions and splitters, copied unchanged from its release into `src/static/pudl/`. Pages load the minified copies in `min/`, which have the same names as the readable files and source maps pointing at them. Update it by copying a newer release's `dist/` over that folder.
 - Vanilla JS for YAVCHN's own behaviour. No SPA framework.
 
 ## Design notes
