@@ -588,13 +588,12 @@ func articleErrorHTML(rawURL string, err error) string {
 	return buf.String()
 }
 
-// excludedTmpl stands in for an article whose publisher asked YAVCHN not to
-// show a copy (takedown.go). It offers no archived copy, which would defeat
-// the request.
+// excludedTmpl stands in for an article excluded from the reader. It offers
+// no archived copy and does not disclose who requested the exclusion.
 var excludedTmpl = template.Must(template.New("excluded").Parse(
 	`<div class="empty-state story-note">
   <p class="empty-state-title">Read this article on its own site</p>
-  <p class="empty-state-body">Its publisher asked YAVCHN not to show a copy of it here.</p>
+  <p class="empty-state-body">This article is not available in YAVCHN's reader.</p>
   {{ if . }}<div class="empty-state-actions"><a class="btn btn-sm" href="{{ . }}" target="_blank" rel="noopener">Open the article</a></div>{{ end }}
 </div>`))
 
@@ -818,6 +817,8 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, errExcluded) {
+			w.Header().Set("X-Robots-Tag", "noindex")
+			w.Header().Set("Cache-Control", "no-store")
 			writeFragment(w, http.StatusOK, excludedHTML(rawURL))
 			return
 		}

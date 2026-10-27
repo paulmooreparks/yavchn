@@ -105,7 +105,7 @@ func TestExclusionStopsTheReader(t *testing.T) {
 	s := &Server{extract: e}
 	rec := httptest.NewRecorder()
 	s.ArticleAPI(rec, httptest.NewRequest("GET", "/api/article?url=https://blog.example.com/one", nil))
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "asked YAVCHN not to show a copy") || strings.Contains(rec.Body.String(), "archive.org") {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "not available in YAVCHN's reader") || strings.Contains(rec.Body.String(), "archive.org") || strings.Contains(rec.Body.String(), "publisher asked") || rec.Header().Get("X-Robots-Tag") != "noindex" || rec.Header().Get("Cache-Control") != "no-store" {
 		t.Errorf("reader got %d: %s", rec.Code, rec.Body)
 	}
 
