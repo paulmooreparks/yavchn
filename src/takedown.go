@@ -147,6 +147,9 @@ func addExclusion(ctx context.Context, db *sql.DB, pattern string) (int, error) 
 
 // runTakedown is the takedown command, given the arguments after its name.
 func runTakedown(ctx context.Context, db *sql.DB, args []string, out io.Writer) error {
+	if len(args) > 0 && args[0] == "cache" {
+		return runCacheExclusion(ctx, db, args[1:], out)
+	}
 	if len(args) > 0 && (args[0] == "author" || args[0] == "item") {
 		return runContentTakedown(ctx, db, args, out)
 	}

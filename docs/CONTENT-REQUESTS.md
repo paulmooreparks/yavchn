@@ -12,6 +12,7 @@ docker exec yavchn /yavchn takedown item add hn 12345
 docker exec yavchn /yavchn takedown author list
 docker exec yavchn /yavchn takedown item list
 docker exec yavchn /yavchn takedown author audit hn example-user
+docker exec yavchn /yavchn takedown cache exclude <cache-key-from-audit>
 docker restart yavchn
 ```
 

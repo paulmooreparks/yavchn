@@ -40,6 +40,36 @@ func TestContentExclusionsPersistAndReverse(t *testing.T) {
 	}
 }
 
+func TestContentCacheAuditAndExclusion(t *testing.T) {
+	e := takedownDB(t)
+	ctx := context.Background()
+	raw := "https://example.com/post?token=secret"
+	cacheArticle(t, e, raw)
+	if _, err := e.db.Exec(`UPDATE articles SET content='<p>excluded-user</p>'`); err != nil {
+		t.Fatal(err)
+	}
+	var audit bytes.Buffer
+	if err := runTakedown(ctx, e.db, []string{"author", "audit", "hn", "excluded-user"}, &audit); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(audit.String(), "cache_key="+articleKey(raw)) || strings.Contains(audit.String(), "secret") {
+		t.Fatalf("audit disclosure: %s", audit.String())
+	}
+	if err := runTakedown(ctx, e.db, []string{"cache", "exclude", articleKey(raw)}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if no, err := excluded(ctx, e.db, raw); err != nil || !no {
+		t.Fatalf("exclusion: %v %v", no, err)
+	}
+	var count int
+	if err := e.db.QueryRow(`SELECT count(*) FROM articles`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("cache retained: %d %v", count, err)
+	}
+	if _, err := e.Get(ctx, raw, "test"); !errors.Is(err, errExcluded) {
+		t.Fatalf("reimport allowed: %v", err)
+	}
+}
+
 func TestHNContentExclusionsAcrossAdapters(t *testing.T) {
 	h := NewHN()
 	h.exclusions = &contentExclusions{authors: map[string]bool{"excluded-user": true}, items: map[string]bool{"42": true}}

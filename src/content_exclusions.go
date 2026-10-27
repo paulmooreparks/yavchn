@@ -94,6 +94,8 @@ func contentGone(w http.ResponseWriter) {
 func runContentTakedown(ctx context.Context, db *sql.DB, args []string, out io.Writer) error {
 	usage := errors.New("usage: yavchn takedown author|item add|remove hn <value>, or author|item list; restart the service after changes")
 	if len(args) == 4 && args[0] == "author" && args[1] == "audit" && args[2] == "hn" && userNameRE.MatchString(args[3]) {
+		ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
 		var articles, accounts int
 		if err := db.QueryRowContext(ctx, `SELECT count(*) FROM articles WHERE instr(lower(title || ' ' || byline || ' ' || content),lower(?))>0`, args[3]).Scan(&articles); err != nil {
 			return err
@@ -109,7 +111,28 @@ func runContentTakedown(ctx context.Context, db *sql.DB, args []string, out io.W
 			}
 		}
 		fmt.Fprintf(out, "Article cache rows mentioning identifier: %d\nPrivate account documents mentioning identifier: %d\nThis text audit does not detect unattributed quotations or offline browser copies.\n", articles, accounts)
-		return nil
+		if articles == 0 {
+			return nil
+		}
+		rows, err := db.QueryContext(ctx, `SELECT url_hash,url FROM articles WHERE instr(lower(title || ' ' || byline || ' ' || content),lower(?))>0`, args[3])
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var key, raw string
+			if err := rows.Scan(&key, &raw); err != nil {
+				rows.Close()
+				return err
+			}
+			u, err := url.Parse(raw)
+			if err != nil {
+				rows.Close()
+				return err
+			}
+			u.User, u.RawQuery, u.Fragment = nil, "", ""
+			fmt.Fprintf(out, "cache_key=%s cache_page=%s\n", key, u.String())
+		}
+		return closeRows(rows)
 	}
 	if len(args) == 2 && args[1] == "list" {
 		rows, err := db.QueryContext(ctx, `SELECT source,value FROM content_exclusions WHERE kind=? ORDER BY source,value`, args[0])
@@ -147,6 +170,27 @@ func runContentTakedown(ctx context.Context, db *sql.DB, args []string, out io.W
 	}
 	if err == nil {
 		fmt.Fprintln(out, "Exclusion updated. Restart the service to apply it and clear upstream memory caches.")
+	}
+	return err
+}
+
+// Resolve the stored URL internally so signed query strings need not be copied
+// into operator command logs. Excluding a URL clears its disposable cache.
+func runCacheExclusion(ctx context.Context, db *sql.DB, args []string, out io.Writer) error {
+	if len(args) != 2 || args[0] != "exclude" || len(args[1]) != 64 {
+		return errors.New("usage: yavchn takedown cache exclude <cache key from author audit>")
+	}
+	var raw string
+	if err := db.QueryRowContext(ctx, `SELECT url FROM articles WHERE url_hash=?`, args[1]).Scan(&raw); err != nil {
+		return err
+	}
+	pattern, err := exclusionPattern(raw)
+	if err != nil {
+		return err
+	}
+	n, err := addExclusion(ctx, db, pattern)
+	if err == nil {
+		fmt.Fprintf(out, "Stored URL excluded; discarded %d cached copies.\n", n)
 	}
 	return err
 }
