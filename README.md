@@ -99,6 +99,8 @@ docker exec yavchn /yavchn takedown list
 docker exec yavchn /yavchn takedown remove example.com
 ```
 
+Contributor and individual-item requests use source-scoped exclusions. See [Content removal requests](docs/CONTENT-REQUESTS.md) for commands, verification and backup-restore safeguards.
+
 ## License
 
 [MIT](LICENSE). Feel free to use it, fork it, embed it, learn from it, whatever. Just keep the copyright notice intact.

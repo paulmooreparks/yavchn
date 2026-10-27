@@ -208,6 +208,10 @@ YAVCHN vendors PUDL 0.85.0 unchanged (2026-10-25). The upgrade includes the menu
 
 YAVCHN vendors PUDL 0.89.0 unchanged (2026-10-26), replacing the pending 0.85.0 distribution update. Taskbar reordering remains disabled, and YAVCHN does not add title-bar status chips or load the optional native-window adapter. This upgrade preserves the current taskbar order and window controls.
 
+## Contributor content requests
+
+Contributor removal requests use persistent, source-scoped author and item exclusions, loaded before upstream background fetching. The first supported source is Hacker News. Exclusions cover direct readers, discussions, profiles, replies and search; omitted comment parents do not remove other authors' replies. Removed direct resources return 410 and noindex. HN source documents use the source adapter instead of the generic article extractor. Operator commands, restart requirements, restore safeguards and remaining policy decisions are recorded in [Content removal requests](docs/CONTENT-REQUESTS.md).
+
 ## Installable web app
 
 The shared page head links a web app manifest with a stable root identity, root scope, and standalone display. Launching at the root respects the existing browsing preference. PNG install icons derive from the existing logo, with a separate Apple touch icon. Installation uses the browser's native controls. No service worker intercepts requests or caches user-specific HTML; feeds and articles continue using the existing network and server-cache behavior. The app does not promise offline reading. This follows the current [installation requirements](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).

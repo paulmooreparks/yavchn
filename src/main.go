@@ -84,6 +84,11 @@ func main() {
 	defer db.Close()
 
 	hn := NewHN()
+	hn.exclusions, err = loadContentExclusions(ctx, db)
+	if err != nil {
+		slog.Error("load content exclusions", "err", err)
+		os.Exit(1)
+	}
 	hn.StartBackgroundRefresh(ctx)
 	lobsters := NewLobsters()
 	lobsters.StartBackgroundRefresh(ctx)

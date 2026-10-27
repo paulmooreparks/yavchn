@@ -141,8 +141,9 @@ type algoliaSearchResponse struct {
 
 // HN implements Source for Hacker News (firebaseio.com + Algolia).
 type HN struct {
-	http *http.Client
-	sf   singleflight.Group
+	exclusions *contentExclusions
+	http       *http.Client
+	sf         singleflight.Group
 
 	mu          sync.RWMutex
 	listIDs     map[string][]string
@@ -190,7 +191,13 @@ type HNUser struct {
 
 // User returns a user's public profile, cached like items.
 func (h *HN) User(ctx context.Context, id string) (*HNUser, error) {
+	if h.exclusions.author(id) {
+		return nil, errContentRemoved
+	}
 	if u, ok := h.users.Get(id); ok {
+		if h.exclusions.author(u.ID) {
+			return nil, errContentRemoved
+		}
 		return u, nil
 	}
 	v, err, _ := h.sf.Do("user:"+id, func() (interface{}, error) {
@@ -213,6 +220,9 @@ func (h *HN) User(ctx context.Context, id string) (*HNUser, error) {
 		// firebaseio answers an unknown user with 200 and "null".
 		if u.ID == "" {
 			return nil, fmt.Errorf("user %s: %w", id, errNoSuchUser)
+		}
+		if h.exclusions.author(u.ID) {
+			return nil, errContentRemoved
 		}
 		return &u, nil
 	})
@@ -345,7 +355,13 @@ func (h *HN) fetchStoryIDs(ctx context.Context, tab string) ([]string, error) {
 // --- single item fetching ---
 
 func (h *HN) Item(ctx context.Context, id string) (*Item, error) {
+	if h.exclusions.item(id) {
+		return nil, errContentRemoved
+	}
 	if item, ok := h.items.Get(id); ok {
+		if h.exclusions.blocks(item.ID, item.By) {
+			return nil, errContentRemoved
+		}
 		return item, nil
 	}
 
@@ -389,6 +405,9 @@ func (h *HN) fetchItem(ctx context.Context, id string) (*Item, error) {
 	if raw.ID == 0 {
 		return nil, fmt.Errorf("item %s: not found", id)
 	}
+	if h.exclusions.blocks(strconv.FormatInt(raw.ID, 10), raw.By) {
+		return nil, errContentRemoved
+	}
 	return raw.toItem(), nil
 }
 
@@ -418,6 +437,9 @@ func (h *HN) ItemsParallel(ctx context.Context, ids []string) []*Item {
 // requesterIP is rate-limited on cache miss only; cache hits and singleflight
 // piggy-backers don't consume the requester's budget.
 func (h *HN) StoryThread(ctx context.Context, id, requesterIP string) (*StoryThread, error) {
+	if h.exclusions.item(id) {
+		return nil, errContentRemoved
+	}
 	if thread, ok := h.threads.Get(id); ok {
 		return thread, nil
 	}
@@ -461,9 +483,13 @@ func (h *HN) fetchThread(ctx context.Context, id string) (*StoryThread, error) {
 		return nil, err
 	}
 	st := &StoryThread{StoryID: id}
+	if h.exclusions.blocks(strconv.FormatInt(raw.ID, 10), raw.Author) {
+		return nil, errContentRemoved
+	}
 	for _, child := range raw.Children {
 		st.Comments = append(st.Comments, convertHNComment(child))
 	}
+	st.Comments = h.exclusions.comments(st.Comments)
 	return st, nil
 }
 
@@ -488,6 +514,9 @@ func (h *HN) Search(ctx context.Context, query string, page int) ([]*SearchHit, 
 // AuthorStories returns a user's most recent submissions, newest first,
 // from the Algolia search API, cached like items.
 func (h *HN) AuthorStories(ctx context.Context, name string) ([]*SearchHit, error) {
+	if h.exclusions.author(name) {
+		return nil, errContentRemoved
+	}
 	if hits, ok := h.authorStories.Get(name); ok {
 		return hits, nil
 	}
@@ -523,6 +552,9 @@ func (h *HN) algoliaHits(ctx context.Context, u string) ([]*SearchHit, int, erro
 	}
 	hits := make([]*SearchHit, 0, len(raw.Hits))
 	for _, r := range raw.Hits {
+		if h.exclusions.blocks(r.ObjectID, r.Author) {
+			continue
+		}
 		hits = append(hits, &SearchHit{
 			ID:          r.ObjectID,
 			Title:       r.Title,

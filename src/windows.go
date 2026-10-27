@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -418,6 +419,7 @@ func (st winState) layerStyle(attrs map[string]winAttrs) template.CSS {
 // a tool applet's window, Reader for the article reader's bootstrap, and
 // the story fields for a loaded story.
 type windowVM struct {
+	ContentRemoved   bool
 	IconGlyph        string // the PUDL glyph an applet's window shows in the taskbar
 	ContentSized     bool
 	StoryKey         string
@@ -492,6 +494,11 @@ func (s *Server) storyWindow(ctx context.Context, key string) (windowVM, bool) {
 	}
 	item, err := src.Item(ctx, id)
 	switch {
+	case errors.Is(err, errContentRemoved):
+		w.Title = "Content unavailable"
+		w.Error = "This content is no longer available."
+		w.SourceURL = ""
+		w.ContentRemoved = true
 	case err != nil || item == nil:
 		w.Title = "Story unavailable"
 		w.Error = "Couldn't load this story. It may have been removed, or the upstream is having a moment."

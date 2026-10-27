@@ -181,6 +181,9 @@ func (s *Server) appletWindow(ctx context.Context, r *http.Request, key string) 
 		if _, known := s.sources[source]; !ok || !known || !userNameRE.MatchString(name) {
 			return windowVM{}, false
 		}
+		if source == "hn" && s.hn != nil && s.hn.exclusions.author(name) {
+			return windowVM{}, false
+		}
 		p := s.profile(ctx, source, name)
 		w.Title, w.PageURL, w.Def = p.Name+" on "+p.SourceLabel, profileURL(source, name), profilePlace
 		w.App = &appVM{Kind: "profile", Profile: p, Lookup: &lookupVM{Key: key, Name: name, Source: source}}
@@ -208,6 +211,10 @@ func (s *Server) profile(ctx context.Context, source, name string) *profileVM {
 		u, err := s.hn.User(ctx, name)
 		<-done
 		if err != nil {
+			if errors.Is(err, errContentRemoved) {
+				p.Name, p.SiteURL, p.Error = "", "", "This content is no longer available."
+				return p
+			}
 			p.Error = userError(err, name, p.SourceLabel)
 			return p
 		}
@@ -308,9 +315,15 @@ func excerpt(fragment string, n int) string {
 // first. HN offers no list of replies, so this reads the user's last 30
 // items and the replies to each; a reply to anything older is not seen.
 func (s *Server) hnReplies(ctx context.Context, name string) *repliesVM {
+	if s.hn.exclusions.author(name) {
+		return &repliesVM{Checked: true, Error: "This content is no longer available."}
+	}
 	vm := &repliesVM{User: name, Checked: true}
 	u, err := s.hn.User(ctx, name)
 	if err != nil {
+		if errors.Is(err, errContentRemoved) {
+			return &repliesVM{Checked: true, Error: "This content is no longer available."}
+		}
 		vm.Error = userError(err, name, "Hacker News")
 		return vm
 	}
@@ -546,6 +559,10 @@ func (s *Server) UserLookup(w http.ResponseWriter, r *http.Request) {
 
 // UserPage serves /user/{source}/{name}, a profile as a page of its own.
 func (s *Server) UserPage(w http.ResponseWriter, r *http.Request) {
+	if r.PathValue("source") == "hn" && s.hn != nil && s.hn.exclusions.author(r.PathValue("name")) {
+		contentGone(w)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	win, ok := s.appletWindow(ctx, r, profileKey(r.PathValue("source"), r.PathValue("name")))
@@ -559,6 +576,10 @@ func (s *Server) UserPage(w http.ResponseWriter, r *http.Request) {
 // RepliesAPI serves /api/replies?u=, the replies list the watcher checks.
 func (s *Server) RepliesAPI(w http.ResponseWriter, r *http.Request) {
 	u := strings.TrimSpace(r.URL.Query().Get("u"))
+	if s.hn.exclusions.author(u) {
+		contentGone(w)
+		return
+	}
 	vm := &repliesVM{User: u, Checked: true}
 	switch {
 	case !userNameRE.MatchString(u):

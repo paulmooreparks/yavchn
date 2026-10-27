@@ -494,6 +494,10 @@ func (s *Server) Window(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	vm, ok := s.window(ctx, r, r.PathValue("key"))
+	if vm.ContentRemoved {
+		contentGone(w)
+		return
+	}
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -511,6 +515,10 @@ func (s *Server) StoryPage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	vm, ok := s.storyWindow(ctx, r.PathValue("source")+"-"+r.PathValue("id"))
+	if vm.ContentRemoved {
+		contentGone(w)
+		return
+	}
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -793,6 +801,16 @@ func (s *Server) ArticleAPI(w http.ResponseWriter, r *http.Request) {
 		article, err = s.extract.Get(ctx, rawURL, clientIP(r))
 	}
 	if err != nil {
+		if errors.Is(err, errSourceDocument) {
+			w.Header().Set("X-Robots-Tag", "noindex")
+			w.Header().Set("Cache-Control", "no-store")
+			writeFragment(w, http.StatusBadRequest, `<p>Open this source page through its story or profile reader.</p>`)
+			return
+		}
+		if errors.Is(err, errContentRemoved) {
+			contentGone(w)
+			return
+		}
 		if errors.Is(err, errRateLimited) {
 			slog.Info("article extract rate-limited", "url", rawURL)
 			w.Header().Set("Retry-After", "60")
@@ -842,6 +860,10 @@ func (s *Server) DiscussionAPI(w http.ResponseWriter, r *http.Request) {
 
 	thread, err := src.StoryThread(ctx, idStr, clientIP(r))
 	if err != nil {
+		if errors.Is(err, errContentRemoved) {
+			contentGone(w)
+			return
+		}
 		if errors.Is(err, errRateLimited) {
 			slog.Info("discussion rate-limited", "id", idStr, "source", sourceName)
 			w.Header().Set("Retry-After", "60")

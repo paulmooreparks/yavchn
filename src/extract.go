@@ -67,7 +67,7 @@ type Article struct {
 }
 
 func NewExtractor(db *sql.DB) *Extractor {
-	return &Extractor{
+	e := &Extractor{
 		db: db,
 		client: &http.Client{
 			Timeout:   extractTimeout,
@@ -76,6 +76,13 @@ func NewExtractor(db *sql.DB) *Extractor {
 		sem:  make(chan struct{}, maxConcurrentExtractions),
 		rate: newRateLimiter(rateLimitPerWindow, rateLimitWindow),
 	}
+	e.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("too many redirects")
+		}
+		return e.checkExcluded(req.Context(), req.URL.String())
+	}
+	return e
 }
 
 // newExtractorTransport wires the politeness wrapper around an http.Transport
@@ -181,6 +188,11 @@ func (e *Extractor) kickRevalidate(hash, rawURL string) {
 // reader not to show (takedown.go). Failing to read the list refuses the
 // article too, since showing an excluded one breaks a promise.
 func (e *Extractor) checkExcluded(ctx context.Context, rawURL string) error {
+	// Source documents can include whole discussions and profiles. They must
+	// use the source adapter's exclusion gates rather than raw extraction.
+	if err := checkSourceDocument(rawURL); err != nil {
+		return err
+	}
 	no, err := excluded(ctx, e.db, rawURL)
 	if err != nil {
 		return fmt.Errorf("checking the reader's exclusions: %w", err)
@@ -233,6 +245,11 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.Request != nil && resp.Request.URL != nil {
+		if err := e.checkExcluded(ctx, resp.Request.URL.String()); err != nil {
+			return nil, err
+		}
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return nil, &upstreamHTTPError{StatusCode: resp.StatusCode}
 	}
@@ -264,6 +281,11 @@ func (e *Extractor) fetchAndStore(ctx context.Context, hash, rawURL string) (*Ar
 		Content: template.HTML(sanitized),
 	}
 	// An exclusion added while this fetch ran must not be undone by it.
+	if resp.Request != nil && resp.Request.URL != nil {
+		if err := e.checkExcluded(ctx, resp.Request.URL.String()); err != nil {
+			return nil, err
+		}
+	}
 	if err := e.checkExcluded(ctx, rawURL); err != nil {
 		return nil, err
 	}

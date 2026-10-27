@@ -8,12 +8,13 @@
 
 {{ define "privacy" }}
 <article class="app legal">
-  <p class="legal-updated">Last updated 8 October 2026.</p>
+  <p class="legal-updated">Last updated 27 October 2026.</p>
   <p>YAVCHN is a reader for Hacker News and Lobsters at yavchn.com. Paul Parks runs it as an individual in Singapore, and he decides what it does with your data. You can reach him about anything on this page at {{ template "legalcontact" }}.</p>
   <p>YAVCHN keeps as little about you as it can. It has no advertising, it doesn't track you across other sites, and it doesn't sell your data, and it doesn't share your data with anyone except the services listed below, which it needs in order to work.</p>
 
   <h2>If you don't sign in</h2>
-  <p>Without an account, the server keeps nothing that identifies you. Your pins, collections, notes, hidden stories, blocked sites, reading positions and layout are stored in your own browser, and they stay there until you clear the site's data.</p>
+  <p>Without an account, YAVCHN does not create a visitor profile. Your pins, collections, notes, hidden stories, blocked sites, reading positions and layout are stored in your own browser, and they stay there until you clear the site's data.</p>
+  <p>Separately, the reader processes public usernames, profiles, stories and comments from its source sites. If you ask YAVCHN to stop displaying your content, it keeps the minimum source identifier needed to prevent that content from being displayed again. Request correspondence is handled privately. This does not remove the source site's original or copies previously saved by other people.</p>
   <p>The server still sees each request your browser makes, as every web server does. It doesn't keep an access log. To stop any one visitor from overloading the site or the sources it reads, it counts requests by IP address in memory, and it forgets each count after a few minutes.</p>
   <p>When you open an article, the server fetches it from the publisher and keeps a copy for 30 days so that the next reader gets it quickly. That copy isn't linked to you or to anyone else.</p>
   <p>The server records errors in a log that is limited in size, so old entries are discarded as new ones arrive. An entry can include the address of an article that failed to load, words searched for on Hacker News, an address entered in Find, or a Hacker News or Lobsters user name being looked up. It never includes IP addresses, email addresses or account details.</p>
@@ -86,12 +87,12 @@
 
 {{ define "terms" }}
 <article class="app legal">
-  <p class="legal-updated">Last updated 5 October 2026.</p>
+  <p class="legal-updated">Last updated 27 October 2026.</p>
   <p>YAVCHN is a free reader for Hacker News and Lobsters at yavchn.com, run by Paul Parks in Singapore. By using it you agree to these terms. The <a href="/privacy" data-win-open="privacy">privacy policy</a> says what YAVCHN keeps about you.</p>
 
   <h2>What YAVCHN is</h2>
   <p>YAVCHN shows the stories and discussions that Hacker News and Lobsters publish, and readable copies of the articles they link to. It isn't affiliated with either site. The stories and comments belong to those sites and their authors, and the articles belong to their publishers. Voting, commenting and your accounts on those sites all happen on the sites themselves.</p>
-  <p>If you publish an article and want YAVCHN to stop showing its readable copy, write to {{ template "legalcontact" }} and it will be removed promptly.</p>
+  <p>If you publish an article and want YAVCHN to stop showing its readable copy, write to {{ template "legalcontact" }} and it will be removed promptly. You can also request removal of comments or identifying attribution copied by YAVCHN. Include the YAVCHN links, the source site and your source username where applicable. YAVCHN may ask for minimal verification if needed, and will describe the outcome and any limits on removal. A request concerns YAVCHN's copies; it does not change the upstream site or guarantee when search engines will update their results.</p>
 
   <h2>Your account</h2>
   <p>An account is for one person. You are responsible for what happens through the ways you sign in, so keep your email, GitHub account and passkeys secure. You can delete your account at any time on the Account page.</p>

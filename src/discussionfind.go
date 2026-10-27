@@ -177,6 +177,9 @@ func (h *HN) algoliaByURL(ctx context.Context, query string) ([]Submission, erro
 	}
 	out := make([]Submission, 0, len(raw.Hits))
 	for _, hit := range raw.Hits {
+		if h.exclusions.blocks(hit.ObjectID, hit.Author) {
+			continue
+		}
 		// Algolia's url-restricted search still fuzzy-matches; keep only hits
 		// whose stored URL actually equals our target (normalized both sides)
 		// so we don't surface unrelated stories.
