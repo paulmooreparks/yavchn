@@ -173,13 +173,16 @@ body.desktop .md-layout {
 .story-row-actions .icon-btn { color: var(--text); }
 .story-row-actions .icon-btn > .glyph { --glyph-size: 12px; }
 .story-row .story-pin[aria-pressed="true"] { color: var(--accent); }
+/* While stories are arranged by hand, PUDL's grip leads each row and its
+   pin and hide step aside, so a press meant for the grip never removes a
+   story. */
+.stories[data-reorder-active] .story-row-actions { display: none; }
 
 .source-icon { width: 16px; height: 16px; flex: none; object-fit: contain; }
 .feed-refresh > .glyph { --glyph-size: 16px; }
 .feed-refresh-status { font-size: var(--text-sm); }
 .source-glyph { --glyph-size: 16px; }
 .reader-site { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
-.win-tab[data-reader-source]:not(.minimized)::before { display: none; }
 .source-seg a { display: inline-flex; align-items: center; gap: 6px; }
 .source-switch .menu-btn-label::before,
 .source-switch .seg-choice[href^="/hn/"]::before,
@@ -1030,7 +1033,6 @@ body.desktop, body.story-page { height: var(--yv-viewport-height, 100dvh); }
   .win-head { gap: 6px; }
   .win-head:has([data-win-action="menu"]) .win-chrome { display: none; }
   .win-head [data-win-action="menu"] { order: 5; min-width: 40px; height: 40px; }
-  .win-dock .reader-site .visually-hidden { display: none; }
   .site-listbar .md-filter-group { flex: 1; min-width: 0; }
   .site-listbar .md-filter { width: 100%; min-width: 0; }
   .site-listbar .feed-refresh { flex: none; }

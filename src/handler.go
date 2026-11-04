@@ -173,15 +173,18 @@ func pinFilter(r *http.Request, view storedList) *pinFilterVM {
 		f.Sites = append(f.Sites, checkVM{s[0], s[1], slices.Contains(q["source"], s[0])})
 	}
 	f.Unread = q.Get("show") == "unread"
-	if s := q.Get("sort"); s == "oldest" || s == "points" || s == "comments" {
-		f.Sort = s
-	}
 	if view.Base == collectedView.Base {
 		for _, c := range q["c"] {
 			if collectionID.MatchString(c) && !slices.Contains(f.Collections, c) && len(f.Collections) < 100 {
 				f.Collections = append(f.Collections, c)
 			}
 		}
+	}
+	// The reader's own order belongs to Pinned and to one collection; a view
+	// of several collections has no single order to keep.
+	ownable := view.Base == pinnedView.Base || (view.Base == collectedView.Base && len(f.Collections) == 1)
+	if s := q.Get("sort"); s == "oldest" || s == "points" || s == "comments" || (s == "own" && ownable) {
+		f.Sort = s
 	}
 	// The view's address with one value of a filter removed, keeping the
 	// others, the order and the windows.
@@ -195,7 +198,11 @@ func pinFilter(r *http.Request, view storedList) *pinFilterVM {
 		}
 		return winURL(view.Base, v, wins)
 	}
-	for _, o := range [][2]string{{"", view.Newest}, {"oldest", view.Oldest}, {"points", "Points"}, {"comments", "Comments"}} {
+	orders := [][2]string{{"", view.Newest}, {"oldest", view.Oldest}, {"points", "Points"}, {"comments", "Comments"}}
+	if ownable {
+		orders = append(orders, [2]string{"own", "Your order"})
+	}
+	for _, o := range orders {
 		v := f.params()
 		v.Del("sort")
 		if o[0] != "" {

@@ -91,6 +91,9 @@
           {{ range .Sorts }}<a class="menu-action seg-choice" href="{{ .URL }}"{{ if .Current }} aria-current="true"{{ end }}>{{ .Label }}</a>{{ end }}
         </nav>
       </div>
+      {{/* In the reader's own order, Arrange puts the stories in order by
+           hand; pinned.js shows it, since it needs script. */}}
+      {{ if eq .Sort "own" }}<button class="btn btn-sm" type="button" id="arrange-stories" data-arrange aria-pressed="false" hidden>Arrange</button>{{ end }}
       {{ end }}
     {{ end }}
   </div>
@@ -164,7 +167,7 @@
             </div>
             {{ end }}
           </div>
-          <div class="win-layer" data-win-layer data-win-src="/window/{key}" data-win-params="r" data-win-menu{{ if .Win.LayerStyle }} style="{{ .Win.LayerStyle }}"{{ end }}>
+          <div class="win-layer" data-win-layer data-win-src="/window/{key}" data-win-params="r" data-win-menu data-win-taskbar-stacks="full"{{ if .Win.LayerStyle }} style="{{ .Win.LayerStyle }}"{{ end }}>
             {{ range .Win.List }}{{ template "window" . }}{{ end }}
           </div>
         </main>

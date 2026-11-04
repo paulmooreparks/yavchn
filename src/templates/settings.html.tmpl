@@ -15,6 +15,29 @@
     </fieldset>
   </section>
   <section class="card">
+    <h2 class="card-title">Style</h2>
+    <p class="card-desc">The shape and depth of buttons, fields and windows, from PUDL's styles. Each works with light and dark.</p>
+    <fieldset data-settings-js disabled>
+      <legend class="visually-hidden">Style</legend>
+      <div class="seg" data-seg-menu aria-label="Style">
+        {{ range skins }}<button type="button" data-setting="skin" value="{{ .ID }}" aria-pressed="false">{{ .Label }}</button>{{ end }}
+      </div>
+    </fieldset>
+  </section>
+  <section class="card">
+    <h2 class="card-title">Colours</h2>
+    <p class="card-desc">The palette, light or dark as the theme above says. The three named palettes match the styles of the same name, and any palette goes with any style.</p>
+    <fieldset data-settings-js disabled>
+      <legend class="visually-hidden">Colours</legend>
+      <div class="seg" data-seg-menu aria-label="Colours">
+        <button type="button" data-setting="palette" value="standard" aria-pressed="false">Standard</button>
+        <button type="button" data-setting="palette" value="bevel" aria-pressed="false">Bevel</button>
+        <button type="button" data-setting="palette" value="gel" aria-pressed="false">Gel</button>
+        <button type="button" data-setting="palette" value="glaze" aria-pressed="false">Glaze</button>
+      </div>
+    </fieldset>
+  </section>
+  <section class="card">
     <h2 class="card-title">View</h2>
     <p class="card-desc">The view a link opens in when it does not name one. The page you are on stays open.</p>
     <form action="/settings/view" method="post" class="settings-view-form" data-saved-view="{{ .SettingsView }}">

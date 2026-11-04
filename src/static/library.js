@@ -273,7 +273,16 @@
       emptyBody: none ? 'Choose New collection in the collection menu, or use Story > Add to collection in a story’s window.' :
         'Use Story > Add to collection in a story’s window to file it here.',
       remove: id ? 'Remove from this collection' : '',
-      extra: id ? null : function (s) { return '<span class="md-meta collection-names">In ' + esc(s.names.sort().join(', ')) + '</span>'; }
+      extra: id ? null : function (s) { return '<span class="md-meta collection-names">In ' + esc(s.names.sort().join(', ')) + '</span>'; },
+      // One collection has an order of its own, kept on its entries.
+      reorder: id ? function (shownKeys) {
+        var current = read(COLLECTED);
+        var all = Object.keys(current).filter(function (k) { return k.split(':')[0] === id; }).map(function (k) {
+          return { entry: k, key: current[k].source + '-' + current[k].id, order: current[k].order, at: current[k].added_at };
+        });
+        stored.reorder(all, function (e) { return e.key; }, shownKeys).forEach(function (e) { current[e.entry].order = e.order; });
+        write(COLLECTED, current);
+      } : null
     });
   }
 

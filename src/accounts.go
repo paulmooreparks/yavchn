@@ -222,6 +222,7 @@ type pinEntry struct {
 	Score    int    `json:"score"`
 	Comments int    `json:"comments"`
 	PinnedAt int64  `json:"pinned_at"`
+	Order    int64  `json:"order,omitempty"` // the story's place in the reader's own order, from 1; 0 until arranged
 }
 type collectionEntry struct {
 	Name      string `json:"name"`
@@ -239,7 +240,11 @@ type collectedEntry struct {
 	Score    int    `json:"score"`
 	Comments int    `json:"comments"`
 	AddedAt  int64  `json:"added_at"`
+	Order    int64  `json:"order,omitempty"` // the story's place in its collection's own order, from 1; 0 until arranged
 }
+
+// maxOrder bounds a saved place, well above any list's size limit.
+const maxOrder = 100000
 
 // noteEntry is the reader's note on one story, keyed "{source}-{id}".
 type noteEntry struct {
@@ -314,7 +319,7 @@ func (d accountDocument) validate() error {
 		return errors.New("invalid account data size")
 	}
 	for k, p := range d.Pins {
-		if !validAccountEntryKey(k) || !validStory(p.Source, p.Title, p.URL, p.Host, p.By, p.Score, p.Comments) || p.PinnedAt < 0 {
+		if !validAccountEntryKey(k) || !validStory(p.Source, p.Title, p.URL, p.Host, p.By, p.Score, p.Comments) || p.PinnedAt < 0 || p.Order < 0 || p.Order > maxOrder {
 			return errors.New("invalid pinned story")
 		}
 	}
@@ -327,7 +332,7 @@ func (d accountDocument) validate() error {
 	for k, e := range d.Collected {
 		collection, story, ok := strings.Cut(k, ":")
 		if _, exists := d.Collections[collection]; !ok || !exists || !storyID.MatchString(e.ID) || story != e.Source+"-"+e.ID ||
-			!validStory(e.Source, e.Title, e.URL, e.Host, e.By, e.Score, e.Comments) || e.AddedAt < 0 {
+			!validStory(e.Source, e.Title, e.URL, e.Host, e.By, e.Score, e.Comments) || e.AddedAt < 0 || e.Order < 0 || e.Order > maxOrder {
 			return errors.New("invalid collection entry")
 		}
 	}

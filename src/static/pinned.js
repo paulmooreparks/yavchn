@@ -145,8 +145,16 @@
       '': function (a, b) { return (b.at || 0) - (a.at || 0); },
       oldest: function (a, b) { return (a.at || 0) - (b.at || 0); },
       points: function (a, b) { return (b.score || 0) - (a.score || 0); },
-      comments: function (a, b) { return (b.comments || 0) - (a.comments || 0); }
+      comments: function (a, b) { return (b.comments || 0) - (a.comments || 0); },
+      own: byOwnOrder
     };
+    /* In the reader's own order the stories can be arranged by hand, with
+       PUDL's reorderable list (0.97.0). The list's items are the rows; the
+       count above them keeps its place. */
+    var arranging = f.sort === 'own' && !!cfg.reorder;
+    box.__reorder = arranging ? cfg.reorder : null;
+    if (arranging) { if (!box.hasAttribute('data-reorder')) box.setAttribute('data-reorder', 'off'); }
+    else box.removeAttribute('data-reorder');
     var shown = entries.filter(function (s) {
       if (f.sources.length && f.sources.indexOf(s.source) < 0) return false;
       if (f.unread && visited && visited.has(s.id)) return false;
@@ -155,7 +163,7 @@
         !f.terms.not.some(function (n) { return text.indexOf(n) >= 0; });
     }).sort(orders[f.sort] || orders['']);
 
-    var count = shown.length !== entries.length ? '<p class="pin-count num">' + shown.length + ' of ' + entries.length + ' ' + esc(cfg.noun) + '</p>' : '';
+    var count = shown.length !== entries.length ? '<p class="pin-count num" data-reorder-fixed>' + shown.length + ' of ' + entries.length + ' ' + esc(cfg.noun) + '</p>' : '';
     if (!shown.length) {
       box.innerHTML = count + '<div class="empty-state list-empty"><p class="empty-state-title">Nothing matches</p>' +
         '<p class="empty-state-body">None of your ' + entries.length + ' ' + esc(cfg.noun) + ' passes these filters.</p></div>';
@@ -174,6 +182,7 @@
       var last = cfg.remove ? '<button type="button" class="icon-btn story-uncollect" aria-label="' + esc(cfg.remove) + '" title="' + esc(cfg.remove) + '">' + close + '</button>' :
         '<button type="button" class="icon-btn story-hide" aria-label="Hide this story" title="Hide this story">' + close + '</button>';
       return '<div class="md-row story-row' + (pinned ? ' pinned' : '') + (cfg.rowClass ? ' ' + cfg.rowClass : '') + (current ? ' active' : '') + '" id="row-' + esc(key) + '" data-key="' + esc(key) + '"' +
+        (arranging ? ' data-reorder-id="' + esc(key) + '" data-reorder-label="' + esc(s.title || '(no title)') + '"' : '') +
         ' data-id="' + esc(s.id) + '" data-source="' + esc(s.source) + '" data-url="' + esc(s.url || '') + '"' +
         ' data-host="' + esc(host) + '" data-by="' + esc(s.by || '') + '" data-score="' + (s.score || 0) + '"' +
         ' data-comments="' + (s.comments || 0) + '">' +
@@ -188,13 +197,72 @@
     box.dispatchEvent(new CustomEvent('yavchn:rows-appended', { bubbles: true }));
   }
 
+  /* The reader's own order: a story's saved place, from 1, and before every
+     placed story those never arranged, newest first, so a story pinned or
+     added since the last arranging comes first. */
+  function byOwnOrder(a, b) {
+    var ra = a.order > 0 ? a.order : -(a.at || 0), rb = b.order > 0 ? b.order : -(b.at || 0);
+    return ra - rb;
+  }
+
+  /* The new order of the rows shown, as their keys. They take the places
+     the shown stories had in the whole list, in their new order, so a
+     filtered view moves its stories among themselves and leaves the
+     others where they were. Every story is then numbered 1, 2, 3. */
+  function reorder(all, keyOf, shownKeys) {
+    var whole = all.slice().sort(byOwnOrder);
+    var keys = whole.map(keyOf);
+    var moved = shownKeys.filter(function (k) { return keys.indexOf(k) >= 0; });
+    var slots = moved.map(function (k) { return keys.indexOf(k); }).sort(function (a, b) { return a - b; });
+    var byKey = {};
+    whole.forEach(function (e, i) { byKey[keys[i]] = e; });
+    slots.forEach(function (slot, i) { whole[slot] = byKey[moved[i]]; });
+    whole.forEach(function (e, i) { e.order = i + 1; });
+    return whole;
+  }
+
   function renderPinnedList() {
     var store = load();
     renderStored(pinnedView(), Object.keys(store).map(function (id) {
       return Object.assign({}, store[id], { id: id, source: store[id].source || 'hn', at: store[id].pinned_at });
     }), { noun: 'pinned stories', time: 'pinned', emptyTitle: 'No pinned stories',
-      emptyBody: 'The pin at the start of a story\'s row, or the p key, keeps the story here.' });
+      emptyBody: 'The pin at the start of a story\'s row, or the p key, keeps the story here.',
+      reorder: function (shownKeys) {
+        var current = load();
+        var all = Object.keys(current).map(function (id) { return { id: id, key: (current[id].source || 'hn') + '-' + id, order: current[id].order, at: current[id].pinned_at }; });
+        reorder(all, function (e) { return e.key; }, shownKeys).forEach(function (e) { current[e.id].order = e.order; });
+        save(current);
+      } });
   }
+
+  /* Arrange turns the list's reorder mode on, and the same button, then
+     reading Done, turns it off, as Escape on a grip does. Each move is
+     saved as PUDL makes it, so the list is never redrawn under the reader. */
+  function arrangeButton() { return document.querySelector('[data-arrange]'); }
+  function storedBox() { var b = document.querySelector('.story-list .stories[data-reorder]'); return b && b.__reorder ? b : null; }
+  function syncArrange() {
+    var btn = arrangeButton(), box = storedBox();
+    if (!btn) return;
+    btn.hidden = !box || !window.pudlReorder;
+    var on = !!box && box.getAttribute('data-reorder') === 'on';
+    btn.setAttribute('aria-pressed', String(on));
+    btn.textContent = on ? 'Done' : 'Arrange';
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-arrange]');
+    if (!btn || !window.pudlReorder) return;
+    var box = storedBox();
+    if (!box) return;
+    if (box.getAttribute('data-reorder') === 'on') window.pudlReorder.off(box);
+    else window.pudlReorder.on(box);
+    syncArrange();
+  });
+  document.addEventListener('pudl:reorder-mode', syncArrange);
+  document.addEventListener('pudl:reorder', function (e) {
+    var box = e.target.closest && e.target.closest('.stories');
+    if (!box || !box.__reorder) return;
+    box.__reorder(e.detail.order.filter(function (k) { return typeof k === 'string'; }));
+  });
 
   function toggleRow(row) {
     if (!row || !row.dataset.id) return;
@@ -218,7 +286,7 @@
   }
 
   window.yavchn.pins = { isPinned: isPinned, toggleStory: toggleStory };
-  window.yavchn.stored = { render: renderStored, metaOf: metaOf, esc: esc };
+  window.yavchn.stored = { render: renderStored, metaOf: metaOf, esc: esc, reorder: reorder };
 
   document.addEventListener('click', function (e) {
     var btn = e.target.closest && e.target.closest('.story-row .story-pin');
@@ -257,5 +325,9 @@
     if (pinnedView()) renderPinnedList();
     applyState();
   });
+  document.addEventListener('yavchn:rows-appended', syncArrange);
+  // The list can be drawn before pudl-reorder.js has run, which every
+  // deferred script has by this event.
+  document.addEventListener('DOMContentLoaded', syncArrange);
   document.addEventListener('yavchn:rows-appended', applyState);
 })();

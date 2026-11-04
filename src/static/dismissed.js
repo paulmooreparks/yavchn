@@ -28,6 +28,29 @@
     save(arr);
   }
 
+  function unhide(ids) {
+    save(load().filter(function (id) { return ids.indexOf(id) < 0; }));
+    apply();
+    document.dispatchEvent(new CustomEvent('yavchn:list-change'));
+  }
+
+  /* Hiding a story offers Undo in a toast (PUDL 0.90.0). A toast with an
+     action stays until it is dismissed, so stories hidden while it shows
+     join it, and its Undo brings back every one of them. Show the hidden
+     stories, below the list, is the lasting way back. */
+  var undoToast = null, undoIds = [];
+  function offerUndo(id) {
+    if (!window.pudlToast) return;
+    if (undoToast && undoToast.isConnected && !undoToast.classList.contains('leaving')) {
+      var close = undoToast.querySelector('.toast-close');
+      if (close) close.click();
+    } else undoIds = [];
+    undoIds.push(id);
+    var ids = undoIds.slice();
+    undoToast = window.pudlToast(ids.length === 1 ? 'Story hidden. Choose Undo to show it again.' : ids.length + ' stories hidden. Choose Undo to show them again.',
+      { action: { label: 'Undo', run: function () { undoIds = []; unhide(ids); } } });
+  }
+
   function apply() {
     var set = {};
     load().forEach(function (id) { set[id] = true; });
@@ -62,6 +85,7 @@
       add(row.dataset.id);
       row.classList.add('dismissed');
       updateBanner();
+      offerUndo(row.dataset.id);
       return;
     }
     if (e.target.closest && e.target.closest('.story-list .story-show-hidden')) {
@@ -77,6 +101,7 @@
     add(id);
     apply();
     document.dispatchEvent(new CustomEvent('yavchn:list-change'));
+    offerUndo(id);
   };
 
   window.yavchn.onList(apply);

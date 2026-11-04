@@ -243,7 +243,8 @@ func TestAccountCollectionsAndNotes(t *testing.T) {
 	}
 	d := emptyAccountDocument()
 	d.Collections["k3x9q2"] = collectionEntry{Name: "Read later", CreatedAt: 1}
-	d.Collected["k3x9q2:hn-42"] = collectedEntry{Source: "hn", ID: "42", Title: "Story", URL: "https://example.com/", AddedAt: 2}
+	d.Collected["k3x9q2:hn-42"] = collectedEntry{Source: "hn", ID: "42", Title: "Story", URL: "https://example.com/", AddedAt: 2, Order: 1}
+	d.Pins["7"] = pinEntry{Source: "hn", Title: "Pinned", PinnedAt: 4, Order: 2}
 	d.Notes["lobsters-ab12cd"] = noteEntry{Source: "lobsters", ID: "ab12cd", Title: "Thread", Text: "Worth rereading.", UpdatedAt: 3}
 	if w := f.put(c, u, d); w.Code != 200 {
 		t.Fatalf("save collections and notes: %d %s", w.Code, w.Body)
@@ -257,6 +258,9 @@ func TestAccountCollectionsAndNotes(t *testing.T) {
 	u = f.session(c)
 	if u.Data.Collections["k3x9q2"].Name != "Read later" || len(u.Data.Collected) != 1 || u.Data.Notes["lobsters-ab12cd"].Text != "Worth rereading." || len(u.Data.Domains) != 1 {
 		t.Fatalf("older client erased newer members: %+v", u.Data)
+	}
+	if u.Data.Collected["k3x9q2:hn-42"].Order != 1 {
+		t.Fatalf("a collected story's own order was not kept: %+v", u.Data.Collected)
 	}
 	invalid := map[string]func(*accountDocument){
 		"orphan entry":     func(d *accountDocument) { d.Collected["zzzzzz:hn-1"] = collectedEntry{Source: "hn", ID: "1"} },
@@ -273,6 +277,12 @@ func TestAccountCollectionsAndNotes(t *testing.T) {
 			d.Notes["hn-1"] = noteEntry{Source: "hn", ID: "1", Text: strings.Repeat("é", 10001)}
 		},
 		"unknown note source": func(d *accountDocument) { d.Notes["x-1"] = noteEntry{Source: "x", ID: "1", Text: "x"} },
+		"negative entry order": func(d *accountDocument) {
+			d.Collected["k3x9q2:hn-1"] = collectedEntry{Source: "hn", ID: "1", Order: -1}
+		},
+		"oversized entry order": func(d *accountDocument) {
+			d.Collected["k3x9q2:hn-1"] = collectedEntry{Source: "hn", ID: "1", Order: maxOrder + 1}
+		},
 	}
 	for name, change := range invalid {
 		u = f.session(c)

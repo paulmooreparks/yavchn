@@ -6,11 +6,13 @@
   var pending = new Map();
   var recent = [];
   var sites = {
-    hn: { label: 'HN', icon: '/static/hn-favicon.svg' },
-    lobsters: { label: 'Lobsters', icon: '/static/lobsters-favicon.png' }
+    hn: { label: 'HN', name: 'Hacker News', icon: '/static/hn-favicon.svg' },
+    lobsters: { label: 'Lobsters', name: 'Lobsters', icon: '/static/lobsters-favicon.png' }
   };
 
-  function badge(site, iconOnly) {
+  // The site's mark in a reader's title bar: its icon, with its name for
+  // assistive technology, which hears it before the title.
+  function badge(site) {
     var span = document.createElement('span');
     span.className = 'reader-site';
     var img = document.createElement('img');
@@ -20,7 +22,7 @@
     img.width = img.height = 16;
     var label = document.createElement('span');
     label.textContent = site.label;
-    if (iconOnly) label.className = 'visually-hidden';
+    label.className = 'visually-hidden';
     span.append(img, label);
     span.title = site.label;
     return span;
@@ -36,27 +38,26 @@
       if (old) old.remove();
       var title = win.querySelector('.win-title');
       if (site) {
-        var mark = badge(site, true);
+        var mark = badge(site);
         mark.id = 'win-' + key + '-site';
         head.insertBefore(mark, title);
         win.setAttribute('aria-labelledby', mark.id + ' ' + title.id);
       } else win.setAttribute('aria-labelledby', title.id);
-      /* A reader's tab shows its site before the title PUDL draws. The
-         badge goes beside PUDL's own parts of the tab and leaves them be,
-         since PUDL keeps and updates those parts (0.69.3). */
-      document.querySelectorAll('[data-win-tab="' + CSS.escape(key) + '"]').forEach(function (tab) {
-        var had = tab.querySelector(':scope > .reader-site');
-        if (had) had.remove();
-        if (site) {
-          var mark = badge(site);
-          var name = tab.querySelector(':scope > .win-item-title');
-          if (name) tab.insertBefore(mark, name); else tab.prepend(mark);
-          tab.setAttribute('data-reader-source', root.dataset.storySource);
-        } else {
-          tab.removeAttribute('data-reader-source');
-        }
-      });
+      /* PUDL draws the site's picture on the reader's taskbar button, its
+         dock tab and every list of windows (0.96.3), and stacks the readers
+         of one site when the taskbar runs short (0.95.0). The server writes
+         these for the first page; a reader that changes site follows here. */
+      setAttr(win, 'data-win-icon', site && site.icon);
+      setAttr(win, 'data-win-group', site && root.dataset.storySource);
+      setAttr(win, 'data-win-group-label', site && site.name);
     });
+  }
+
+  // Sets or clears an attribute only when it changes, since PUDL redraws
+  // the window's taskbar button on each change.
+  function setAttr(el, name, value) {
+    if (value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+    else if (el.hasAttribute(name)) el.removeAttribute(name);
   }
 
   function remember(key) {
@@ -178,12 +179,6 @@
   });
   document.addEventListener('yavchn:rows-appended', syncRows);
   lib.onList(syncRows);
-  // PUDL also rebuilds dock tabs for placement policies and title changes.
-  // Observe the dock's direct children so decorating a tab does not retrigger us.
-  var taskDock = document.querySelector('[data-win-dock]');
-  if (taskDock) new MutationObserver(function () {
-    syncChrome();
-  }).observe(taskDock, { childList: true });
   window.addEventListener('popstate', function () {
     mounted.forEach(function (entry, key) {
       if (entry.root.isConnected) {

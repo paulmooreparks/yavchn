@@ -89,15 +89,24 @@
   renderList();
   document.addEventListener('pudl:window-open', renderList);
 
-  // For the story applet's menu, which blocks the site of the story in front.
+  // For the story applet's and the rows' menus, which block a story's site.
+  // A site newly blocked this way offers Undo in a toast (PUDL 0.90.0);
+  // the Blocked domains list in Settings is the lasting way back.
   window.yavchn.hiding = window.yavchn.hiding || {};
   window.yavchn.hiding.blockDomain = function (host) {
     var d = normalize(host);
     if (!d) return;
     var arr = load();
-    if (arr.indexOf(d) < 0) { arr.push(d); save(arr); }
+    if (arr.indexOf(d) >= 0) return;
+    arr.push(d);
+    save(arr);
     renderList();
     changed();
+    if (window.pudlToast) window.pudlToast(d + ' is blocked across all feeds. Choose Undo to unblock it.', { action: { label: 'Undo', run: function () {
+      save(load().filter(function (x) { return x !== d; }));
+      renderList();
+      changed();
+    } } });
   };
 
   window.addEventListener('storage', function (e) {

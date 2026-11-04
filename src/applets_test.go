@@ -77,6 +77,20 @@ func TestRender_PinnedFilters(t *testing.T) {
 	if !strings.Contains(get(t, mux, "/hn/").Body.String(), `<div class="md-chips" data-region="chips">`) {
 		t.Error("every list needs the chips region, empty or not, for region swaps")
 	}
+	// The reader's own order belongs to Pinned and to one collection, and
+	// offers Arrange; several collections, and Notes, have no such order.
+	own := get(t, mux, "/pinned/?sort=own").Body.String()
+	if !strings.Contains(own, `data-pin-sort="own"`) || !strings.Contains(own, `aria-label="Order: Your order"`) || !strings.Contains(own, `data-arrange`) {
+		t.Error("Pinned did not take its own order")
+	}
+	if b := get(t, mux, "/collections/?c=abcdef123456&sort=own").Body.String(); !strings.Contains(b, `data-pin-sort="own"`) || !strings.Contains(b, `data-arrange`) {
+		t.Error("one collection did not take its own order")
+	}
+	for _, path := range []string{"/collections/?c=abcdef123456&c=bcdefa123456&sort=own", "/collections/?sort=own", "/notes/?sort=own"} {
+		if b := get(t, mux, path).Body.String(); !strings.Contains(b, `data-pin-sort=""`) || strings.Contains(b, `data-arrange`) || strings.Contains(b, `Your order`) {
+			t.Errorf("%s offered an own order it cannot keep", path)
+		}
+	}
 }
 
 func TestRender_LookupWindow(t *testing.T) {

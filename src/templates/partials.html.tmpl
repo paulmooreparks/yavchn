@@ -41,6 +41,10 @@
       var old = localStorage.getItem('yavchn-theme');
       localStorage.setItem('pudl-theme', old === 'light' || old === 'dark' ? old : 'system');
     }
+    /* The colour theme chosen in Settings, which YAVCHN keeps, applied
+       before the first paint. PUDL's skin script keeps the style. */
+    var palette = localStorage.getItem('yavchn-palette');
+    if (palette === 'bevel' || palette === 'gel' || palette === 'glaze') document.documentElement.setAttribute('data-palette', palette);
     /* The article's share of a story window, applied before the first
        paint so the split never jumps. */
     var h = localStorage.getItem('yavchn-article-h');
@@ -55,6 +59,15 @@
 <script src="{{ asset "/static/pudl/min/pudl-theme.js" }}"></script>
 <link rel="stylesheet" href="{{ asset "/static/pudl/min/pudl.css" }}">
 <link rel="stylesheet" href="{{ asset "/static/pudl/min/pudl-windows.css" }}">
+{{/* PUDL's admitted skins and colour themes. Each applies only while the
+     root selects it, so all are loaded and switching costs no request.
+     pudl-skins.js runs once they have loaded, registers the skins and
+     applies the reader's saved choice before the first paint. */}}
+{{ range skins }}{{ if .Stylesheet }}<link rel="stylesheet" href="{{ asset (print "/static/pudl/min/" .Stylesheet) }}" data-pudl-skin="{{ .ID }}">
+{{ end }}{{ end }}<link rel="stylesheet" href="{{ asset "/static/pudl/min/pudl-theme-bevel.css" }}">
+<link rel="stylesheet" href="{{ asset "/static/pudl/min/pudl-theme-gel.css" }}">
+<link rel="stylesheet" href="{{ asset "/static/pudl/min/pudl-theme-glaze.css" }}">
+<script src="{{ asset "/static/pudl/min/pudl-skins.js" }}"></script>
 <link rel="stylesheet" href="{{ asset "/static/style.css" }}">
 {{ end }}
 
@@ -112,10 +125,25 @@
             <li><button type="button" commandfor="filters-dialog" command="show-modal">Blocked domains across feeds</button></li>
             <li>-</li>
             <li>Theme
-              <ul>
+              <ul data-menu-radio>
                 <li><button type="button" data-theme-choice="light" aria-checked="false">Light</button></li>
                 <li><button type="button" data-theme-choice="dark" aria-checked="false">Dark</button></li>
                 <li><button type="button" data-theme-choice="system" aria-checked="false">Follow the system</button></li>
+              </ul>
+            </li>
+            {{/* The same choices as Settings' Style and Colours cards. */}}
+            <li>Style
+              <ul data-menu-radio>
+                {{ range skins }}<li><button type="button" data-skin-choice="{{ .ID }}" aria-checked="false">{{ .Label }}</button></li>
+                {{ end }}
+              </ul>
+            </li>
+            <li>Colours
+              <ul data-menu-radio>
+                <li><button type="button" data-palette-choice="standard" aria-checked="false">Standard</button></li>
+                <li><button type="button" data-palette-choice="bevel" aria-checked="false">Bevel</button></li>
+                <li><button type="button" data-palette-choice="gel" aria-checked="false">Gel</button></li>
+                <li><button type="button" data-palette-choice="glaze" aria-checked="false">Glaze</button></li>
               </ul>
             </li>
           </ul>
@@ -266,7 +294,7 @@
 {{/* One story window, the same markup whether the page renders it for
      its address or /window/{key} returns it. */}}
 {{ define "window" }}
-<section class="win {{ if .App }}app-win app-win-{{ .App.Kind }}{{ else }}story-win{{ end }}{{ if .Active }} active{{ end }}" data-win="{{ .Key }}"{{ if .App }} data-win-glyph="{{ if .IconGlyph }}{{ .IconGlyph }}{{ else }}app{{ end }}"{{ end }}{{ if .ContentSized }} data-win-size="content"{{ end }} data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }}{{ if not .App }} data-win-narrow="maximized"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="{{ if and (not .App) .Source }}win-{{ .Key }}-site {{ end }}win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
+<section class="win {{ if .App }}app-win app-win-{{ .App.Kind }}{{ else }}story-win{{ end }}{{ if .Active }} active{{ end }}" data-win="{{ .Key }}"{{ if .App }} data-win-glyph="{{ if .IconGlyph }}{{ .IconGlyph }}{{ else }}app{{ end }}"{{ end }}{{ if .ContentSized }} data-win-size="content"{{ end }} data-win-mode="{{ .Mode }}"{{ if .Edge }} data-win-edge="{{ .Edge }}"{{ end }}{{ if .Style }} style="{{ .Style }}"{{ end }}{{ if not .App }} data-win-narrow="maximized"{{ end }}{{ if .App }}{{ else if eq .Source "hn" }} data-win-icon="/static/hn-favicon.svg" data-win-group="hn" data-win-group-label="Hacker News"{{ else if eq .Source "lobsters" }} data-win-icon="/static/lobsters-favicon.png" data-win-group="lobsters" data-win-group-label="Lobsters"{{ end }} data-win-min="360,260" role="dialog" aria-labelledby="{{ if and (not .App) .Source }}win-{{ .Key }}-site {{ end }}win-{{ .Key }}-title"{{ if .Hidden }} hidden{{ end }}>
   <header class="win-head">
     {{ if and (not .App) .Source }}<span class="reader-site" id="win-{{ .Key }}-site">{{ template "sourceicon" .Source }}<span class="visually-hidden">{{ if eq .Source "hn" }}HN{{ else if eq .Source "lobsters" }}Lobsters{{ else }}{{ .Source }}{{ end }}</span></span>{{ end }}
     <h2 class="win-title" id="win-{{ .Key }}-title">{{ .Title }}</h2>
@@ -409,6 +437,7 @@
 <script src="{{ asset "/static/pudl/min/pudl-toast.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/min/pudl-fields.js" }}" defer></script>
 <script src="{{ asset "/static/pudl/min/pudl-combo.js" }}" defer></script>
+<script src="{{ asset "/static/pudl/min/pudl-reorder.js" }}" defer></script>
 <script src="{{ asset "/static/migration.js" }}" defer></script>
 <script src="{{ asset "/static/desktop.js" }}" defer></script>
 <script src="{{ asset "/static/views.js" }}" defer></script>

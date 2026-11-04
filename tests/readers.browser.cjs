@@ -43,12 +43,22 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await touchPage.getByRole('menuitem', { name: /Back/ }).tap();
     await touchContext.close();
     const story = (key, article) => page.waitForFunction(([k, a]) => document.querySelector(`.win[data-win="${k}"] .story`)?.dataset.storyKey === a, [key, article]);
+    // A reader shows its site's mark in its title bar, and PUDL draws the
+    // site's picture on its taskbar button and groups it with the site's
+    // other readers.
     const siteBadge = async (key, source, label) => {
-      await page.waitForFunction(([k, s]) => document.querySelector(`[data-win-tab="${k}"]`)?.getAttribute('data-reader-source') === s, [key, source]);
+      const icon = source === 'hn' ? '/static/hn-favicon.svg' : '/static/lobsters-favicon.png';
+      await page.waitForFunction(([k, s]) => document.querySelector(`[data-win="${k}"]`)?.getAttribute('data-win-group') === s, [key, source]);
+      assert.equal(await page.locator(`[data-win="${key}"]`).getAttribute('data-win-icon'), icon);
       assert.equal(await page.locator(`[data-win="${key}"] .win-head .reader-site .visually-hidden`).count(), 1);
       assert.equal((await page.locator(`[data-win="${key}"] .win-head .reader-site`).textContent()).trim(), label);
-      assert.equal((await page.locator(`[data-win-tab="${key}"] .reader-site`).innerText()).trim(), label);
-      await page.waitForFunction(k => [...document.querySelectorAll(`[data-win="${k}"] .reader-site img, [data-win-tab="${k}"] .reader-site img`)].every(img => img.complete && img.naturalWidth > 0), key);
+      await page.waitForFunction(([k, i]) => document.querySelector(`[data-win-tab="${k}"] .win-item-icon`)?.getAttribute('src') === i, [key, icon]);
+      await page.waitForFunction(k => [...document.querySelectorAll(`[data-win="${k}"] .reader-site img, [data-win-tab="${k}"] .win-item-icon`)].every(img => img.complete && img.naturalWidth > 0), key);
+    };
+    const noSite = async key => {
+      await page.waitForFunction(k => !document.querySelector(`[data-win="${k}"]`)?.hasAttribute('data-win-icon'), key);
+      assert.equal(await page.locator(`[data-win="${key}"] .reader-site, [data-win-tab="${key}"] .win-item-icon`).count(), 0);
+      assert.equal(await page.locator(`[data-win="${key}"]`).getAttribute('data-win-group'), null);
     };
     await page.waitForFunction(() => [...document.querySelectorAll('.source-seg .source-icon')].filter(img => img.complete && img.naturalWidth > 0).length === 2);
     assert.equal(await page.locator('.source-seg [data-source="pinned"] .source-glyph-pin').count(), 1);
@@ -234,13 +244,13 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     await page.getByRole('menuitem', { name: 'New reader window', exact: true }).click();
     await page.locator('[data-win="reader-4"]').waitFor();
     assert.match(await page.locator('[data-win="reader-4"]').innerText(), /Select an article/);
-    assert.equal(await page.locator('[data-win="reader-4"] .reader-site, [data-win-tab="reader-4"] .reader-site').count(), 0);
+    await noSite('reader-4');
     await clickRow('1');
     await story('reader-4', 'hn-1');
     await siteBadge('reader-4', 'hn', 'HN');
     await page.goBack();
     await page.waitForFunction(() => !document.querySelector('[data-win="reader-4"] .story')?.dataset.storyKey);
-    assert.equal(await page.locator('[data-win="reader-4"] .reader-site, [data-win-tab="reader-4"] .reader-site').count(), 0);
+    await noSite('reader-4');
     await page.goForward();
     await story('reader-4', 'hn-1');
     await page.evaluate(() => window.pudlWindows.close('reader-4'));
@@ -644,6 +654,78 @@ const { chromium } = require(process.env.YAVCHN_PLAYWRIGHT || 'playwright');
     assert.equal(await page.locator('.md-layout').getAttribute('data-md-side'), null);
     assert.ok(await listLeft() < 100);
     assert.equal(await page.locator('.win[data-win="settings"] .settings-side-form button[value="start"]').getAttribute('aria-pressed'), 'true');
+
+    // Settings chooses PUDL's style and colours, which apply at once and
+    // before the first paint of the next page.
+    const look = page.locator('.win[data-win="settings"] [data-settings]');
+    await look.locator('[data-setting="skin"][value="ink"]').click();
+    assert.equal(await page.locator('html').getAttribute('data-skin'), 'ink');
+    assert.equal(await look.locator('[data-setting="skin"][value="ink"]').getAttribute('aria-pressed'), 'true');
+    await look.locator('[data-setting="palette"][value="gel"]').click();
+    assert.equal(await page.locator('html').getAttribute('data-palette'), 'gel');
+    await page.reload();
+    await page.locator('.win[data-win="settings"] [data-settings]').waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-skin') + ' ' + document.documentElement.getAttribute('data-palette')), 'ink gel');
+    assert.equal(await look.locator('[data-setting="palette"][value="gel"]').getAttribute('aria-pressed'), 'true');
+    // View > Style and View > Colours choose the same, and Settings follows.
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Style', exact: true }).click();
+    assert.equal(await page.getByRole('menuitemradio', { name: 'Ink', exact: true }).getAttribute('aria-checked'), 'true');
+    await page.getByRole('menuitemradio', { name: 'Matte', exact: true }).click();
+    assert.equal(await page.locator('html').getAttribute('data-skin'), 'matte');
+    assert.equal(await look.locator('[data-setting="skin"][value="matte"]').getAttribute('aria-pressed'), 'true');
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Colours', exact: true }).click();
+    await page.getByRole('menuitemradio', { name: 'Bevel', exact: true }).click();
+    assert.equal(await page.locator('html').getAttribute('data-palette'), 'bevel');
+    assert.equal(await look.locator('[data-setting="palette"][value="bevel"]').getAttribute('aria-pressed'), 'true');
+    await look.locator('[data-setting="skin"][value="standard"]').click();
+    await look.locator('[data-setting="palette"][value="standard"]').click();
+    assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-skin') + ' ' + document.documentElement.hasAttribute('data-palette')), 'standard false');
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Colours', exact: true }).click();
+    assert.equal(await page.getByRole('menuitemradio', { name: 'Standard', exact: true }).getAttribute('aria-checked'), 'true');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+
+    // Hiding a story offers Undo; stories hidden while the toast shows join
+    // it, and Undo brings them all back.
+    await page.goto(process.argv[2] + '/hn/?view=window');
+    await page.waitForFunction(() => window.yavchn.readers && window.pudlToast);
+    await page.locator('#row-hn-1 .story-hide').click();
+    await page.locator('.toast').filter({ hasText: 'Story hidden.' }).waitFor();
+    await page.locator('#row-hn-2 .story-hide').click();
+    await page.locator('.toast').filter({ hasText: '2 stories hidden.' }).waitFor();
+    await page.waitForFunction(() => document.querySelectorAll('.toast:not(.leaving) .toast-action').length === 1);
+    await page.locator('.toast:not(.leaving)').getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.waitForFunction(() => !document.querySelector('#row-hn-1.dismissed, #row-hn-2.dismissed'));
+    // Blocking a story's site offers Undo too.
+    await page.evaluate(() => window.yavchn.hiding.blockDomain('undo.example'));
+    await page.locator('.toast').filter({ hasText: 'undo.example is blocked across all feeds.' }).getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.waitForFunction(() => JSON.parse(window.yavchnStorage.getItem('yavchn-blocked-domains') || '[]').indexOf('undo.example') < 0);
+
+    // In Pinned's own order the stories are arranged by hand, by a grip and
+    // its keys, and the order is kept.
+    await page.evaluate(() => {
+      const pins = {};
+      [['1', 30], ['2', 20], ['3', 10]].forEach(([id, at]) => { pins[id] = { source: 'hn', title: 'Pin ' + id, url: '', host: '', by: '', score: 0, comments: 0, pinned_at: at }; });
+      window.yavchnStorage.setItem('yavchn-pinned', JSON.stringify(pins));
+    });
+    await page.goto(process.argv[2] + '/pinned/?sort=own');
+    const order = () => page.locator('.stories .story-row').evaluateAll(rows => rows.map(r => r.dataset.id).join(','));
+    await page.waitForFunction(() => document.querySelectorAll('.stories .story-row').length === 3);
+    assert.equal(await order(), '1,2,3');
+    const arrange = page.getByRole('button', { name: 'Arrange', exact: true });
+    await arrange.click();
+    await page.getByRole('button', { name: 'Done', exact: true }).waitFor();
+    await page.locator('#row-hn-1 .reorder-grip').focus();
+    await page.keyboard.press('ArrowDown');
+    await page.waitForFunction(() => [...document.querySelectorAll('.stories .story-row')].map(r => r.dataset.id).join(',') === '2,1,3');
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await arrange.waitFor();
+    await page.reload();
+    await page.waitForFunction(() => document.querySelectorAll('.stories .story-row').length === 3);
+    assert.equal(await order(), '2,1,3');
     assert.deepEqual(errors, []);
     await nojs.close();
     console.log('Reader creation, per-site reuse, docking, minimization, duplicates, independent scroll positions, history, reload, list navigation and no-JS links passed.');

@@ -71,6 +71,51 @@
   document.addEventListener('pudl:theme-change', syncTheme);
   syncTheme();
 
+  /* === Style and colours =================================================
+     View > Style and View > Colours choose what Settings' cards choose:
+     PUDL's skin, which pudl-skins.js keeps, and its companion colours,
+     which YAVCHN keeps under yavchn-palette, as PUDL leaves them to the
+     host. The head script applies the colours before the first paint. */
+  var PALETTES = ['standard', 'bevel', 'gel', 'glaze'];
+  function palette() {
+    var p = document.documentElement.getAttribute('data-palette');
+    return PALETTES.indexOf(p) > 0 ? p : 'standard';
+  }
+  function showPalette(p) {
+    if (PALETTES.indexOf(p) > 0) document.documentElement.setAttribute('data-palette', p);
+    else document.documentElement.removeAttribute('data-palette');
+    document.dispatchEvent(new CustomEvent('yavchn:palette-change'));
+  }
+  function setPalette(p) {
+    if (PALETTES.indexOf(p) < 0) return;
+    showPalette(p);
+    try { localStorage.setItem('yavchn-palette', p); } catch (e) {}
+  }
+  window.yavchn.palette = { get: palette, set: setPalette };
+  window.addEventListener('storage', function (e) { if (e.key === 'yavchn-palette') showPalette(e.newValue); });
+  function syncLook() {
+    var skin = window.pudlSkins ? window.pudlSkins.current() : 'standard', p = palette();
+    document.querySelectorAll('[data-skin-choice]').forEach(function (b) {
+      b.setAttribute('aria-checked', String(b.getAttribute('data-skin-choice') === skin));
+    });
+    document.querySelectorAll('[data-palette-choice]').forEach(function (b) {
+      b.setAttribute('aria-checked', String(b.getAttribute('data-palette-choice') === p));
+    });
+  }
+  document.addEventListener('pudl:skin-change', syncLook);
+  document.addEventListener('yavchn:palette-change', syncLook);
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-skin-choice], [data-palette-choice]');
+    if (!b) return;
+    if (b.hasAttribute('data-skin-choice')) {
+      if (window.pudlSkins && !window.pudlSkins.select(b.getAttribute('data-skin-choice')) && window.pudlToast) {
+        window.pudlToast('That style could not be loaded, so the standard style is showing.', { kind: 'warn' });
+      }
+    } else setPalette(b.getAttribute('data-palette-choice'));
+    syncLook();
+  });
+  syncLook();
+
   /* === Hiding the story list =========================================== */
   var layout = document.querySelector('.md-layout');
   var mobileWindows = null;

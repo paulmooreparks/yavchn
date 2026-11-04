@@ -11,7 +11,12 @@
       root.querySelectorAll('[data-settings-js]').forEach(function (el) { el.disabled = false; });
       mark(root, '[data-setting="theme"]', window.pudlThemePreference());
       mark(root, '[data-setting="sort"]', window.yavchn.sort.get());
+      mark(root, '[data-setting="skin"]', window.pudlSkins ? window.pudlSkins.current() : 'standard');
+      mark(root, '[data-setting="palette"]', window.yavchn.palette.get());
     });
+    // The style and colour choices fold into pop-up buttons on a phone,
+    // which PUDL builds for a segmented control it has not seen yet.
+    if (window.pudlMenu && window.pudlMenu.refresh) window.pudlMenu.refresh();
   }
   function status(root, text) { root.querySelector('.settings-status').textContent = text; }
   async function saveView(form, value) {
@@ -42,6 +47,11 @@
     if (!root) return;
     if (button.dataset.setting === 'theme') { window.pudlSetTheme(button.value); status(root, 'Theme saved.'); }
     if (button.dataset.setting === 'sort') { window.yavchn.sort.set(button.value); status(root, 'Comment order saved.'); }
+    if (button.dataset.setting === 'skin' && window.pudlSkins) {
+      status(root, window.pudlSkins.select(button.value) ? 'Style saved.' : 'That style could not be loaded, so the standard style is showing.');
+      sync();
+    }
+    if (button.dataset.setting === 'palette') { window.yavchn.palette.set(button.value); status(root, 'Colours saved.'); }
   });
   document.addEventListener('submit', function (e) {
     if (!e.target.matches('.settings-side-form') || !e.submitter) return;
@@ -58,6 +68,8 @@
   });
   document.addEventListener('pudl:window-open', sync);
   document.addEventListener('pudl:theme-change', sync);
+  document.addEventListener('pudl:skin-change', sync);
+  document.addEventListener('yavchn:palette-change', sync);
   document.addEventListener('yavchn:sort-change', sync);
   sync();
 })();
