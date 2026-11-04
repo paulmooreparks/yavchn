@@ -119,11 +119,11 @@
 .win[data-win-size="content"] { padding: 0; }
 .win[data-win-size="content"] .win-head {
   border-width: 0 0 1px;
-  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  border-radius: max(0px, calc(var(--radius) - 1px)) max(0px, calc(var(--radius) - 1px)) 0 0;
 }
 .win[data-win-size="content"] .win-body {
   border: 0;
-  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
+  border-radius: 0 0 max(0px, calc(var(--radius) - 1px)) max(0px, calc(var(--radius) - 1px));
 }
 .win[data-win-size="content"] > .win-rh,
 .win[data-win-size="content"] .win-head [data-win-action="maximize"],
@@ -193,7 +193,7 @@
 .win-splitter[aria-orientation="horizontal"]::before { inset: calc((100% - 3px) / 2) 0; }
 .win-splitter:hover::before, .win-splitter.dragging::before, .win-splitter:focus-visible::before { background: var(--accent); }
 .win-splitter:focus-visible { outline: none; }
-.win-splitter:focus-visible::before { box-shadow: 0 0 0 3px var(--focus-ring); }
+.win-splitter:focus-visible::before { box-shadow: 0 0 0 var(--focus-ring-width, 3px) var(--focus-ring); }
 .win-splitter-cross {
   left: calc(var(--dock-left, 0px) + var(--split-x) * (100% - var(--dock-left, 0px) - var(--dock-right, 0px)) - var(--split-target));
   top: calc(var(--dock-top, 0px) + var(--split-y) * (100% - var(--dock-top, 0px) - var(--dock-bottom, 0px)) - var(--split-target));
@@ -268,12 +268,16 @@
    tabs do; the chosen one reaches the foot and opens the rule (0.89.5). */
 .win-dock-entry[data-selected] { background: var(--surface); padding-top: 3px; box-shadow: none; border-color: var(--border); margin-bottom: 0; }
 .win-dock-entry > [role="tab"]:not(.icon-btn) { display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 5px 8px; border: 0; border-radius: inherit; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.win-dock-menu { position: absolute; width: 18px; height: 18px; padding: 0; border: 1px solid var(--raise-border); border-radius: 50%; background: var(--raise-grad); box-shadow: var(--raise-shadow); color: var(--text); cursor: pointer; }
+.win-dock-menu { position: absolute; width: 18px; height: 18px; padding: 0; border: 1px solid var(--raise-border); border-radius: var(--dismiss-radius, 50%); background: var(--raise-grad); box-shadow: var(--raise-shadow); color: var(--text); cursor: pointer; }
 .win-dock-menu::before { content: ''; display: block; width: 10px; height: 10px; margin: auto; background: currentColor; mask: var(--glyph-caret) center / contain no-repeat; }
 .win-dock-menu:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .win-dock-entry > button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .win-dock-tablist .win-item-title { max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
 .win-dock-toggle { flex: none; align-self: flex-start; margin: 4px; }
+/* The More button stands at the strip's end, before the collapse button,
+   while any tab is outside the strip (0.97.7). */
+.win-dock-more { flex: none; align-self: flex-start; margin: 4px; }
+.win-dock-more + .win-dock-toggle { margin-inline-start: 0; }
 .win[data-win-dock-shared]:is([data-win-edge="left"], [data-win-edge="right"]):not([data-win-dock-peek]) {
   top: calc(var(--dock-top, 0px) + 40px);
   height: calc(100% - var(--dock-top, 0px) - var(--dock-bottom, 0px) - 40px);
@@ -299,7 +303,7 @@
 .win-dock-group[data-dock-rail] .doc-tab-close { display: none; }
 .win-dock-group[data-dock-rail] .win-item-attention { position: absolute; top: 0; right: 0; padding: 0 3px; font-size: var(--text-2xs); }
 .win-dock-group[data-dock-rail] .win-item-attention::before { display: none; }
-.win-dock-group[data-dock-rail] .win-item-running { position: absolute; bottom: 2px; right: 2px; }
+.win-dock-group[data-dock-rail] .win-item-state { position: absolute; bottom: 2px; inset-inline-end: 2px; }
 .win[data-win-dock-peek] {
   top: var(--dock-top, 0px);
   height: calc(100% - var(--dock-top, 0px) - var(--dock-bottom, 0px));
@@ -415,11 +419,50 @@
    words are drawn further toward the text colour than an ordinary badge's
    so that they keep 4.5:1 on every one of them, in both themes. */
 .win-item-attention.badge:is(.warn, .danger, .positive, .accent) { color: color-mix(in srgb, var(--badge-color) 40%, var(--text)); }
-.win-item-running { display: inline-block; flex: none; width: 8px; height: 8px; border: 1px solid currentColor; border-radius: 50%; background: var(--positive); }
+/* Reserve the execution slot even before a window has a state. */
+.win-item-state { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 16px; width: 16px; }
+.win-state { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; max-width: 100%; }
+.win-state-words { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.win-state > .glyph { --glyph-size: 16px; flex: 0 0 16px; }
+.win-state[data-state="working"] { color: color-mix(in srgb, var(--accent) 40%, var(--text)); }
+.win-state[data-state="waiting"] { color: color-mix(in srgb, var(--warn) 40%, var(--text)); }
+.win-state[data-state="stuck"] { color: color-mix(in srgb, var(--danger) 40%, var(--text)); }
+.win-state[data-state="idle"] { color: var(--text-muted); }
+.win-item-state .win-state-words, .win-execution .win-state-words { display: none; }
+.win-status.win-execution { box-sizing: border-box; width: 24px; min-width: 24px; height: 22px; padding: 0; justify-content: center; background: var(--surface); }
+/* A stack row's state is the execution-state badge (0.96.4), at the row's
+   end before Close, in a column of fixed width so a change of state moves
+   nothing else in the row. */
+.win-stack-link .win-item-state { flex: none; width: var(--win-stack-state, auto); max-width: 50%; justify-content: end; }
+.win-stack-link .win-state-words { display: block; }
+.win-state.badge { gap: var(--space-1); }
+.win-state.badge > .glyph { display: none; }
+.win-state.badge:is([data-state="working"], [data-state="waiting"], [data-state="stuck"], [data-state="idle"]) { color: color-mix(in srgb, var(--badge-color) 50%, var(--text)); }
+/* A lifecycle word is a plain badge with no glyph (0.96.5). */
+.win-state.badge[data-lifecycle] { color: var(--text); }
+/* The popover is a child of the window layer, which lets the pointer through to the content beneath it, so the popover takes the pointer back. */
+.win-status-popover { --win-status-row: max(22px, 1.5em); width: min(24rem, calc(100vw - 24px)); pointer-events: auto; }
+.win-status-popover li { min-height: var(--win-status-row); overflow-wrap: anywhere; }
+.win-status-popover .win-execution-row { display: flex; align-items: center; }
+/* The rows scroll in a region of their own, so Dismiss stays where it is:
+   the popover is a column that is never taller than the viewport, and the
+   region gives up height before the button does. A window that sets
+   data-win-status-rows reserves that many rows (and the gaps between
+   them), whatever it shows at the moment. */
+.win-status-popover:popover-open { display: flex; flex-direction: column; overflow: hidden; }
+.win-status-rows { flex: 0 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.win-status-popover[data-win-status-rows] .win-status-rows { flex-basis: calc(var(--win-status-count) * var(--win-status-row) + (var(--win-status-count) - 1) * var(--space-2)); }
+.win-status-popover > .btn { flex: none; align-self: start; margin-top: var(--space-2); }
+.win-status-popover li > .glyph { vertical-align: middle; margin-inline-end: var(--space-1); }
+@media (forced-colors: active) { .win-state[data-state] { forced-color-adjust: none; background: Canvas; color: CanvasText; } }
+
 .win-item-progress { font-size: var(--text-2xs); font-variant-numeric: tabular-nums; }
 .win-tab .win-item-glyph { flex: none; }
 .win-tab .win-item-title { overflow: hidden; text-overflow: ellipsis; }
-.win-tab:has(.win-item-glyph:not([hidden]))::before { display: none; }
+.win-tab:has(.win-item-glyph:not([hidden]), .win-item-icon)::before { display: none; }
+/* A window's picture (data-win-icon) stands where its glyph would, at the
+   glyph's size, on every surface that draws the mark. */
+.win-item-icon { flex: none; width: var(--glyph-size, 16px); height: var(--glyph-size, 16px); object-fit: contain; vertical-align: middle; }
 
 /* === Title bar ============================================================
    The title bar is what you drag, so it is raised. The active window's
@@ -431,20 +474,20 @@
   --win-text: var(--text-md);   /* the title's size, which the buttons and their glyphs are sized from */
   background: var(--raise-grad);
   border: 1px solid var(--raise-border);
-  border-radius: calc(var(--radius) - var(--win-band)) calc(var(--radius) - var(--win-band)) 0 0;
-  box-shadow: inset 0 1px color-mix(in srgb, var(--light) var(--lit), transparent);
+  border-radius: max(0px, calc(var(--radius) - var(--win-band))) max(0px, calc(var(--radius) - var(--win-band))) 0 0;
+  box-shadow: var(--surface-edge-shadow, inset 0 1px color-mix(in srgb, var(--light) var(--lit), transparent));
   cursor: move;
   user-select: none;
   touch-action: none;
 }
-.win-head:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.win-head:focus-visible { outline: none; box-shadow: 0 0 0 var(--focus-ring-width, 3px) var(--focus-ring); }
 .win.active .win-head {
   background: var(--win-active-bg);
   border-color: var(--win-active-border);
   box-shadow: var(--win-active-shadow);
   color: var(--win-active-fg);
 }
-.win.active .win-head:focus-visible { box-shadow: var(--win-active-shadow), 0 0 0 3px var(--focus-ring); }
+.win.active .win-head:focus-visible { box-shadow: var(--win-active-shadow), 0 0 0 var(--focus-ring-width, 3px) var(--focus-ring); }
 /* The title is usually a heading, so it resets what a page's own heading
    styles might give it. */
 .win-title {
@@ -481,7 +524,7 @@
 .win-statuses[data-win-status-compact] > .win-status { display: none; }
 .win-statuses:not([data-win-status-compact]) > .win-status-toggle { display: none; }
 .win-status-popover { color: var(--text); }
-.win-status-popover ul { margin: 0; padding-inline-start: 1.25em; }
+.win-status-popover ul { margin: 0; padding: 0; list-style: none; }
 .win-status-popover li + li { margin-top: var(--space-2); }
 .win-bar > .win-bar-arrange { flex: none; }
 .win-bar-arrange::before { content: ''; width: 14px; height: 14px; background: currentColor; -webkit-mask: var(--glyph-sort) center / contain no-repeat; mask: var(--glyph-sort) center / contain no-repeat; }
@@ -504,7 +547,7 @@
 .win-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: var(--win-button-size, calc(var(--win-text, var(--text-md)) * 2)); height: var(--win-button-size, calc(var(--win-text, var(--text-md)) * 2)); padding: 0; flex-shrink: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--win-button-radius, var(--radius-sm));
   border: 1px solid var(--raise-border);
   background: var(--raise-grad);
   box-shadow: var(--raise-shadow);
@@ -515,7 +558,8 @@
 }
 .win-btn:hover { color: var(--text); background: var(--raise-grad-hover); border-color: var(--raise-border-hover); }
 .win-btn:active { background: var(--raise-active-bg); box-shadow: var(--raise-active-shadow); }
-.win-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.win-btn:focus-visible { outline: none; box-shadow: 0 0 0 var(--focus-ring-width, 3px) var(--focus-ring); }
+.win.active > .win-head .win-btn:focus-visible { box-shadow: var(--win-chrome-focus-shadow, 0 0 0 var(--focus-ring-width, 3px) var(--focus-ring)); }
 .win-btn[data-win-action="close"]:hover { color: var(--danger); }
 
 /* The glyphs come from here, drawn from pudl.css's glyph masks, so the
@@ -560,14 +604,14 @@
   background: var(--raise-grad); box-shadow: var(--raise-shadow);
 }
 .win-snap .win-snap-zone:hover { background: var(--raise-grad-hover); border-color: var(--raise-border-hover); }
-.win-snap .win-snap-zone:focus-visible { background: var(--raise-grad-hover); box-shadow: var(--raise-shadow), 0 0 0 3px var(--focus-ring); }
+.win-snap .win-snap-zone:focus-visible { background: var(--raise-grad-hover); box-shadow: var(--raise-shadow), 0 0 0 var(--focus-ring-width, 3px) var(--focus-ring); }
 .win-snap .win-snap-zone:active { background: var(--raise-active-bg); box-shadow: var(--raise-active-shadow); }
 .win-snap .win-snap-zone[aria-current="true"] {
   background: var(--accent); border-color: var(--accent-hover);
-  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--shade) calc(var(--depth) * 2), transparent);
+  box-shadow: var(--snap-current-shadow, inset 0 1px 3px color-mix(in srgb, var(--shade) calc(var(--depth) * 2), transparent));
 }
 .win-snap .win-snap-zone[aria-current="true"]:focus-visible {
-  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--shade) calc(var(--depth) * 2), transparent), 0 0 0 3px var(--focus-ring);
+  box-shadow: var(--snap-current-shadow, inset 0 1px 3px color-mix(in srgb, var(--shade) calc(var(--depth) * 2), transparent)), 0 0 0 var(--focus-ring-width, 3px) var(--focus-ring);
 }
 @media (forced-colors: active) {
   .win-snap .win-snap-zone { border-color: ButtonText; }
@@ -596,7 +640,7 @@
   padding: 16px 18px;
   background: var(--surface);
   border: 1px solid var(--border); border-top: 0;
-  border-radius: 0 0 calc(var(--radius) - var(--win-band)) calc(var(--radius) - var(--win-band));
+  border-radius: 0 0 max(0px, calc(var(--radius) - var(--win-band))) max(0px, calc(var(--radius) - var(--win-band)));
 }
 /* Tabs that are a window's whole body fill it (0.71.0). The bar runs from
    edge to edge under the title bar, and the chosen panel takes the rest of
@@ -618,7 +662,7 @@
 
 /* The script makes the body a tab stop, so it can be scrolled from the
    keyboard. It is a large area, so its focus ring is drawn inside it. */
-.win-body:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--focus-ring); }
+.win-body:focus-visible { outline: none; box-shadow: inset 0 0 0 var(--focus-ring-width, 3px) var(--focus-ring); }
 .win[data-win-mode="maximized"] .win-body,
 .win[data-win-mode="left"] .win-body,
 .win[data-win-mode="right"] .win-body,
@@ -721,6 +765,9 @@
   background: var(--raise-grad);
   box-shadow: var(--raise-shadow);
   font-size: var(--text-xs); font-weight: 600;
+  /* A stack is a button, whose own line height is the browser's "normal";
+     inheriting makes it the line height a link in the same row has. */
+  line-height: inherit;
   color: var(--text); text-decoration: none;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -731,7 +778,7 @@
   mask: var(--glyph-circle) center / contain no-repeat;
 }
 .win-tab:hover { background: var(--raise-grad-hover); border-color: var(--raise-border-hover); }
-.win-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.win-tab:focus-visible { outline: none; box-shadow: 0 0 0 var(--focus-ring-width, 3px) var(--focus-ring); }
 .win-tab[aria-current="true"] { background: var(--raise-active-bg); box-shadow: var(--raise-active-shadow); }
 /* A taskbar button whose window menu is open from a right-click keeps the
    hover look and an accent ring, pressed or not, until the menu closes. */
@@ -746,6 +793,32 @@
   -webkit-mask-image: var(--glyph-ring);
   mask-image: var(--glyph-ring);
 }
+
+.win-stack { cursor: pointer; font-family: inherit; }
+.win-stack::before { display: none; }
+.win-stack-count { flex: none; font-variant-numeric: tabular-nums; }
+.win-stack[aria-expanded="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The list has a menu's metrics (0.96.4): the panel sets its own text
+   size rather than taking the body's, and a row has a menu row's padding,
+   type and 14px glyph. */
+/* The list sizes to its longest title, up to a cap, as it opens (0.96.5),
+   and keeps that width while open, so Close stands still. A row is the
+   window's glyph, title and counts, then its state, then Close. The
+   state column is as wide as the widest badge in the list, which the
+   script measures into --win-stack-state, so every row's badge ends in
+   one line before Close and a row with no state keeps the column. The
+   title takes what is left and truncates last. */
+.win-stack-panel { position: fixed; inset: auto; margin: 0; padding: var(--space-2); width: fit-content; min-width: min(280px, calc(100vw - 8px)); max-width: min(560px, calc(100vw - 8px)); max-height: calc(100vh - 8px); overflow: auto; font-size: var(--text-sm); }
+.win-stack-row { display: flex; align-items: center; gap: var(--space-2); }
+.win-stack-link { display: flex; flex: 1; align-items: center; gap: var(--space-2); min-width: 0; padding: 6px 14px; font: var(--text-sm)/1.5 var(--font); color: var(--text); text-decoration: none; border-radius: var(--radius-sm); }
+.win-stack-main { display: flex; flex: 1; align-items: center; gap: var(--space-2); min-width: 0; }
+.win-stack-main .win-item-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.win-stack-link .win-item-glyph { --glyph-size: 14px; }
+.win-stack-link .win-item-icon { width: 14px; height: 14px; }
+.win-stack-link:hover { background: var(--surface-alt); }
+.win-stack-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.win-stack-close { flex: none; }
+.win-stack-section { margin: var(--space-2) 0; font-size: var(--text-sm); color: var(--text-muted); }
 
 /* === The taskbar (0.79.0) ================================================
    A .win-bar runs along the foot of the window area, or along its head
@@ -787,6 +860,20 @@
 .win-bar > .win-bar-more { flex: none; }
 .win-bar > .win-bar-more::before { width: 14px; height: 14px; -webkit-mask-image: var(--glyph-more); mask-image: var(--glyph-more); background: currentColor; }
 .win-bar[data-win-bar-compact] > .status-area .status-item > :not(.glyph, .badge, img, svg, .status-picture) { display: none; }
+/* A folding status area's folded items give way to its Status item
+   (0.97.0), whose glyph takes the most urgent tone among them. */
+.win-bar > .status-area > [data-status-folded] { display: none; }
+.status-fold[data-tone="stuck"] > .glyph, .status-fold[data-tone="danger"] > .glyph { color: var(--danger); }
+.status-fold[data-tone="waiting"] > .glyph, .status-fold[data-tone="warn"] > .glyph { color: var(--warn); }
+.status-fold[data-tone="working"] > .glyph, .status-fold[data-tone="accent"] > .glyph { color: var(--accent); }
+.status-fold[data-tone="positive"] > .glyph { color: var(--positive); }
+/* The Status item's badge stands as wide as its reserve, the widest text
+   it will show, with the reserve laid invisibly under the count, and a
+   blank badge keeps its room (0.97.4). */
+.status-fold > .badge[data-status-reserve] { display: inline-grid; justify-items: center; }
+.status-fold > .badge[data-status-reserve] > .status-fold-count, .status-fold > .badge[data-status-reserve]::after { grid-area: 1 / 1; }
+.status-fold > .badge[data-status-reserve]::after { content: attr(data-status-reserve); visibility: hidden; }
+.status-fold > .badge[data-status-blank] { visibility: hidden; }
 .win-bar [hidden] { display: none; }
 .win-bar .icon-btn > .glyph { --glyph-size: 16px; }
 .win-bar .icon-btn > :is(svg, img) { width: 16px; height: 16px; flex: none; object-fit: contain; }
@@ -825,11 +912,15 @@
     background: Highlight; color: HighlightText; border-color: Highlight;
   }
   .win.active .win-head .win-btn { forced-color-adjust: none; background: Canvas; color: CanvasText; }
+  .win-status.win-execution { forced-color-adjust: none; background: Canvas; color: CanvasText; }
+  .win-state > .glyph { forced-color-adjust: none; background: currentColor; }
   .win-ghost { border-color: Highlight; }
   /* The glyphs are masks, painted in the colour the system has set. */
   .win-btn[data-win-action]::before { forced-color-adjust: none; background: ButtonText; }
   .win-tab::before, .md-row-child .md-item::before { forced-color-adjust: none; background: CanvasText; }
-  .win-tab[aria-current="true"]::before { background: HighlightText; }
+  .win-tab[aria-current="true"]::before, .win-tab[aria-current="true"] .win-item-glyph { background: HighlightText; }
+  .win-stack[aria-current="true"] .win-item-attention { color: HighlightText; border-color: HighlightText; background: Highlight; }
+  .win-stack-link:focus-visible, .win-stack[aria-expanded="true"] { outline-color: Highlight; }
 }
 
 /* === Print ===============================================================
@@ -851,3 +942,5 @@
   .win.active .win-title { font-size: var(--text-lg); white-space: normal; }
   .win.active .win-body { overflow: visible; border: 0; padding: 0; }
 }
+
+.win-statuses[data-win-status-empty], .win-execution:has(> .win-state[hidden]) { visibility: hidden; }

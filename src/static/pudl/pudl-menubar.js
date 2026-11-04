@@ -258,8 +258,8 @@
       titles = [{ label: name, items: articleItems(src) }].concat(
         readList(src.nav.querySelector(':scope > ul') || document.createElement('ul')).filter(function (t) { return t.items; }));
     }
-    titles.forEach(function (t) { own(t.items, src); });
-    Object.keys(into).forEach(function (k) { own(into[k], src); });
+    titles.forEach(function (t) { own(t.items, src, ['title', t.id || t.label]); });
+    Object.keys(into).forEach(function (k) { own(into[k], src, ['into', k]); });
     return { kind: 'front', name: name, titles: titles, into: into, src: src };
   }
 
@@ -282,7 +282,7 @@
       if (c === '-') return '-';
       if (c && c.heading) return { heading: String(c.heading) };
       if (!c || typeof c.label !== 'string') return null;
-      var item = { label: c.label, run: c.run, disabled: !!c.disabled, danger: !!c.danger };
+      var item = { id: c.id != null ? String(c.id) : undefined, label: c.label, run: c.run, disabled: !!c.disabled, danger: !!c.danger };
       if (c.checked != null) item.checked = !!c.checked;
       if (c.radio != null) item.radio = String(c.radio);
       if (c.shortcut) item.shortcut = String(c.shortcut);
@@ -328,11 +328,15 @@
 
   /* The host's titles, with the front menu's additions, and the front
      menu, each command checked against the rules. */
-  function own(items, src) {
+  function own(items, src, path, disabled) {
     items.forEach(function (c) {
       if (!c || typeof c !== 'object') return;
       c.owner = src;
-      if (c.items) own(c.items, src);
+      /* A disabled parent disables everything under it, so a submenu opened
+         before the parent was disabled cannot invoke its old child. */
+      c.disabled = !!(disabled || c.disabled);
+      c.commandPath = (path || []).concat(c.id || c.label || c.heading);
+      if (c.items) own(c.items, src, c.commandPath, c.disabled);
     });
   }
 
@@ -485,9 +489,19 @@
       var title = w.node.querySelector('.win-title');
       var detail = (w.node.getAttribute('data-win-detail') || '').trim();
       var layer = document.querySelector('[data-win-layer]'), sep = (layer && layer.getAttribute('data-win-text-title-sep')) || ' · ';
-      result.push({ label: (i + 1) + '. ' + (title ? title.textContent.trim() : w.key) + (detail ? sep + detail : ''), checked: w.key === st.top && !st.min[w.key], run: function () {
+      var item = { label: (i + 1) + '. ' + (title ? title.textContent.trim() : w.key) + (detail ? sep + detail : ''), checked: w.key === st.top && !st.min[w.key], run: function () {
         if (w.node.isConnected && document.querySelector('.win[data-win="' + CSS.escape(w.key) + '"]') === w.node) api.raise(w.key);
-      } });
+      } };
+      /* The window's picture, as its taskbar button shows it (0.96.3). A
+         window with no picture, or whose picture failed, keeps the row as
+         it was. */
+      var src = api.iconOf ? api.iconOf(w.key) : '';
+      if (src) {
+        var img = document.createElement('img');
+        img.src = src; img.alt = ''; img.className = 'win-item-icon';
+        item.icon = [img];
+      }
+      result.push(item);
     });
     return result;
   }
@@ -705,6 +719,204 @@
     });
   }
 
+  /* Whether two rows are the same command, read at different times: a
+     contributed command by its source and menu path, any other by its id
+     or its label. */
+  function sameItem(a, b) {
+    if (!a || !b) return false;
+    if (a.owner || b.owner) return !!(a.owner && b.owner) && sameSource(a.owner, b.owner) && JSON.stringify(a.commandPath) === JSON.stringify(b.commandPath);
+    if (a.id || b.id) return a.id === b.id;
+    return a.label === b.label;
+  }
+
+  /* === An open menu through the page's updates ===========================
+     The page's updates draw the bar again: a command changing, a window
+     retitled, the bar rebuilt. An open menu, an open submenu beside it or
+     in its place, and an open ribbon dropdown are not closed and opened
+     again by that. Their rows are brought to the current commands in
+     place: a row whose command is still there is the same element, with
+     its words and state updated, so focus on it, the scroll and the
+     reader's place stay as they were, and only rows that came or went are
+     added or removed. When the focused command goes or is disabled, focus
+     moves to the first enabled row of the menu it was in. When that menu
+     goes, because its command went or was disabled, focus moves to its
+     row in the menu around it if that is enabled, else that menu's first
+     enabled row, else the title or tab the menu belongs to. Focus is never
+     put on a disabled control or one that has left the page, and focus the
+     reader moved out of the menu stays where it is. Only what the reader
+     does closes a menu, or its command or title going. */
+  function enabledRow(r) {
+    return !!r && r.isConnected && !r.disabled && r.getAttribute('aria-disabled') !== 'true' && r.getClientRects().length > 0;
+  }
+  function firstEnabled(host) { return host ? items(host).filter(function (r) { return !r._back && enabledRow(r); })[0] || null : null; }
+  /* Focus moved by the bar to a row it chose, shown: a panel whose rows
+     changed has its scroll put back by pudl-menu.js once this task is done
+     (__pudlKeepScroll), so the row is brought into sight after that. */
+  function focusShown(n) {
+    n.focus({ preventScroll: true });
+    queueMicrotask(function () { if (document.activeElement === n && n.scrollIntoView) n.scrollIntoView({ block: 'nearest' }); });
+  }
+  function rowTag(c) { return c.href != null && !c.items ? 'A' : 'BUTTON'; }
+
+  /* A row brought to its command's state now, as row() would draw it. */
+  var ROW_ATTRS = ['role', 'href', 'title', 'aria-checked', 'aria-disabled', 'aria-haspopup', 'aria-keyshortcuts', 'data-letter'];
+  function syncAttrs(to, from, names) {
+    names.forEach(function (n) {
+      var v = from.getAttribute(n);
+      if (v == null) { if (to.hasAttribute(n)) to.removeAttribute(n); }
+      else if (to.getAttribute(n) !== v) to.setAttribute(n, v);
+    });
+  }
+  function sameContent(a, b) {
+    var strip = function (h) { return h.replace(/ id="menubar-d\d+"/g, ''); };
+    return strip(a.innerHTML) === strip(b.innerHTML);
+  }
+  function updateRow(r, c) {
+    var fresh = row(c);
+    syncAttrs(r, fresh, ROW_ATTRS);
+    ['danger', 'menubar-has-sub'].forEach(function (k) { if (r.classList.contains(k) !== fresh.classList.contains(k)) r.classList.toggle(k); });
+    if (!c.items) r.removeAttribute('aria-expanded');
+    else if (!r.hasAttribute('aria-expanded')) r.setAttribute('aria-expanded', 'false');
+    if (!sameContent(r, fresh)) {
+      r.replaceChildren.apply(r, Array.prototype.slice.call(fresh.childNodes));
+      syncAttrs(r, fresh, ['aria-describedby']);
+    }
+    r._item = c;
+    if (c._title) r._title = c._title;
+  }
+
+  /* Brings host's rows to list in place (see above), after its first skip
+     children, which stay: a submenu's Back row and the line under it. The
+     submenu beside the panel stays too. A row with focus is never moved,
+     since moving an element takes focus from it; the rows around it move
+     instead. When rows come or go, the scroll stays where it was
+     (pudl-menu.js, __pudlKeepScroll). */
+  function reconcile(host, list, skip) {
+    var kids = Array.prototype.slice.call(host.children);
+    var lead = kids.slice(0, skip || 0), old = kids.slice(skip || 0).filter(function (n) { return n !== sub; });
+    var used = new Set(), wanted = [], made = false;
+    list.forEach(function (c) {
+      var n = null;
+      for (var i = 0; i < old.length && !n; i++) {
+        var o = old[i];
+        if (used.has(o)) continue;
+        if (c === '-') { if (o.classList.contains('menu-sep')) n = o; }
+        else if (c.heading) { if (o.classList.contains('md-section-label') && o.textContent === c.heading) n = o; }
+        else if (o._item && !o._back && o.tagName === rowTag(c) && sameItem(o._item, c)) n = o;
+      }
+      if (n) { used.add(n); if (c !== '-' && !c.heading) updateRow(n, c); }
+      else { n = row(c); if (c && c._title) n._title = c._title; made = true; }
+      wanted.push(n);
+    });
+    var gone = old.filter(function (o) { return !used.has(o); });
+    var order = old.filter(function (o) { return used.has(o); });
+    var inOrder = !made && order.every(function (o, i) { return o === wanted[i]; });
+    if (inOrder && !gone.length) return;
+    host.__pudlKeepScroll = host.scrollTop;
+    gone.forEach(function (o) { o.remove(); });
+    if (!inOrder) placeRows(host, wanted, lead.length ? lead[lead.length - 1] : null);
+  }
+  /* Puts wanted in order in host after the node after (or first), moving
+     every node but the one holding focus or an open popup. */
+  function placeRows(host, wanted, after) {
+    var a = document.activeElement;
+    var pin = wanted.findIndex(function (n) { return n === a || n.contains(a) || !!n.querySelector(':popover-open'); });
+    if (pin < 0) {
+      var prev = after;
+      wanted.forEach(function (n) {
+        var at = prev ? prev.nextSibling : host.firstChild;
+        if (n !== at) host.insertBefore(n, at);
+        prev = n;
+      });
+      return;
+    }
+    for (var i = pin - 1; i >= 0; i--) if (wanted[i].nextSibling !== wanted[i + 1]) host.insertBefore(wanted[i], wanted[i + 1]);
+    for (var j = pin + 1; j < wanted.length; j++) if (wanted[j - 1].nextSibling !== wanted[j]) host.insertBefore(wanted[j], wanted[j - 1].nextSibling);
+  }
+
+  /* The rows a title's panel shows now. */
+  function titleItems(info) {
+    if (info.all) return allItems();
+    if (info.title.id === 'pins-items') {
+      var pins = menus.find(function (m) { return m.kind === 'pins'; });
+      return pins ? pins.pins.map(pinRow) : [];
+    }
+    var fresh = findTitle(info.menu.kind, info.title.label);
+    return fresh ? fresh.items : info.title.items;
+  }
+
+  /* The open panel brought to the commands now, under title, the same
+     title or the one that takes its place when the bar is built again. */
+  function refreshOpen(title) {
+    var a = document.activeElement, hadFocus = panel.contains(a);
+    var subOpen = !!(sub && sub.parentNode === panel && sub.matches(':popover-open')), inSub = subOpen && sub.contains(a);
+    var subFrom = subOpen ? sub._from : null;
+    if (title !== openTitle) {
+      if (openTitle && openTitle.isConnected) associate(openTitle, false);
+      openTitle = title;
+      associate(title, true);
+      panel.setAttribute('aria-labelledby', title.id);
+      panel.setAttribute('data-menu-anchor', title.id);
+      titles().forEach(function (t) { t.tabIndex = t === title ? 0 : -1; });
+    }
+    var info = title._menu;
+    if (pinsSource && (info.all || (info.menu.kind === 'pins' && info.title.id === 'pins'))) {
+      pinsSource.dispatchEvent(new CustomEvent('pudl:pins-menu', { bubbles: true }));
+    }
+    menus = assemble();
+    /* A submenu shown in the panel's place is followed down from the top:
+       each level's command found again, and the path cut where one has
+       gone or been disabled. */
+    var list = titleItems(info), path = panel.__path || [], depth = 0;
+    for (; depth < path.length; depth++) {
+      var want = path[depth];
+      var next = list.filter(function (c) { return c && c !== '-' && !c.heading && c.items && !c.disabled && sameItem(c, want); })[0];
+      if (!next) break;
+      path[depth] = next;
+      list = next.items;
+    }
+    var cut = depth < path.length ? path[depth] : null;
+    path.length = depth;
+    panel.__path = path.length ? path : null;
+    var back = panel.querySelector(':scope > .menubar-back');
+    if (!path.length && back) {
+      var line = back.nextElementSibling;
+      back.remove();
+      if (line && line.classList.contains('menu-sep')) line.remove();
+    }
+    reconcile(panel, list, path.length ? 2 : 0);
+    /* The submenu beside the panel stays open while its row is there and
+       enabled, its rows brought to its command's items now. */
+    if (subOpen) {
+      if (subFrom && panel.contains(subFrom) && enabledRow(subFrom) && subFrom._item && subFrom._item.items) {
+        reconcile(sub, subFrom._item.items, 0);
+        sub.setAttribute('aria-label', subFrom._item.label);
+        placeSub();
+      } else closeSub();
+    }
+    if (window.pudlMenu && window.pudlMenu.place) window.pudlMenu.place(panel);
+    var now = document.activeElement;
+    if (!hadFocus || (now && now !== document.body && !panel.contains(now) && !built.contains(now))) return;
+    if (panel.contains(now) && enabledRow(now)) return;
+    var target = null;
+    if (inSub && sub.matches(':popover-open')) target = firstEnabled(sub);
+    else if (inSub) target = enabledRow(subFrom) && panel.contains(subFrom) ? subFrom : null;
+    else if (cut) target = items(panel).filter(function (r) { return r._item && sameItem(r._item, cut) && enabledRow(r); })[0] || null;
+    target = target || firstEnabled(panel) || (title.isConnected && !title.disabled ? title : null);
+    if (target) focusShown(target);
+  }
+
+  /* Back from a submenu shown in the panel's place: the level above,
+     drawn as it is now, with focus on the submenu's row. */
+  function backOne() {
+    var path = panel.__path;
+    var left = path && path.pop();
+    if (path && !path.length) panel.__path = null;
+    if (openTitle) refreshOpen(openTitle);
+    var r = left && items(panel).filter(function (x) { return x._item && sameItem(x._item, left); })[0];
+    focusShown(enabledRow(r) ? r : firstEnabled(panel) || openTitle);
+  }
+
   /* force builds it again whatever it reads as: after the pins change, the
      bar collapses or opens out, or the page's regions or policy change. */
   function render(force) {
@@ -717,10 +929,18 @@
       return titles().find(function (t) {
         var m = t._menu;
         if (previous.all) return m.all;
-        return m.menu && m.menu.kind === previous.menu.kind && m.menu.name === previous.menu.name &&
+        /* The front menu is named for its window, so a retitle must not end it. */
+        return m.menu && m.menu.kind === previous.menu.kind && (m.menu.kind === 'front' || m.menu.name === previous.menu.name) &&
           (previous.title.id ? m.title.id === previous.title.id : m.title.label === previous.title.label) &&
           (m.menu.kind !== 'front' || sameSource(previousSource, frontSrc));
       });
+    }
+    /* Keyboard focus that was in a panel that does not come back goes to the
+       front menu's first title, so it is never dropped onto the page. */
+    function focusFront(fallback) {
+      var list = titles();
+      var t = list.find(function (x) { return x._menu && x._menu.menu && x._menu.menu.kind === 'front'; }) || fallback || list[0];
+      if (t) t.focus();
     }
     if (force) lastSig = null;
     frontSrc = findFront();
@@ -739,19 +959,16 @@
       rebind(); syncRibbon();
       if (previous) {
         var surviving = survivingTitle();
-        var selectedLabel = document.activeElement && document.activeElement._item && document.activeElement._item.label;
-        if (!surviving) closeAll(false);
-        else {
-          open(surviving, null);
-          if (panelFocus) {
-            var row = items(panel).find(function (r) { return r._item && r._item.label === selectedLabel; }) || items(panel)[0];
-            if (row) row.focus();
-          }
-        }
+        if (!surviving) {
+          closeAll(false);
+          if (panelFocus) focusFront();
+        } else refreshOpen(surviving);
       }
       return;
     }
-    closeAll(false);
+    /* An open panel stays open while the bar is built again, and goes on
+       under the title that takes its title's place (refreshOpen). */
+    if (!previous) closeAll(false);
     lastSig = sig;
     var focusedIndex = -1;
     if (built && built.contains(document.activeElement)) focusedIndex = titles().indexOf(document.activeElement);
@@ -797,7 +1014,8 @@
     if (focusedIndex >= 0 && keep) keep.focus();
     syncRibbon();
     var reopen = survivingTitle();
-    if (reopen) open(reopen, panelFocus ? 'first' : null);
+    if (reopen) refreshOpen(reopen);
+    else if (previous) { closeAll(false); if (panelFocus) focusFront(keep); }
   }
 
   /* Whether the full bar fits, measured with it showing, in one pass, so
@@ -953,13 +1171,21 @@
     if (panel) return;
     panel = el('div', 'menu-panel menubar-panel', { popover: '', role: 'menu', id: 'menubar-panel' });
     panel.addEventListener('toggle', function (e) {
+      /* The bar says when a menu opens and closes (0.96.9), so a host does
+         not redraw a menu's source while a reader is in it. */
+      if (e.newState === 'open') bar.dispatchEvent(new CustomEvent('pudl:menubar-open', { bubbles: true }));
       /* A close whose event arrives after the panel was opened again, by
          a key pressed within the same tick, must not undo the reopening. */
       if (e.newState === 'closed' && openTitle && !panel.matches(':popover-open')) {
+        /* A submenu inside a panel that closed, by a press outside, is
+           closed with it, so no popup is left open out of sight. */
+        closeSub();
+        panel.__path = null;
         associate(openTitle, false);
         openTitle = null;
         soon();
       }
+      if (e.newState === 'closed' && !panel.matches(':popover-open')) bar.dispatchEvent(new CustomEvent('pudl:menubar-close', { bubbles: true }));
     });
     bar.appendChild(panel);
   }
@@ -1032,32 +1258,27 @@
       p.appendChild(b);
       p.appendChild(el('div', 'menu-sep', { role: 'separator' }));
     }
-    items.forEach(function (c) { p.appendChild(row(c)); });
+    items.forEach(function (c) { var r = row(c); if (c && c._title) r._title = c._title; p.appendChild(r); });
   }
 
   /* The collapsed bar's panel: each menu a section of its titles, each
      title leading to its commands. */
-  function fillAll(p) {
-    p.textContent = '';
+  function allItems() {
+    var list = [];
     menus.forEach(function (m, mi) {
-      if (mi) p.appendChild(el('div', 'menu-sep', { role: 'separator' }));
-      var h = el('div', 'md-section-label', { role: 'presentation' });
-      h.textContent = m.name;
-      p.appendChild(h);
+      if (mi) list.push('-');
+      list.push({ heading: m.name });
       /* The Pins menu is short, so its commands stand in the section
          itself, and the pins after them, each one press away. */
       if (m.kind === 'pins') {
-        m.titles[0].items.forEach(function (c) { p.appendChild(row(c)); });
-        if (m.titles[0].items.length && m.pins.length) p.appendChild(el('div', 'menu-sep', { role: 'separator' }));
-        m.pins.forEach(function (pin) { p.appendChild(row(pinRow(pin))); });
+        m.titles[0].items.forEach(function (c) { list.push(c); });
+        if (m.titles[0].items.length && m.pins.length) list.push('-');
+        m.pins.forEach(function (pin) { list.push(pinRow(pin)); });
         return;
       }
-      m.titles.forEach(function (t) {
-        var r = row({ label: t.label, items: t.items, letter: t.letter });
-        r._title = t;
-        p.appendChild(r);
-      });
+      m.titles.forEach(function (t) { list.push({ id: t.id, label: t.label, items: t.items, letter: t.letter, _title: t }); });
     });
+    return list;
   }
 
   /* The group glyph is another native invoker for its first title. */
@@ -1077,7 +1298,7 @@
       render();
       title = titles().find(function (t) {
         var info = t._menu;
-        return prior.all ? info.all : info.menu && prior.menu.kind === info.menu.kind && prior.menu.name === info.menu.name && prior.title.label === info.title.label;
+        return prior.all ? info.all : info.menu && prior.menu.kind === info.menu.kind && (prior.menu.kind === 'front' || prior.menu.name === info.menu.name) && (prior.title.id ? prior.title.id === info.title.id : prior.title.label === info.title.label);
       });
       if (!title || !currentTarget()) return;
     }
@@ -1096,14 +1317,8 @@
       pinsSource.dispatchEvent(new CustomEvent('pudl:pins-menu', { bubbles: true }));
     }
     menus = assemble();
-    if (info.all) fillAll(panel);
-    else if (info.title.id === 'pins-items') {
-      var pins = menus.find(function (m) { return m.kind === 'pins'; });
-      fill(panel, pins ? pins.pins.map(pinRow) : []);
-    } else {
-      var fresh = findTitle(info.menu.kind, info.title.label);
-      fill(panel, fresh ? fresh.items : info.title.items);
-    }
+    panel.__path = null;
+    fill(panel, titleItems(info));
     panel.setAttribute('aria-labelledby', title.id);
     panel.setAttribute('data-menu-anchor', title.id);
     openTitle = title;
@@ -1146,6 +1361,7 @@
     var t = openTitle;
     closeSub();
     if (panel && panel.matches(':popover-open')) panel.hidePopover();
+    if (panel) panel.__path = null;
     if (focusTitle && t && t.isConnected) t.focus();
   }
 
@@ -1155,13 +1371,11 @@
     var c = r._item;
     var inPlace = panel.classList.contains('sheet') || (openTitle && openTitle._menu.all);
     if (inPlace) {
-      var host = r.closest('.menu-panel');
-      var prev = Array.prototype.slice.call(host.childNodes);
-      fill(host, c.items, function () {
-        host.textContent = '';
-        prev.forEach(function (n) { host.appendChild(n); });
-        r.focus();
-      });
+      /* The path down is kept, so the page's updates draw the same level
+         again (refreshOpen), and Back draws the level above as it is. */
+      var host = panel;
+      panel.__path = (panel.__path || []).concat([c]);
+      fill(host, c.items, backOne);
       var first = items(host)[1] || items(host)[0];
       if (first) first.focus();
       return;
@@ -1200,9 +1414,27 @@
      a reader's click on it would be, an applet's run called. Focus goes
      back first to where it was before the bar, so a command that acts on
      the focused thing finds it. */
+  /* Re-resolve a contributed command by its source and menu path. A
+     closure from a previous opening must never outlive its availability. */
+  function currentCommand(c) {
+    if (!c.owner) return c;
+    var matches = [], path = JSON.stringify(c.commandPath);
+    function visit(list) {
+      list.forEach(function (item) {
+        if (!item || typeof item !== 'object') return;
+        if (item.owner && sameSource(c.owner, item.owner) && JSON.stringify(item.commandPath) === path) matches.push(item);
+        if (item.items) visit(item.items);
+      });
+    }
+    assemble().forEach(function (m) { m.titles.forEach(function (t) { visit(t.items); }); });
+    return matches.length === 1 ? matches[0] : null;
+  }
+
   function act(c, fromMenu) {
     if (c.disabled || c.items) return;
     if ((fromMenu && !currentTarget()) || (c.owner && !c.owner.resident && !sameSource(c.owner, findFront()))) { render(); return; }
+    c = currentCommand(c);
+    if (!c || c.disabled || c.items) { render(); return; }
     var scopeEl = c.owner ? c.owner.scope.scope : document;
     if (fromMenu) {
       closeAll(false);
@@ -1641,22 +1873,101 @@
       if (x === t) x.setAttribute('aria-controls', rowId); else x.removeAttribute('aria-controls');
     });
     if (!t) return;
-    /* The row is built afresh each time, as its menu would be, so its
-       states are read now; a new toolbar is folded by pudl-toolbar.js as
-       it arrives. Focus inside it stays on the same control. */
+    /* The row's controls are read afresh each time, as a menu's rows are,
+       so their states are current. While the row shows the same tab it is
+       brought to them in place (reconcileRibbon), and an open dropdown in
+       it stays open. Another tab's row is built new, folded by
+       pudl-toolbar.js as it arrives, with focus that was in the row on the
+       same command. */
     var old = ribbonRow.querySelector(':scope > .toolbar');
-    var focusIndex = -1;
-    if (old && old.contains(document.activeElement)) focusIndex = Array.prototype.indexOf.call(old.querySelectorAll('button, a[href], select'), document.activeElement);
     menus = assemble();
     var label = t._menu.title.label;
     var fresh = findTitle(t._menu.menu.kind, label);
     var tb = el('div', 'toolbar', { role: 'toolbar', id: rowId, 'aria-label': label, 'data-toolbar-fold': '', 'data-toolbar-captions': bar.getAttribute('data-menubar-ribbon-captions') || 'none' });
     ribbonGroups(fresh ? fresh.items : t._menu.title.items, label).forEach(function (g) { tb.appendChild(g); });
+    if (old && old.getAttribute('aria-label') === label) { reconcileRibbon(old, tb, t); return; }
+    var focusedCommand = old && old.contains(document.activeElement) ? document.activeElement._item : null;
     if (old) old.replaceWith(tb); else ribbonRow.appendChild(tb);
-    if (focusIndex >= 0) {
-      var again = tb.querySelectorAll('button, a[href], select')[focusIndex];
-      if (again) again.focus();
+    if (focusedCommand) {
+      var again = Array.from(tb.querySelectorAll('button, a[href], select')).find(function (n) { return n._item && sameItem(n._item, focusedCommand); });
+      if (enabledRow(again)) again.focus(); else t.focus();
     }
+  }
+
+  /* The ribbon's row brought in place to fresh, the same tab's row built
+     from the commands now: groups by name, controls by command, a
+     dropdown's rows as a menu's are (reconcile). A dropdown whose command
+     is disabled closes; one whose command has gone goes with it. Focus
+     that was on a row of an open dropdown that has gone or been disabled
+     moves to the dropdown's first enabled row; focus whose dropdown or
+     control has gone, or been disabled, moves to the tab. */
+  function children(n) { return Array.prototype.slice.call(n.children); }
+  function partKey(n) {
+    if (n.classList.contains('menu')) { var b = n.querySelector(':scope > .menu-btn'); return b && b._item ? { kind: 'menu', item: b._item } : null; }
+    if (n.classList.contains('seg')) return { kind: 'seg', label: n.getAttribute('aria-label') };
+    return n._item ? { kind: n.tagName, item: n._item } : null;
+  }
+  function samePart(a, b) {
+    var x = partKey(a), y = partKey(b);
+    return !!x && !!y && x.kind === y.kind && (x.item ? sameItem(x.item, y.item) : x.label === y.label);
+  }
+  function updateLook(o, f) {
+    syncAttrs(o, f, ['aria-pressed', 'aria-disabled', 'aria-label', 'aria-keyshortcuts', 'data-tooltip', 'data-toolbar-glyph-only', 'href']);
+    if (o.classList.contains('btn-danger') !== f.classList.contains('btn-danger')) o.classList.toggle('btn-danger');
+    /* pudl-toolbar.js disables a menu button whose rows are all disabled;
+       only a change in the command's own state is written here. */
+    if (o.__ownDisabled !== f.__ownDisabled) { o.__ownDisabled = f.__ownDisabled; o.disabled = !!f.__ownDisabled; }
+    if (o.innerHTML !== f.innerHTML) o.replaceChildren.apply(o, Array.prototype.slice.call(f.childNodes));
+    o._item = f._item;
+  }
+  function updatePart(o, f) {
+    if (o.classList.contains('menu')) {
+      var ob = o.querySelector(':scope > .menu-btn'), op = o.querySelector(':scope > .menu-panel');
+      var fb = f.querySelector(':scope > .menu-btn'), fp = f.querySelector(':scope > .menu-panel');
+      updateLook(ob, fb);
+      syncAttrs(op, fp, ['aria-label']);
+      if (fb.__ownDisabled && op.matches(':popover-open')) op.hidePopover();
+      reconcile(op, fp._flat, 0);
+      return;
+    }
+    if (o.classList.contains('seg')) { reconcileList(o, children(f), function (x, y) { return x._item && y._item && sameItem(x._item, y._item); }, updateLook); return; }
+    updateLook(o, f);
+  }
+  /* olds brought to the fresh nodes in place: a node matched by same is
+     kept and updated, a fresh one with no match taken in, and an old one
+     with none removed. */
+  function reconcileList(host, fresh, same, update, skip) {
+    var olds = children(host).filter(function (n) { return !skip || !skip(n); });
+    var used = new Set(), wanted = [], made = false;
+    fresh.forEach(function (f) {
+      var o = olds.filter(function (x) { return !used.has(x) && same(x, f); })[0];
+      if (o) { used.add(o); update(o, f); wanted.push(o); }
+      else { wanted.push(f); made = true; }
+    });
+    var gone = olds.filter(function (o) { return !used.has(o); });
+    var kept = olds.filter(function (o) { return used.has(o); });
+    gone.forEach(function (o) { o.remove(); });
+    if (made || !kept.every(function (o, i) { return o === wanted[i]; })) placeRows(host, wanted, null);
+  }
+  function reconcileRibbon(old, tb, t) {
+    var a = document.activeElement, had = old.contains(a);
+    var drop = had ? a.closest('.menu-panel') : null, owner = drop && drop.parentNode.querySelector(':scope > .menu-btn');
+    syncAttrs(old, tb, ['data-toolbar-captions']);
+    reconcileList(old, children(tb).filter(function (g) { return g.classList.contains('toolbar-group'); }),
+      function (x, y) { return x.classList.contains('toolbar-group') && x.getAttribute('data-toolbar-group') === y.getAttribute('data-toolbar-group'); },
+      function (og, fg) {
+        syncAttrs(og, fg, ['aria-label', 'data-toolbar-glyph', 'data-toolbar-priority', 'data-toolbar-captioned']);
+        reconcileList(og, children(fg), samePart, updatePart, function (n) { return n.classList.contains('toolbar-fold'); });
+      },
+      function (n) { return !n.classList.contains('toolbar-group'); });
+    var now = document.activeElement;
+    if (!had || (now && now !== document.body && !old.contains(now))) return;
+    if (old.contains(now) && enabledRow(now)) return;
+    var target = null;
+    if (drop && drop.isConnected && drop.matches(':popover-open')) target = firstEnabled(drop);
+    else if (drop && enabledRow(owner)) target = owner;
+    target = target || (t.isConnected ? t : null);
+    if (target) focusShown(target);
   }
 
   /* A menu's rows as the groups of a folding toolbar. */
@@ -1725,6 +2036,10 @@
       var id = 'menubar-ribbon-menu-' + (++ribbonUid);
       var b = el('button', 'btn btn-sm menu-btn', { type: 'button', popovertarget: id });
       ribbonLook(b, c);
+      b._item = c;
+      /* A dropdown whose command is disabled cannot be opened. */
+      b.__ownDisabled = !!c.disabled;
+      if (c.disabled) b.disabled = true;
       var p = el('div', 'menu-panel', { popover: '', id: id, role: 'menu', 'aria-label': c.label });
       /* A submenu's own submenus stand in it under their names. */
       var flat = [];
@@ -1733,6 +2048,7 @@
         else flat.push(x);
       });
       fill(p, flat);
+      p._flat = flat;
       wrap.append(b, p);
       return wrap;
     }
@@ -1742,6 +2058,7 @@
     ribbonLook(n, c);
     if (c.checked != null) n.setAttribute('aria-pressed', c.checked ? 'true' : 'false');
     if (c.disabled) { if (n.tagName === 'BUTTON') n.disabled = true; else n.setAttribute('aria-disabled', 'true'); }
+    n.__ownDisabled = !!c.disabled && n.tagName === 'BUTTON';
     n._item = c;
     return n;
   }
@@ -1752,6 +2069,7 @@
       var b = el('button', '', { type: 'button', 'aria-pressed': c.checked ? 'true' : 'false' });
       b.textContent = c.label;
       if (c.disabled) b.disabled = true;
+      b.__ownDisabled = !!c.disabled;
       b._item = c;
       seg.appendChild(b);
     });
@@ -1827,6 +2145,8 @@
     render();
 
     document.addEventListener('pudl:windows-change', soon);
+    document.addEventListener('pudl:window-title', function () { render(); });
+    document.addEventListener('pudl:commands-change', function () { render(); });
     /* A resident applet's menus join the bar as it starts. */
     document.addEventListener('pudl:applet-start', function (e) {
       if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-applet-resident')) render(true);
@@ -1899,12 +2219,14 @@
        again only when its menus, titles or pins read differently (0.69.3);
        an applet may call it whenever its commands change. */
     refresh: function () { if (bar) render(); },
+    /* Whether a menu of the bar is open now (0.96.9). */
+    isOpen: function () { return !!(panel && panel.matches(':popover-open')); },
     /* Unfold the bar into a ribbon, or fold it back (0.79.0). */
     ribbon: function (on) { if (bar && ribbonRow) { if (on == null) return ribbonOn; setRibbon(!!on, true); } return ribbonOn; },
     /* Every key bound in the bar now: its key in PUDL's spelling and as
        shown, the row's label and title, its source and whether disabled. */
     shortcuts: function () {
-      if (bar && !currentTarget()) render();
+      if (bar) { if (!currentTarget()) render(); else assemble(); }
       var list = bound.map(function (b) { return Object.assign({}, b); });
       /* The window switcher's keys, which are the windows script's and not
          rows of the bar, are listed with it. */
